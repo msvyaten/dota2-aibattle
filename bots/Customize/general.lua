@@ -44,10 +44,10 @@ Customize.Ban = {
 5. There are sample team picks in Appendix section below. 
 6. Check Appendix to ensure you DO NOT pick more than 1 "weak" heroes in a team for your game experience.
 --]]
-Customize.Radiant_Heros = { "npc_dota_hero_wisp", "npc_dota_hero_sniper", "npc_dota_hero_wisp", "npc_dota_hero_wisp", "npc_dota_hero_wisp" }
+Customize.Radiant_Heros = { "npc_dota_hero_sniper", "npc_dota_hero_wisp", "npc_dota_hero_wisp", "npc_dota_hero_wisp", "npc_dota_hero_wisp" }
 
 -- Same notes as above for picking heroes but for the Dire side.
-Customize.Dire_Heros = { "npc_dota_hero_wisp", "npc_dota_hero_sniper", "npc_dota_hero_wisp", "npc_dota_hero_wisp", "npc_dota_hero_wisp" }
+Customize.Dire_Heros = { "npc_dota_hero_sniper", "npc_dota_hero_wisp", "npc_dota_hero_wisp", "npc_dota_hero_wisp", "npc_dota_hero_wisp" }
 
 --[[
 1. To allow bots to randomly pick heroes that can be the same/repeated. 
@@ -81,13 +81,20 @@ Customize.Trash_Talk_Level = 1
 
 -- To set the names for the Radiant bots. Don't need to provide a value for all 5 bots, missing names will have a Random value.
 Customize.Radiant_Names = {
-    'Random',
-    'Random',
+    'ChatGPT',
+    '1',
+    '2',
+    '3',
+    '4',
 }
 
 -- Same notes as above for setting the bots' names but for the Dire side.
 Customize.Dire_Names = {
-    'Random',
+    'Gemini',
+    '6',
+    '7',
+    '8',
+    '9',
 }
 
 -- The desire level that the bots will group up and push the same lane. 

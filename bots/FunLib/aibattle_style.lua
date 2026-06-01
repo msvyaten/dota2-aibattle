@@ -39,20 +39,36 @@ local function buildStyle(raw)
     local rb = rawRules.respawn_behavior
     local respawn = (type(rb) == "string" and RESPAWN_VALUES[rb]) and rb or DEFAULT_RESPAWN
 
-    return { dials = dials, rules = { respawn_behavior = respawn } }
+    -- Prompt-driven item build (ordered). Keep only "item_*" strings here; the
+    -- purchaser validates each against GetItemCost so a bogus name can't break the buy loop.
+    local items = {}
+    local rawItems = (type(raw) == "table" and type(raw.item_build) == "table") and raw.item_build or {}
+    for _, name in ipairs(rawItems) do
+        if type(name) == "string" and string.match(name, "^item_") then
+            items[#items + 1] = name
+        end
+    end
+
+    return { dials = dials, rules = { respawn_behavior = respawn }, item_build = items }
 end
 
 -- Returns the {dials, rules} config for the calling bot's team (cached, with safe defaults).
 function M.Get()
     local team = GetBot():GetTeam()
     if _cache[team] ~= nil then return _cache[team] end
-    local fname = (team == TEAM_RADIANT)
+    local rel = (team == TEAM_RADIANT)
         and "Customize/playstyle_radiant"
         or  "Customize/playstyle_dire"
-    local ok, raw = pcall(require, fname)
+    -- Use the GetScriptDirectory()-prefixed path (the form OHA actually resolves).
+    local ok, raw = pcall(require, GetScriptDirectory().."/"..rel)
     local style = buildStyle(ok and raw or nil)
     _cache[team] = style
     return style
+end
+
+-- Returns the prompt-driven ordered item build for the calling bot's team (may be empty).
+function M.GetItemBuild()
+    return M.Get().item_build
 end
 
 -- Scale a "soft" mode desire by a 0-1 dial: 0.5 = baseline (x1), 0 = off, 1 = x2.

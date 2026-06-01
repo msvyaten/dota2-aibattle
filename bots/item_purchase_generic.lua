@@ -37,6 +37,28 @@ bot.SecretShop = false
 local sPurchaseList = BotBuild['sBuyList']
 local sItemSellList = BotBuild['sSellList']
 
+-- AIBattle: prompt-driven custom item build overrides the hero default (per team).
+-- Each name is validated via GetItemCost (engine returns 0 for unknown items), so a
+-- hallucinated name from the LLM is dropped rather than breaking the buy loop.
+do
+	local okS, Style = pcall(require, GetScriptDirectory()..'/FunLib/aibattle_style')
+	if okS and type(Style) == 'table' and Style.GetItemBuild ~= nil then
+		local okB, custom = pcall(Style.GetItemBuild)
+		if okB and type(custom) == 'table' and #custom > 0 then
+			local clean = {}
+			for _, name in ipairs(custom) do
+				local okC, cost = pcall(GetItemCost, name)
+				if okC and type(cost) == 'number' and cost > 0 then
+					clean[#clean + 1] = name
+				end
+			end
+			if #clean > 0 then
+				sPurchaseList = clean
+			end
+		end
+	end
+end
+
 
 if sPurchaseList == nil then
 	print("[ERROR] Can't load purchase list for: " .. botName)

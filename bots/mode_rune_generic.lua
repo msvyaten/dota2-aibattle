@@ -1,6 +1,7 @@
 local X = {}
 local J = require(GetScriptDirectory()..'/FunLib/jmz_func')
 local Customize = require(GetScriptDirectory()..'/Customize/general')
+local AIBStyle = require(GetScriptDirectory()..'/FunLib/aibattle_style')
 Customize.ThinkLess = Customize.Enable and Customize.ThinkLess or 1
 
 local bot = GetBot()
@@ -55,8 +56,13 @@ local nShrineOfWisdomTeam = TEAM_RADIANT
 
 --------------------------------------------------------------------
 -- GetDesire  (reference structure, with local additions)
+-- AIBattle Schema v2: wrapper scales the raw rune desire by the rune_control dial.
 --------------------------------------------------------------------
 function GetDesire()
+	return AIBStyle.ScaleDesire(GetRuneDesireRaw(), AIBStyle.Get().dials.rune_control)
+end
+
+function GetRuneDesireRaw()
 	X.InitRune()
 
 	if (DotaTime() > 2 * 60 and DotaTime() < 6 * 60 and GetUnitToLocationDistance(bot, GetRuneSpawnLocation(RUNE_POWERUP_2)) < 80) then

@@ -2,6 +2,7 @@ local X = {}
 
 local J = require(GetScriptDirectory()..'/FunLib/jmz_func')
 local Customize = require(GetScriptDirectory()..'/Customize/general')
+local AIBStyle = require(GetScriptDirectory()..'/FunLib/aibattle_style')
 
 local bot = GetBot()
 
@@ -123,7 +124,8 @@ function GetDesire()
     -- if DotaTime() > 30 and cachedVar ~= nil then return cachedVar end
     local res = GetDesireHelper()
     -- J.Utils.SetCachedVars(cacheKey, res)
-    return res
+    -- AIBattle Schema v2: scale retreat desire by the retreat_caution dial.
+    return AIBStyle.ScaleDesire(res, AIBStyle.Get().dials.retreat_caution)
 end
 
 function GetDesireHelper()

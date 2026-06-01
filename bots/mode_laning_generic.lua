@@ -29,20 +29,56 @@ local isChangePosMessageDone     = false
 
 if Utils.BuggyHeroesDueToValveTooLazy[botName] then local_mode_laning_generic = dofile( GetScriptDirectory().."/FunLib/override_generic/mode_laning_generic" ) end
 
--- AIBattle: returns playstyle config per team (no module-level cache — each bot reads its own team)
-local function GetPlayStyle()
-	if GetBot():GetTeam() == TEAM_RADIANT then
-		return { harass_desire=0.85, farm_priority=false, tower_safe=false, ability_aggro=true }
-	else
-		return { harass_desire=0.05, farm_priority=true,  tower_safe=true,  ability_aggro=false }
+-- AIBattle Schema v2: shared loader (dials + rules), with safe defaults/clamping.
+local Style = require(GetScriptDirectory()..'/FunLib/aibattle_style')
+local function GetDials() return Style.Get().dials end
+local function GetRules() return Style.Get().rules end
+
+-- AIBattle: returns the location of the most-forward SURVIVING friendly tower (closest to fight)
+local function AIB_ForwardSurvivingTowerLoc()
+	local team = GetBot():GetTeam()
+	local ids = { TOWER_MID_1, TOWER_MID_2, TOWER_MID_3, TOWER_BASE_1, TOWER_BASE_2 }
+	for _, id in ipairs(ids) do
+		local t = GetTower(team, id)
+		if t ~= nil and t:IsAlive() then return t:GetLocation() end
 	end
+	return nil
+end
+
+-- AIBattle: on death->alive transition, act per rules.respawn_behavior. Returns true if it issued an action.
+local function AIB_HandleRespawn()
+	if not bot:IsAlive() then bot.aib_wasDead = true; return false end
+	if not bot.aib_wasDead then return false end
+	-- already left base without TPing (no scroll / gave up) -> stop trying
+	if bot:DistanceFromFountain() > 1500 then bot.aib_wasDead = false; return false end
+
+	local behavior = GetRules().respawn_behavior
+	if behavior == "walk_back" then bot.aib_wasDead = false; return false end
+
+	local tp = bot:GetItemInSlot(bot:FindItemSlot("item_tpscroll"))
+	if tp == nil or not tp:IsFullyCastable() then return false end  -- wait for scroll
+
+	local loc
+	if behavior == "tp_to_tower" then
+		loc = AIB_ForwardSurvivingTowerLoc()
+	elseif behavior == "tp_to_lane" then
+		loc = GetLaneFrontLocation(GetTeam(), LANE_MID, 0)
+	end
+	if loc == nil then bot.aib_wasDead = false; return false end
+
+	bot:Action_UseAbilityOnLocation(tp, loc)
+	bot.aib_wasDead = false
+	return true
 end
 
 function GetDesire()
 	PickOneAnnouncer()
 	AnnounceMessages()
 
+	-- AIBattle: mark death here so respawn handling fires (Think() doesn't run while dead).
+	if bot:IsHero() and not bot:IsIllusion() and not bot:IsAlive() then bot.aib_wasDead = true end
 	if bot:IsInvulnerable() or not bot:IsHero() or not bot:IsAlive() or not string.find(botName, "hero") or bot:IsIllusion() then return BOT_MODE_DESIRE_NONE end
+	if bot:IsAlive() and bot.aib_wasDead then return BOT_MODE_DESIRE_ABSOLUTE end
 	local botLV = bot:GetLevel()
 	local currentTime = DotaTime()
 
@@ -171,6 +207,9 @@ function Think()
 		return
 	end
 
+	if AIB_HandleRespawn() then return end
+	local dials = GetDials()
+
 	-- Last-hit logic (pos1/2 only, or when no core nearby)
 	local hitCreep, moveToCreep = GetBestLastHitCreep(nEnemyCreeps)
 	if J.IsValid(hitCreep) then
@@ -202,29 +241,32 @@ function Think()
 		target_loc = GetLaneFrontLocation(GetOpposingTeam(), botAssignedLane, -nLongestAttackRange)
 	end
 
-	-- AIBattle: style-driven harass
-	local style = GetPlayStyle()
-
-	if style.ability_aggro then
+	-- AIBattle Schema v2: dial-driven behaviour (0..1 dimmers)
+	-- ability_aggro as probability (0..1)
+	if math.random() < (dials.ability_aggro or 0.5) then
 		local shrapnel = bot:GetAbilityByName("sniper_shrapnel")
 		if shrapnel and shrapnel:IsFullyCastable() then
-			local targets = bot:GetNearbyHeroes(900, true, BOT_MODE_NONE)
-			if targets and #targets > 0 and targets[1]:IsAlive() then
-				bot:Action_UseAbilityOnLocation(shrapnel, targets[1]:GetLocation())
+			local atk = bot:GetNearbyHeroes(900, true, BOT_MODE_NONE)
+			if atk and #atk > 0 and atk[1]:IsAlive() then
+				bot:Action_UseAbilityOnLocation(shrapnel, atk[1]:GetLocation())
 				return
 			end
 		end
 	end
 
-	if not style.farm_priority then
-		local targets = bot:GetNearbyHeroes(botAttackRange + 50, true, BOT_MODE_NONE)
-		if targets and #targets > 0 and targets[1]:IsAlive() and math.random() < (style.harass_desire or 0.3) then
-			bot:Action_AttackUnit(targets[1], true)
+	-- farm_focus low -> trade CS for harass; harass_desire = swing probability
+	if math.random() > (dials.farm_focus or 0.5) then
+		local atk = bot:GetNearbyHeroes(botAttackRange + 50, true, BOT_MODE_NONE)
+		if atk and #atk > 0 and atk[1]:IsAlive() and math.random() < (dials.harass_desire or 0.5) then
+			bot:Action_AttackUnit(atk[1], true)
 			return
 		end
 	end
 
-	if not style.tower_safe then
+	-- forwardness: high pushes to the lane front (validated v1 aggressive move);
+	-- low holds position (no forced move -> bot last-hits / holds instead of ramming its tower).
+	local fwd = dials.forwardness or 0.5
+	if fwd >= 0.5 then
 		bot:Action_MoveToLocation(target_loc + RandomVector(50))
 	end
 end
