@@ -11,6 +11,7 @@ local bDebugMode = ( 1 == 10 )
 local bot = GetBot()
 
 local J = require( GetScriptDirectory()..'/FunLib/jmz_func' )
+local AIBStyle = require( GetScriptDirectory()..'/FunLib/aibattle_style' )
 local Minion = dofile( GetScriptDirectory()..'/FunLib/aba_minion' )
 local sTalentList = J.Skill.GetTalentList( bot )
 local sAbilityList = J.Skill.GetAbilityList( bot )
@@ -499,6 +500,20 @@ function X.ConsiderR()
 	local nWeakestEnemyHeroInCastRange = X.GetWeakestUnitInRangeExRadius( nEnemysHerosCanSeen, nCastRange, nAttackRange -300, bot )
 	local nChannelingEnemyHeroInCastRange = X.GetChannelingUnitInRange( nEnemysHerosCanSeen, nCastRange, bot )
 	local castRTarget = nil
+
+	-- AIBattle: aggressive ultimate/execute policy. Finish a fleeing low-HP enemy with
+	-- Assassinate even without the strict lethal/ally gates (which never pass in 1v1).
+	-- execute_threshold = 0 keeps the conservative OHA default below.
+	local nExecute = AIBStyle.Get().dials.execute_threshold or 0
+	if nExecute > 0
+		and J.IsValid( nWeakestEnemyHeroInCastRange )
+		and not J.IsRetreating( bot )
+	then
+		local nMax = nWeakestEnemyHeroInCastRange:GetMaxHealth()
+		if nMax > 0 and ( nWeakestEnemyHeroInCastRange:GetHealth() / nMax ) < nExecute then
+			return BOT_ACTION_DESIRE_HIGH, nWeakestEnemyHeroInCastRange
+		end
+	end
 
 	if J.IsValid( nWeakestEnemyHeroInCastRange )
 		and ( J.WillMagicKillTarget( bot, nWeakestEnemyHeroInCastRange, nDamage, nCastPoint )

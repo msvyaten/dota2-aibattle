@@ -9,12 +9,15 @@ local M = {}
 local _cache = {}
 
 local DEFAULT_DIALS = {
-    harass_desire   = 0.5,
-    farm_focus      = 0.5,
-    forwardness     = 0.5,
-    ability_aggro   = 0.5,
-    rune_control    = 0.5,
-    retreat_caution = 0.5,
+    harass_desire     = 0.5,
+    farm_focus        = 0.5,
+    forwardness       = 0.5,
+    ability_aggro     = 0.5,
+    rune_control      = 0.5,
+    retreat_caution   = 0.5,
+    -- Finish/ultimate aggression: cast Assassinate on a fleeing enemy below this HP
+    -- fraction. 0 = never (conservative OHA default), 0.45 = finish enemies under 45%.
+    execute_threshold = 0.0,
 }
 
 local RESPAWN_VALUES = { tp_to_tower = true, tp_to_lane = true, walk_back = true }
@@ -49,7 +52,18 @@ local function buildStyle(raw)
         end
     end
 
-    return { dials = dials, rules = { respawn_behavior = respawn }, item_build = items }
+    -- Situational purchase rules (optional): { when=<cond>, item=<name>, first=<bool> }.
+    -- Lets a prompt say "if behind, buy survivability". Evaluated in-game by the purchaser.
+    local item_rules = {}
+    local rawItemRules = (type(raw) == "table" and type(raw.item_rules) == "table") and raw.item_rules or {}
+    for _, r in ipairs(rawItemRules) do
+        if type(r) == "table" and type(r.when) == "string"
+            and type(r.item) == "string" and string.match(r.item, "^item_") then
+            item_rules[#item_rules + 1] = { when = r.when, item = r.item, first = (r.first ~= false) }
+        end
+    end
+
+    return { dials = dials, rules = { respawn_behavior = respawn }, item_build = items, item_rules = item_rules }
 end
 
 -- Returns the {dials, rules} config for the calling bot's team (cached, with safe defaults).
@@ -69,6 +83,47 @@ end
 -- Returns the prompt-driven ordered item build for the calling bot's team (may be empty).
 function M.GetItemBuild()
     return M.Get().item_build
+end
+
+-- Returns the situational purchase rules for the calling bot's team (may be empty).
+function M.GetItemRules()
+    return M.Get().item_rules
+end
+
+-- Evaluate a named situational condition for the CALLING bot. Returns boolean.
+-- Cheap, fog-of-war-tolerant signals used so a prompt-authored item_rule can react
+-- to the match state. Nil-safe; unknown conditions return false.
+function M.EvalItemCondition(cond)
+    local bot = GetBot()
+    if bot == nil or cond == nil then return false end
+
+    local enemyLevel, enemyInt, enemyPhys = nil, false, false
+    local enemies = GetUnitList(UNIT_LIST_ENEMY_HEROES)
+    if enemies ~= nil then
+        for _, e in pairs(enemies) do
+            if e ~= nil then
+                local lv = e:GetLevel()
+                if enemyLevel == nil or (lv ~= nil and lv > enemyLevel) then enemyLevel = lv end
+                if e:GetPrimaryAttribute() == ATTRIBUTE_INTELLECT then enemyInt = true else enemyPhys = true end
+            end
+        end
+    end
+
+    if cond == "behind" then
+        return enemyLevel ~= nil and bot:GetLevel() <= (enemyLevel - 2)
+    elseif cond == "ahead" then
+        return enemyLevel ~= nil and bot:GetLevel() >= (enemyLevel + 2)
+    elseif cond == "dying" then
+        return (bot.aib_deathCount or 0) >= 2
+    elseif cond == "low_hp" then
+        local mx = bot:GetMaxHealth()
+        return bot:IsAlive() and mx > 0 and (bot:GetHealth() / mx) < 0.4
+    elseif cond == "enemy_magical" then
+        return enemyInt
+    elseif cond == "enemy_physical" then
+        return enemyPhys and not enemyInt
+    end
+    return false
 end
 
 -- Scale a "soft" mode desire by a 0-1 dial: 0.5 = baseline (x1), 0 = off, 1 = x2.

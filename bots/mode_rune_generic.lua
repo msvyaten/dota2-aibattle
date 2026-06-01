@@ -86,7 +86,12 @@ function GetRuneDesireRaw()
 	-- Drop rune desire when outnumbered or taking damage so attack/retreat can take over.
 	-- This prevents bots from walking into 5-man ambushes at rune spots.
 	if #nEnemyHeroes > 0 then
-		if #nEnemyHeroes > #nAllyHeroes then
+		-- AIBattle: high rune_control contests even when outnumbered by 1 (e.g. 1v1 mid
+		-- mirror, where allies-near is always 0) as long as HP is healthy. Passive/normal
+		-- bots keep the original safety bail so they don't walk into ambushes.
+		local rc = AIBStyle.Get().dials.rune_control or 0.5
+		local contestOutnumbered = rc > 0.6 and (#nEnemyHeroes - #nAllyHeroes) <= 1 and botHP > 0.5
+		if #nEnemyHeroes > #nAllyHeroes and not contestOutnumbered then
 			return BOT_MODE_DESIRE_NONE
 		end
 		if bot:WasRecentlyDamagedByAnyHero(2.0) and botHP < 0.7 then

@@ -7,6 +7,7 @@ local Item = require( GetScriptDirectory()..'/FunLib/aba_item' )
 local Role = require( GetScriptDirectory()..'/FunLib/aba_role' )
 local J = require( GetScriptDirectory()..'/FunLib/jmz_func')
 local Utils = require( GetScriptDirectory()..'/FunLib/utils')
+local okAIB, AIBStyle = pcall( require, GetScriptDirectory()..'/FunLib/aibattle_style' )
 
 local X = {}
 
@@ -460,6 +461,43 @@ end
 
 function ItemPurchaseThink()
 	currentTime = DotaTime()
+
+	-- AIBattle: situational item rules — the bot decides what to buy from match state,
+	-- while the prompt sets the strategy. Opt-in & dormant unless the team's playstyle
+	-- defines item_rules. Each fired rule moves its item to the front of the buy order.
+	if okAIB and AIBStyle ~= nil then
+		if not bot:IsAlive() then
+			if not bot.aib_deadFlag then
+				bot.aib_deadFlag = true
+				bot.aib_deathCount = (bot.aib_deathCount or 0) + 1
+			end
+		else
+			bot.aib_deadFlag = false
+		end
+		if (bot.aib_nextRuleCheck or 0) <= currentTime then
+			bot.aib_nextRuleCheck = currentTime + 2.0
+			local okR, rules = pcall(AIBStyle.GetItemRules)
+			if okR and type(rules) == 'table' and #rules > 0 then
+				bot.aib_ruleDone = bot.aib_ruleDone or {}
+				for _, r in ipairs(rules) do
+					local item = r.item
+					if type(item) == 'string'
+						and not bot.aib_ruleDone[item]
+						and not Item.HasItem(bot, item)
+					then
+						local okC, cost = pcall(GetItemCost, item)
+						local okE, hit = pcall(AIBStyle.EvalItemCondition, r.when)
+						if okC and type(cost) == 'number' and cost > 0 and okE and hit
+							and type(bot.purchaseListInReverseOrder) == 'table'
+						then
+							table.insert(bot.purchaseListInReverseOrder, item)  -- end = next to buy
+							bot.aib_ruleDone[item] = true
+						end
+					end
+				end
+			end
+		end
+	end
 
 	-- ARDM: detect stale hero instance and rebuild purchase list on hero swap
 	local isStale, freshBot, freshName = J.IsStaleARDMHero(bot, botName)
