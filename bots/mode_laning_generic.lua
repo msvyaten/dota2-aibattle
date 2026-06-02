@@ -47,8 +47,18 @@ end
 
 -- AIBattle: on death->alive transition, act per rules.respawn_behavior. Returns true if it issued an action.
 local function AIB_HandleRespawn()
-	if not bot:IsAlive() then bot.aib_wasDead = true; return false end
+	if not bot:IsAlive() then bot.aib_wasDead = true; bot.aib_tping = false; return false end
 	if not bot.aib_wasDead then return false end
+
+	-- We already issued our TP: PROTECT THE CHANNEL so normal Think can't move the bot mid-cast
+	-- (this was the tp_to_tower bug: clearing the flag on the cast tick let Think walk the bot
+	-- toward creeps and cancel the 3s channel to a rear tower). Hold until the channel resolves.
+	if bot.aib_tping then
+		if bot:HasModifier("modifier_teleporting") then return true end          -- channelling: hold
+		if (DotaTime() - (bot.aib_tpCastTime or 0)) < 1.0 then return true end    -- grace: modifier not applied yet
+		bot.aib_wasDead = false; bot.aib_tping = false; return false             -- channel ended/interrupted
+	end
+
 	-- already left base without TPing (no scroll / gave up) -> stop trying
 	if bot:DistanceFromFountain() > 1500 then bot.aib_wasDead = false; return false end
 
@@ -67,7 +77,10 @@ local function AIB_HandleRespawn()
 	if loc == nil then bot.aib_wasDead = false; return false end
 
 	bot:Action_UseAbilityOnLocation(tp, loc)
-	bot.aib_wasDead = false
+	-- keep aib_wasDead = true: GetDesire holds laning ABSOLUTE and Think keeps calling this guard
+	-- until the channel completes, so the bot can't be moved mid-cast.
+	bot.aib_tping = true
+	bot.aib_tpCastTime = DotaTime()
 	return true
 end
 
