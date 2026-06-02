@@ -31,7 +31,7 @@ goes 2/0 and never dies, so it can never fire.)
 | 4 | `rune_control` works (after 1v1 fix) | aggressor `0.9` vs `0.1` | bot moves to mid rune at 2:00/4:00 vs ignores (replay/positions) | ⬜ |
 | 5 | `retreat_caution` works | same bot `0.2` vs `0.8` | low-HP behaviour: fights to low HP vs backs off early; deaths differ | ⬜ |
 | 6 | `forwardness` (currently BINARY at 0.5) | `0.1` vs `0.9` | holds near tower vs pushes to lane front | ⬜ |
-| 7 | `respawn_behavior = tp_to_tower` | put it on the **passive (dying)** bot | console `[AIB] casting TP` line, OR bot teleports (not walks) after a death | ⚠️ tp_to_lane WORKS (2 TPs), tp_to_tower FAILS (0 TPs) — channel interrupted; see Test 7 |
+| 7 | `respawn_behavior = tp_to_tower` | put it on the **passive (dying)** bot | console `[AIB] casting TP` line, OR bot teleports (not walks) after a death | ✅ CONFIRMED — tp_to_tower teleports_used=2 (8835623865) after channel-guard fix; tp_to_lane already ✅ (2 TPs). See Test 7 |
 
 > Note: row 6 — `forwardness` is presently a switch at 0.5, NOT a true 0–1 gradient. Confirm
 > the binary effect for now; true gradation is a follow-up fix (do not implement during freeze).
@@ -84,19 +84,21 @@ it can last-hit.
 ### Test 7 — respawn TP (config: TP on the dying/passive bot)
 | Run | respawn_behavior | TP fired? (log line / observed) | Match log |
 |---|---|---|---|
-| A | tp_to_tower | NO — teleports_used=0 (passive Dire died 2x, did not teleport) | 8835293640 |
+| A (pre-fix) | tp_to_tower | NO — teleports_used=0 (passive Dire died 2x, did not teleport) | 8835293640 |
+| **A (post-fix)** | **tp_to_tower** | **YES — teleports_used=2 (passive Dire died 2x, teleported both times)** | **8835623865** ✅ |
 | ref | tp_to_lane | YES — teleports_used=2 (passive bot, prior swap test) | 8834938959 |
 
-**Finding:** the respawn-TP mechanism works (tp_to_lane proven, 2 teleports). `tp_to_tower`
-specifically fails. Tower lookup is NOT the cause (this game the lane was pushed into the
-enemy, so the passive bot's own towers were intact → `loc` valid). Suspected break: the TP
-**channel is interrupted on the next tick** — `AIB_HandleRespawn` clears `bot.aib_wasDead`
-on the same tick it issues the TP (mode_laning_generic.lua line ~70), so normal laning Think
-resumes immediately and moves the bot toward the creeps (forward), cancelling the 3s channel
-to the rear tower. With tp_to_lane the destination matches the bot's intent (forward), so the
-channel completes. Likely fix: keep guarding (don't clear `aib_wasDead`) until the TP is
-consumed / the bot is no longer channelling, so Think can't move it mid-channel. NOT yet
-applied — awaiting confirmation.
+**Finding (RESOLVED ✅):** the respawn-TP mechanism works for BOTH behaviours now.
+Original break: the TP **channel was interrupted on the next tick** — `AIB_HandleRespawn`
+cleared `bot.aib_wasDead` on the same tick it issued the TP, so normal laning Think resumed
+immediately and moved the bot toward the creeps (forward), cancelling the 3s channel to the
+rear tower. (tp_to_lane survived only because its destination matched the bot's forward intent.)
+**Fix applied** (Mac-side, commit `89b5dc8`): after casting, `AIB_HandleRespawn` sets
+`aib_tping` + `aib_tpCastTime` and HOLDS the bot (returns true, issues no other action) while
+`modifier_teleporting` is present (+1s grace for the cast point), clearing the flag only once
+the channel resolves. **Confirmed in 8835623865**: canon config (Dire passive,
+`respawn_behavior = tp_to_tower`), passive died twice and `teleports_used = 2` in the stat dump.
+Row 7 of the matrix is now ✅.
 
 ---
 
