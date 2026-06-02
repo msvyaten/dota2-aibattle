@@ -45,6 +45,19 @@ local function AIB_ForwardSurvivingTowerLoc()
 	return nil
 end
 
+-- AIBattle: centroid of nearby enemy lane creeps (the threat to step away from). nil if none.
+local function AIB_EnemyCreepCentroid(enemyCreeps)
+	local cx, cy, n = 0, 0, 0
+	for _, c in pairs(enemyCreeps or {}) do
+		if J.IsValid(c) then
+			local l = c:GetLocation()
+			cx = cx + l.x; cy = cy + l.y; n = n + 1
+		end
+	end
+	if n == 0 then return nil end
+	return Vector(cx / n, cy / n, 0)
+end
+
 -- AIBattle: on death->alive transition, act per rules.respawn_behavior. Returns true if it issued an action.
 local function AIB_HandleRespawn()
 	if not bot:IsAlive() then bot.aib_wasDead = true; bot.aib_tping = false; return false end
@@ -287,6 +300,18 @@ function Think()
 				return
 			end
 		end
+	end
+
+	-- AIBattle: don't stand and tank enemy creep fire while idle. We only reach here when no
+	-- in-range last-hit, walkable last-hit, or deny was available (those returned above), so the
+	-- bot would otherwise just stand. If it's taking creep damage, step out of creep attack range.
+	-- Gated on retreat_caution: aggressive bots (low caution) hold the line, cautious/passive bots
+	-- back off; math.random()<rc makes it kite (step back / drift in) instead of robotically pinging.
+	local rc = dials.retreat_caution or 0.5
+	if rc > 0.4 and bot:WasRecentlyDamagedByCreep(1.5) and math.random() < rc then
+		local cen = AIB_EnemyCreepCentroid(nEnemyCreeps)
+		local back = cen and J.VectorAway(bot:GetLocation(), cen, 400) or AIB_ForwardSurvivingTowerLoc()
+		if back then bot:Action_MoveToLocation(back); return end
 	end
 
 	-- forwardness: high pushes to the lane front (validated v1 aggressive move);

@@ -1,18 +1,18 @@
--- Dire: passive mid (AIBattle Schema v2)
+-- Dire: PASSIVE Sniper (canonical). This is the DYING bot.
+-- TEST 7: respawn_behavior = tp_to_tower -> after death it must TELEPORT to its tower (not walk).
 return {
     dials = {
-        harass_desire     = 0.00,  -- 0-1: frequency of attacking enemy hero
-        farm_focus        = 1.00,  -- 0-1: 0 = pure harass, 1 = pure last-hitting
-        forwardness       = 0.10,  -- 0-1: 0 = glued to tower, 1 = aggressive front
-        ability_aggro     = 0.00,  -- 0-1: frequency of Shrapnel on hero
-        rune_control      = 0.20,  -- 0-1: 0.5 = baseline, <0.5 ignores runes
-        retreat_caution   = 0.80,  -- 0-1: 0.5 = baseline, >0.5 retreats early
-        execute_threshold = 0.00,  -- 0-1: 0 = never ult-finish (conservative)
+        harass_desire     = 0.05,
+        farm_focus        = 1.00,
+        forwardness       = 0.10,
+        ability_aggro     = 0.00,
+        rune_control      = 0.20,
+        retreat_caution   = 0.80,
+        execute_threshold = 0.00,
     },
     rules = {
-        respawn_behavior = "walk_back",  -- tp_to_tower | tp_to_lane | walk_back
+        respawn_behavior = "tp_to_tower",  -- TEST 7: expect teleports_used > 0 on Dire (slot 128)
     },
-    -- Passive demo build: standard farming carry WITH boots (Power Treads).
     item_build = {
         "item_power_treads",
         "item_dragon_lance",
