@@ -314,6 +314,28 @@ function Think()
 		if back then bot:Action_MoveToLocation(back); return end
 	end
 
+	-- AIBattle: don't just stand facing the enemy between last-hits — act per dials so the
+	-- matchup reads naturally. Aggressor (high harass) attacks the enemy hero when in range;
+	-- farmer (high farm) auto-attacks creeps to keep busy/pushing instead of idling for the
+	-- next last-hit window. Hero approach is left to forwardness below to avoid tower dives.
+	do
+		local enemyHero = bot:GetNearbyHeroes(botAttackRange + 50, true, BOT_MODE_NONE)
+		if enemyHero and #enemyHero > 0 and enemyHero[1]:IsAlive()
+			and math.random() < (dials.harass_desire or 0.5) then
+			bot:Action_AttackUnit(enemyHero[1], true)
+			return
+		end
+		if nEnemyCreeps and #nEnemyCreeps > 0 and math.random() < (dials.farm_focus or 0.5) then
+			for _, c in pairs(nEnemyCreeps) do
+				if J.IsValid(c) and J.CanBeAttacked(c)
+					and GetUnitToUnitDistance(bot, c) <= botAttackRange then
+					bot:Action_AttackUnit(c, true)
+					return
+				end
+			end
+		end
+	end
+
 	-- forwardness: high pushes to the lane front (validated v1 aggressive move);
 	-- low holds position (no forced move -> bot last-hits / holds instead of ramming its tower).
 	local fwd = dials.forwardness or 0.5
