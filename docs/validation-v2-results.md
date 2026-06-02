@@ -86,6 +86,7 @@ it can last-hit.
 |---|---|---|---|
 | A (pre-fix) | tp_to_tower | NO — teleports_used=0 (passive Dire died 2x, did not teleport) | 8835293640 |
 | **A (post-fix)** | **tp_to_tower** | **YES — teleports_used=2 (passive Dire died 2x, teleported both times)** | **8835623865** ✅ |
+| **A2 (post-fix, other side)** | **tp_to_tower** | **YES — teleports_used=1 (passive Radiant died 1x, teleported)** | **8835688565** ✅ |
 | ref | tp_to_lane | YES — teleports_used=2 (passive bot, prior swap test) | 8834938959 |
 
 **Finding (RESOLVED ✅):** the respawn-TP mechanism works for BOTH behaviours now.
@@ -99,6 +100,30 @@ rear tower. (tp_to_lane survived only because its destination matched the bot's 
 the channel resolves. **Confirmed in 8835623865**: canon config (Dire passive,
 `respawn_behavior = tp_to_tower`), passive died twice and `teleports_used = 2` in the stat dump.
 Row 7 of the matrix is now ✅.
+
+---
+
+## Code audit (2026-06-02) — unverified branch code
+No blocking bugs. Code is defensive (pcall, nil-safe, 0-1 clamp, GetItemCost validation,
+item_rules dormant unless configured). Findings:
+
+1. **[root cause] `rune_control` can't express in 1v1.** The rune-fix gate is logically correct,
+   but `mode_laning` GetDesire returns a flat **1.0** in 1v1 mid (mode_laning_generic.lua ~164)
+   while rune desire is hard-capped at **0.99** in `ScaleDesire` (aibattle_style.lua ~138) → laning
+   always outranks rune except in the narrow windows where laning itself bails. So runes are never
+   taken in 1v1 due to *arbitration priority*, not short games. To test it: raise the rune cap >1.0
+   for high rune_control, or drop laning desire at rune timings. Deferred (freeze).
+2. **[latent] item_rules `dying`** depends on `aib_deathCount`, incremented in `ItemPurchaseThink`
+   only on a dead frame — if the engine doesn't call it while the bot is dead, the count never grows.
+   Verify in-game when item_rules is enabled.
+3. **[5v5 edge] item_rules insertions wiped + latched:** ARDM/pos-swap rebuilds reset
+   `purchaseListInReverseOrder` (item_purchase_generic.lua ~535/658/705) but `aib_ruleDone[item]`
+   stays true → the situational item is dropped and never re-added. Irrelevant to 1v1.
+4. **[nit] comment mismatch:** the item_rules hook comment says "to the front" but it appends to the
+   END of `purchaseListInReverseOrder` = next-to-buy (the loop pops from the end). Behaviour correct.
+
+OK: `aibattle_style` clamp/whitelist/pcall solid; item_build override proven; `Item` required
+(item_purchase_generic.lua:6, no crash); `execute_threshold` proven; passive creep-fix safe.
 
 ---
 
