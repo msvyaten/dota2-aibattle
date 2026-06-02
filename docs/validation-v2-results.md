@@ -27,7 +27,7 @@ goes 2/0 and never dies, so it can never fire.)
 |---|---|---|---|---|
 | 1 | Swap holds (config drives behaviour) | aggressive vs passive, then swap sides | aggressor 2/0 + high hero dmg both orientations | ✅ confirmed (Phase 1, 8/8) |
 | 2 | `ability_aggro` is a gradient | aggressor `0.3` (run A) vs `0.9` (run B), all else equal | Shrapnel magical dmg: B noticeably > A (not 0↔max) | ⬜ |
-| 3 | `harass_desire` is a gradient | aggressor `0.3` vs `0.9` | hero attacks / hero dmg scales up | ⬜ |
+| 3 | `harass_desire` is a gradient | aggressor `0.3` vs `0.9` | hero attacks / hero dmg scales up | ❌ DEAD DIAL — see below |
 | 4 | `rune_control` works (after 1v1 fix) | aggressor `0.9` vs `0.1` | bot moves to mid rune at 2:00/4:00 vs ignores (replay/positions) | ⬜ |
 | 5 | `retreat_caution` works | same bot `0.2` vs `0.8` | low-HP behaviour: fights to low HP vs backs off early; deaths differ | ⬜ |
 | 6 | `forwardness` (currently BINARY at 0.5) | `0.1` vs `0.9` | holds near tower vs pushes to lane front | ⬜ |
@@ -45,6 +45,18 @@ goes 2/0 and never dies, so it can never fire.)
 |---|---|---|---|---|
 | A | 0.3 |  |  |  |
 | B | 0.9 |  |  |  |
+
+### Test 3 — harass_desire (FAILED, root cause found)
+Match 8835349718 (R harass 0.90 / D 0.30), ~35 min. Physical hero dmg: R=109, D=0.
+**109 over 35 min ≈ 2 stray autoattacks = noise, NOT proof.** Magical (Shrapnel) ~1350/1010
+nearly equal because that is driven by `ability_aggro` (equal at 0.50), not harass.
+
+**Root cause:** in `mode_laning_generic.lua` Think(), the harass branch (~line 260) sits
+BELOW the last-hit (~213) and deny (~229) branches, each of which `return`s. A mid lane
+almost always has a creep to last-hit/deny, so the bot returns before ever reaching harass.
+→ `harass_desire` is structurally dead at any value. Fix (depth, not breadth): roll
+`harass_desire` ABOVE the last-hit branch so the bot can choose to attack the hero instead
+of CSing. NOT applied yet — awaiting go-ahead (freeze).
 
 ### Test 4 — rune_control
 | Run | rune_control | Went to rune @2:00? @4:00? | Match log |
