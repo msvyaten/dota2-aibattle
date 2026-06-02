@@ -210,20 +210,42 @@ function Think()
 	if AIB_HandleRespawn() then return end
 	local dials = GetDials()
 
-	-- Last-hit logic (pos1/2 only, or when no core nearby)
+	-- AIBattle: announce the loaded config once in chat (visible in console.log).
+	if not bot.aib_announced then
+		bot.aib_announced = true
+		bot:ActionImmediate_Chat(string.format("AIB harass=%.2f farm=%.2f fwd=%.2f abil=%.2f rune=%.2f retreat=%.2f exec=%.2f",
+			dials.harass_desire, dials.farm_focus, dials.forwardness, dials.ability_aggro,
+			dials.rune_control, dials.retreat_caution, dials.execute_threshold), true)
+	end
+
+	-- Last-hit / harass interleave (AIBattle): secure an IN-RANGE last-hit first (free CS,
+	-- no repositioning), THEN harass with probability harass_desire, and only WALK to a
+	-- creep when not harassing. Lets the bot farm AND harass instead of one killing the other.
 	local hitCreep, moveToCreep = GetBestLastHitCreep(nEnemyCreeps)
-	if J.IsValid(hitCreep) then
-		if J.GetPosition(bot) <= 2 or not J.IsThereNonSelfCoreNearby(700) then
-			if GetUnitToUnitDistance(bot, hitCreep) > botAttackRange
-			or (moveToCreep and GetUnitToUnitDistance(bot, hitCreep) > botAttackRange * 0.8) then
-				bot:Action_MoveToUnit(hitCreep)
-				return
-			else
-				bot:SetTarget(hitCreep)
-				bot:Action_AttackUnit(hitCreep, true)
-				return
-			end
+	local csAllowed = J.IsValid(hitCreep) and (J.GetPosition(bot) <= 2 or not J.IsThereNonSelfCoreNearby(700))
+	local needMove = csAllowed and (GetUnitToUnitDistance(bot, hitCreep) > botAttackRange
+		or (moveToCreep and GetUnitToUnitDistance(bot, hitCreep) > botAttackRange * 0.8))
+
+	-- 1) grab a securable last-hit that's already in range
+	if csAllowed and not needMove then
+		bot:SetTarget(hitCreep)
+		bot:Action_AttackUnit(hitCreep, true)
+		return
+	end
+
+	-- 2) harass the hero instead of walking off to a creep
+	if math.random() > (dials.farm_focus or 0.5) then
+		local atkHero = bot:GetNearbyHeroes(botAttackRange + 50, true, BOT_MODE_NONE)
+		if atkHero and #atkHero > 0 and atkHero[1]:IsAlive() and math.random() < (dials.harass_desire or 0.5) then
+			bot:Action_AttackUnit(atkHero[1], true)
+			return
 		end
+	end
+
+	-- 3) not harassing -> walk to the creep to secure it
+	if csAllowed and needMove then
+		bot:Action_MoveToUnit(hitCreep)
+		return
 	end
 
 	local denyCreep = GetBestDenyCreep(nAllyCreeps)
@@ -251,15 +273,6 @@ function Think()
 				bot:Action_UseAbilityOnLocation(shrapnel, atk[1]:GetLocation())
 				return
 			end
-		end
-	end
-
-	-- farm_focus low -> trade CS for harass; harass_desire = swing probability
-	if math.random() > (dials.farm_focus or 0.5) then
-		local atk = bot:GetNearbyHeroes(botAttackRange + 50, true, BOT_MODE_NONE)
-		if atk and #atk > 0 and atk[1]:IsAlive() and math.random() < (dials.harass_desire or 0.5) then
-			bot:Action_AttackUnit(atk[1], true)
-			return
 		end
 	end
 

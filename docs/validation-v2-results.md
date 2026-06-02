@@ -56,7 +56,18 @@ BELOW the last-hit (~213) and deny (~229) branches, each of which `return`s. A m
 almost always has a creep to last-hit/deny, so the bot returns before ever reaching harass.
 → `harass_desire` is structurally dead at any value. Fix (depth, not breadth): roll
 `harass_desire` ABOVE the last-hit branch so the bot can choose to attack the hero instead
-of CSing. NOT applied yet — awaiting go-ahead (freeze).
+of CSing.
+
+**Update (match 8835417950): fix applied + balanced (secure in-range last-hit → harass →
+walk-to-creep), STILL FAILS.** Physical hero dmg = 0 for BOTH bots (incl. harass 0.90).
+Real root cause is deeper: the two Snipers never close to autoattack range (~550) — they
+farm at range, heroes sit ~1000+ apart behind creeps, so the harass branch ("attack hero
+if in range") never triggers. Making harass real requires the bot to ADVANCE toward the
+enemy hero, which entangles with retreat (advance → take damage → mode_retreat pulls back =
+"shoot and run"). Conclusion: harass/aggression is a laning+retreat behavior cluster, not a
+dial-ordering issue. Treat holistically (post-validation). Also: denies ≈ last-hits because
+GetDesire scans ally creeps at 1200 but enemy creeps at 800 — bot denies from farther than
+it can last-hit.
 
 ### Test 4 — rune_control
 | Run | rune_control | Went to rune @2:00? @4:00? | Match log |
