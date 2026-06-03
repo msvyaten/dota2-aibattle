@@ -422,7 +422,7 @@ function Think()
 	-- Gated on retreat_caution: aggressive bots (low caution) hold the line, cautious/passive bots
 	-- back off; math.random()<rc makes it kite (step back / drift in) instead of robotically pinging.
 	local rc = dials.retreat_caution or 0.5
-	if rc > 0.4 and bot:WasRecentlyDamagedByCreep(1.5) and math.random() < rc then
+	if rc >= 0.4 and bot:WasRecentlyDamagedByCreep(1.5) and math.random() < rc then
 		local cen = AIB_EnemyCreepCentroid(nEnemyCreeps)
 		local back = cen and J.VectorAway(bot:GetLocation(), cen, 400) or AIB_ForwardSurvivingTowerLoc()
 		if back then bot:Action_MoveToLocation(back); return end
