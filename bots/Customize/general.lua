@@ -102,7 +102,7 @@ Customize.Dire_Names = {
 -- The desire level that the bots will group up and push the same lane. 
 -- 1 is mild meaning bots will group up only when convenient; 3 is bots will almost always try to push together.
 -- Group pushing may increase the difficulty but can reduce the game experience. 
-Customize.Force_Group_Push_Level = 1
+Customize.Force_Group_Push_Level = 3
 
 -- The Enhanced Fretbots mode settings:
 -- For more about Fretbots mode: https://github.com/forest0xia/dota2bot-OpenHyperAI/discussions/68
