@@ -44,10 +44,12 @@ Customize.Ban = {
 5. There are sample team picks in Appendix section below. 
 6. Check Appendix to ensure you DO NOT pick more than 1 "weak" heroes in a team for your game experience.
 --]]
-Customize.Radiant_Heros = { "npc_dota_hero_juggernaut", "npc_dota_hero_wisp", "npc_dota_hero_wisp", "npc_dota_hero_wisp", "npc_dota_hero_wisp" }
+-- 5v5 smoke test (Phase 1): mirrored balanced comp (same on both teams = clean team-level A/B),
+-- ordered pos1->5. All outside the weak/buggy lists; Zeus/Warlock/Lion give clear fight signal.
+Customize.Radiant_Heros = { "npc_dota_hero_phantom_assassin", "npc_dota_hero_zuus", "npc_dota_hero_axe", "npc_dota_hero_lion", "npc_dota_hero_warlock" }
 
 -- Same notes as above for picking heroes but for the Dire side.
-Customize.Dire_Heros = { "npc_dota_hero_juggernaut", "npc_dota_hero_wisp", "npc_dota_hero_wisp", "npc_dota_hero_wisp", "npc_dota_hero_wisp" }
+Customize.Dire_Heros = { "npc_dota_hero_phantom_assassin", "npc_dota_hero_zuus", "npc_dota_hero_axe", "npc_dota_hero_lion", "npc_dota_hero_warlock" }
 
 --[[
 1. To allow bots to randomly pick heroes that can be the same/repeated. 
