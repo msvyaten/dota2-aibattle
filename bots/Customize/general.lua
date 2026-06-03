@@ -44,10 +44,10 @@ Customize.Ban = {
 5. There are sample team picks in Appendix section below. 
 6. Check Appendix to ensure you DO NOT pick more than 1 "weak" heroes in a team for your game experience.
 --]]
-Customize.Radiant_Heros = { "npc_dota_hero_sniper", "npc_dota_hero_wisp", "npc_dota_hero_wisp", "npc_dota_hero_wisp", "npc_dota_hero_wisp" }
+Customize.Radiant_Heros = { "npc_dota_hero_juggernaut", "npc_dota_hero_wisp", "npc_dota_hero_wisp", "npc_dota_hero_wisp", "npc_dota_hero_wisp" }
 
 -- Same notes as above for picking heroes but for the Dire side.
-Customize.Dire_Heros = { "npc_dota_hero_sniper", "npc_dota_hero_wisp", "npc_dota_hero_wisp", "npc_dota_hero_wisp", "npc_dota_hero_wisp" }
+Customize.Dire_Heros = { "npc_dota_hero_juggernaut", "npc_dota_hero_wisp", "npc_dota_hero_wisp", "npc_dota_hero_wisp", "npc_dota_hero_wisp" }
 
 --[[
 1. To allow bots to randomly pick heroes that can be the same/repeated. 

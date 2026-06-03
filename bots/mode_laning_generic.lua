@@ -33,6 +33,40 @@ if Utils.BuggyHeroesDueToValveTooLazy[botName] then local_mode_laning_generic = 
 local Style = require(GetScriptDirectory()..'/FunLib/aibattle_style')
 local function GetDials() return Style.Get().dials end
 local function GetRules() return Style.Get().rules end
+local function GetImp(name) return Style.Imp(name) end
+
+-- AIBattle diag: count each branch firing silently, then emit ONE combined summary line at most
+-- once per minute (only when something fired) so a TEST GAME yields measurable numbers without
+-- spamming chat. Format 'AIB[R] anti-afk=15 heal-item=7'; the LAST such line in console.<id>.log
+-- carries the cumulative totals. (print() is invisible in console.log, so chat is the only
+-- logging channel — keep it sparse.)
+local AIB_SIDE = (bot:GetTeam() == TEAM_RADIANT) and "R" or "D"
+local function AIB_Diag(key)
+	bot.aib_diagCnt = bot.aib_diagCnt or {}
+	bot.aib_diagCnt[key] = (bot.aib_diagCnt[key] or 0) + 1
+	local now = DotaTime()
+	if bot.aib_diagLast == nil or now - bot.aib_diagLast >= 60.0 then
+		bot.aib_diagLast = now
+		local parts = {}
+		for k, v in pairs(bot.aib_diagCnt) do parts[#parts + 1] = k .. "=" .. v end
+		table.sort(parts)
+		bot:ActionImmediate_Chat("AIB[" .. AIB_SIDE .. "] " .. table.concat(parts, " "), true)
+	end
+end
+
+-- AIBattle improvement helper: nearest ALIVE enemy tower whose attack range threatens the bot
+-- (range ~700 + buffer). Returns the tower handle or nil.
+local function AIB_EnemyTowerDanger()
+	local opp = GetOpposingTeam()
+	local ids = { TOWER_MID_1, TOWER_MID_2, TOWER_TOP_1, TOWER_BOT_1, TOWER_MID_3, TOWER_BASE_1, TOWER_BASE_2 }
+	for _, id in ipairs(ids) do
+		local t = GetTower(opp, id)
+		if t ~= nil and t:IsAlive() and GetUnitToUnitDistance(bot, t) < 900 then
+			return t
+		end
+	end
+	return nil
+end
 
 -- AIBattle: returns the location of the most-forward SURVIVING friendly tower (closest to fight)
 local function AIB_ForwardSurvivingTowerLoc()
@@ -239,15 +273,77 @@ function Think()
 	-- AIBattle: announce the loaded config once in chat (visible in console.log).
 	if not bot.aib_announced then
 		bot.aib_announced = true
-		bot:ActionImmediate_Chat(string.format("AIB harass=%.2f farm=%.2f fwd=%.2f abil=%.2f rune=%.2f retreat=%.2f exec=%.2f",
+		bot:ActionImmediate_Chat(string.format("AIB[%s] harass=%.2f farm=%.2f fwd=%.2f abil=%.2f rune=%.2f retreat=%.2f exec=%.2f heal=%d afk=%d tower=%d abildial=%d",
+			AIB_SIDE,
 			dials.harass_desire, dials.farm_focus, dials.forwardness, dials.ability_aggro,
-			dials.rune_control, dials.retreat_caution, dials.execute_threshold), true)
+			dials.rune_control, dials.retreat_caution, dials.execute_threshold,
+			GetImp('defensive_heal') and 1 or 0, GetImp('anti_afk') and 1 or 0,
+			GetImp('tower_avoid') and 1 or 0, GetImp('ability_on_dials') and 1 or 0), true)
+	end
+
+	-- AIBattle improvement (opt-in tower_avoid): don't sit in enemy tower range without a kill
+	-- in progress. If inside an alive enemy tower's range and NOT finishing a low-HP hero, step
+	-- out. Fixes bots walking under the tower and dying to it for no reason.
+	if GetImp('tower_avoid') then
+		local twr = AIB_EnemyTowerDanger()
+		if twr ~= nil then
+			local he = bot:GetNearbyHeroes(botAttackRange + 50, true, BOT_MODE_NONE)
+			local finishing = he and #he > 0 and he[1]:IsAlive() and J.GetHP(he[1]) < 0.35
+			if not finishing then
+				bot:Action_MoveToLocation(J.VectorAway(bot:GetLocation(), twr:GetLocation(), 350))
+				return
+			end
+		end
+	end
+
+	-- AIBattle improvement (opt-in defensive_heal, HERO-AGNOSTIC): at low HP recover IN LANE via
+	-- inventory items + pull back to safety, instead of plodding to fountain (which bleeds farm).
+	-- Threshold scales with retreat_caution (cautious heals earlier). No hero spells — items only.
+	-- Anti-thrash (fix for heal-item firing ~2x/s and starving farm): at most one heal attempt per
+	-- HEAL_CD seconds, and NEVER skip a securable in-range last-hit to heal (free CS > a wand tick).
+	-- Diag: 'heal-item' / 'heal-pullback'. NOTE: hitCreep/moveToCreep are computed once here and
+	-- reused by the last-hit/harass interleave below.
+	local HEAL_CD = 2.5
+	local hitCreep, moveToCreep = GetBestLastHitCreep(nEnemyCreeps)
+	local lhSecurable = J.IsValid(hitCreep) and not moveToCreep
+		and GetUnitToUnitDistance(bot, hitCreep) <= botAttackRange
+	if GetImp('defensive_heal') and not lhSecurable
+		and J.GetHP(bot) < (0.30 + 0.20 * (dials.retreat_caution or 0.5))
+		and (bot.aib_healLast == nil or DotaTime() - bot.aib_healLast >= HEAL_CD) then
+		-- instant items: safe to pop any time
+		for _, nm in ipairs({ "item_magic_wand", "item_magic_stick", "item_faerie_fire", "item_satanic" }) do
+			local it = bot:GetItemInSlot(bot:FindItemSlot(nm))
+			if it ~= nil and it:IsFullyCastable() then
+				bot.aib_healLast = DotaTime(); AIB_Diag("heal-item")
+				bot:Action_UseAbility(it); return
+			end
+		end
+		local safe = not (bot:WasRecentlyDamagedByAnyHero(1.0) or bot:WasRecentlyDamagedByCreep(1.0))
+		if safe then
+			-- channel items (break on damage): only when not being hit
+			local salve = bot:GetItemInSlot(bot:FindItemSlot("item_flask"))
+			if salve ~= nil and salve:IsFullyCastable() then
+				bot.aib_healLast = DotaTime(); AIB_Diag("heal-item")
+				bot:Action_UseAbilityOnEntity(salve, bot); return
+			end
+			local bottle = bot:GetItemInSlot(bot:FindItemSlot("item_bottle"))
+			if bottle ~= nil and bottle:IsFullyCastable() then
+				bot.aib_healLast = DotaTime()
+				bot:Action_UseAbility(bottle); return
+			end
+		else
+			-- being hit, no instant heal -> pull back toward own tower to regen, don't keep fighting
+			local back = AIB_ForwardSurvivingTowerLoc()
+			if back then
+				bot.aib_healLast = DotaTime(); AIB_Diag("heal-pullback")
+				bot:Action_MoveToLocation(back); return
+			end
+		end
 	end
 
 	-- Last-hit / harass interleave (AIBattle): secure an IN-RANGE last-hit first (free CS,
 	-- no repositioning), THEN harass with probability harass_desire, and only WALK to a
 	-- creep when not harassing. Lets the bot farm AND harass instead of one killing the other.
-	local hitCreep, moveToCreep = GetBestLastHitCreep(nEnemyCreeps)
 	local csAllowed = J.IsValid(hitCreep) and (J.GetPosition(bot) <= 2 or not J.IsThereNonSelfCoreNearby(700))
 	local needMove = csAllowed and (GetUnitToUnitDistance(bot, hitCreep) > botAttackRange
 		or (moveToCreep and GetUnitToUnitDistance(bot, hitCreep) > botAttackRange * 0.8))
@@ -302,6 +398,24 @@ function Think()
 		end
 	end
 
+	-- AIBattle improvement (opt-in ability_on_dials): generalize ability use beyond Sniper.
+	-- Juggernaut Blade Fury (no-target AOE) — cast to harass a nearby enemy hero (harass_desire)
+	-- or to push/farm a creep pack (farm_focus), so non-Sniper abilities are dial-driven instead
+	-- of relying only on OHA's native (conservative) gating.
+	if GetImp('ability_on_dials') then
+		local bf = bot:GetAbilityByName("juggernaut_blade_fury")
+		if bf and bf:IsFullyCastable() then
+			local foe = bot:GetNearbyHeroes(280, true, BOT_MODE_NONE)
+			if foe and #foe > 0 and foe[1]:IsAlive() and math.random() < (dials.harass_desire or 0.5) then
+				bot:Action_UseAbility(bf); return
+			end
+			local creeps = bot:GetNearbyCreeps(280, true)
+			if creeps and #creeps >= 3 and math.random() < (dials.farm_focus or 0.5) then
+				bot:Action_UseAbility(bf); return
+			end
+		end
+	end
+
 	-- AIBattle: don't stand and tank enemy creep fire while idle. We only reach here when no
 	-- in-range last-hit, walkable last-hit, or deny was available (those returned above), so the
 	-- bot would otherwise just stand. If it's taking creep damage, step out of creep attack range.
@@ -319,19 +433,30 @@ function Think()
 	-- farmer (high farm) auto-attacks creeps to keep busy/pushing instead of idling for the
 	-- next last-hit window. Hero approach is left to forwardness below to avoid tower dives.
 	do
+		local antiAfk = GetImp('anti_afk')
 		local enemyHero = bot:GetNearbyHeroes(botAttackRange + 50, true, BOT_MODE_NONE)
 		if enemyHero and #enemyHero > 0 and enemyHero[1]:IsAlive()
 			and math.random() < (dials.harass_desire or 0.5) then
 			bot:Action_AttackUnit(enemyHero[1], true)
 			return
 		end
-		if nEnemyCreeps and #nEnemyCreeps > 0 and math.random() < (dials.farm_focus or 0.5) then
+		-- anti_afk: always act (prob 1.0); otherwise gated by farm_focus.
+		local creepProb = antiAfk and 1.0 or (dials.farm_focus or 0.5)
+		if nEnemyCreeps and #nEnemyCreeps > 0 and math.random() < creepProb then
+			local nearest, nd = nil, 1e9
 			for _, c in pairs(nEnemyCreeps) do
-				if J.IsValid(c) and J.CanBeAttacked(c)
-					and GetUnitToUnitDistance(bot, c) <= botAttackRange then
-					bot:Action_AttackUnit(c, true)
-					return
+				if J.IsValid(c) and J.CanBeAttacked(c) then
+					local d = GetUnitToUnitDistance(bot, c)
+					if d <= botAttackRange then
+						bot:Action_AttackUnit(c, true); return
+					end
+					if d < nd then nearest, nd = c, d end
 				end
+			end
+			-- anti_afk: nothing in range -> walk to the nearest creep instead of standing idle
+			if antiAfk and nearest then
+				AIB_Diag("anti-afk")
+				bot:Action_MoveToUnit(nearest); return
 			end
 		end
 	end

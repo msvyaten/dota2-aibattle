@@ -1,107 +1,323 @@
-# AIBattle × Dota 2 — HANDOFF (полный контекст для нового окна)
+# HANDOFF — AIBattle × Dota 2 (единый живой документ)
 
-> Дата: 02.06.2026. Машина: Windows / Shadow PC (виртуалка на Mac). **Общаться с пользователем по-русски.**
-> Это единая точка входа. Прочитать целиком перед действиями. Связанные доки:
-> `docs/report-schema-v2.md` (сводка по диалам), `docs/validation-v2-results.md` (детальный лог тестов),
-> `docs/windows-plan-finish-1v1.md` (план добивания валидации). Авто-память: `~/.claude/.../memory/aibattle-dota-validation.md`.
+> Единственная точка входа и единственный поддерживаемый док проекта. Обновлять ЕГО, новых
+> статус/план-доков не плодить. Он же — то, что отдаём другому Claude (мак/новое окно).
+> Последнее обновление: 2026-06-03. Машина: Windows/Shadow PC (тут LIVE Dota). По-русски.
+>
+> Доказательство = ТОЛЬКО цифра из финального стат-дампа ИЛИ строка из `console.<matchid>.log`.
+> «На глаз» не считается. FREEZE новых фич, пока матрица не закрыта (глубина перед шириной).
 
 ---
 
-## 0. Что за проект (в одном абзаце)
-AIBattle — продукт «ставки на ИИ-агентов»: игрок задаёт **промптом** характер бота, боты дерутся, на это ставят.
-Доказываем на Dota 2: **промпт → конфиг → измеримое поведение бота**. База ботов — OpenHyperAI (OHA).
-Демо-полигон — зеркальный 1v1 Solo Mid, Sniper vs Sniper. Ядро (Phase 1/2) ДОКАЗАНО. Сейчас — валидация
-вглубь Schema v2 (6 диалов + правила) и вскрытие узких мест базовой laning-логики OHA.
+## 0. Проект в одном абзаце
+AIBattle — «ставки на ИИ-агентов»: игрок промптом задаёт характер бота. Доказываем на Dota 2:
+**промпт → конфиг → измеримое поведение бота**. База ботов — OpenHyperAI (OHA). Демо-полигон:
+зеркальный 1v1 Solo Mid, Sniper vs Sniper (для harass — мили Juggernaut/Sven). Цепочка:
+`промпт → LLM → JSON → playstyle_*.lua → поведение`. Сейчас: валидация Schema v2 (6 диалов +
+правила) и вскрытие узких мест базовой laning-логики OHA.
 
-## 1. Где что лежит
-- **Git-репо:** `C:\Users\Shadow\dota2-aibattle` (origin: github **msvyaten/dota2-aibattle**, ветка **`schema-v2-item-builds`**, в `main` НЕ мёржено). Git-личность: **don / don@users.noreply.github.com** (личность юзера, уже в локальном конфиге репо).
-- **LIVE-код (что грузит игра):** `C:\Program Files (x86)\Steam\steamapps\common\dota 2 beta\game\dota\scripts\vscripts\bots\`
-- **Конфиги стиля:** `bots/Customize/playstyle_radiant.lua` и `playstyle_dire.lua`.
-- **Логи матчей:** `...\dota 2 beta\game\dota\console.<matchid>.log` (при `-condebug`). Метрики — в финальном стат-дампе в конце лога.
-- **Бэкенд (генерация конфига из промпта):** `backend/` (нужен свежий OPENAI_API_KEY — старый отозван; юзер бережёт лимиты, генерит промпты сам).
+## 1. Пути / окружение
+- **Git-репо:** `C:\Users\Shadow\dota2-aibattle` (origin `msvyaten/dota2-aibattle`, ветка
+  **`schema-v2-item-builds`**, в `main` НЕ мёржено). Git-личность: **don / don@users.noreply.github.com**.
+- **LIVE (что грузит игра):** `…\dota 2 beta\game\dota\scripts\vscripts\bots\`. Структура `bots/` зеркалит LIVE.
+- **Конфиги стиля:** `bots/Customize/playstyle_radiant.lua` / `playstyle_dire.lua`.
+- **Логи:** `…\game\dota\console.<matchid>.log` (при `-condebug`). Метрики — финальный стат-дамп в конце.
+- **Анализ матча:** `python tools/match_stats.py <id> [id2 …]` — печатает cfg + по-слотам KDA/LH/DN/
+  урон/предметы/диаги. `player_slot 0=Radiant, 128=Dire`. Использовать ЕГО, не гречить логи руками.
+- Python 3.12 (openai). Бэкенд `backend/generate_playstyle.py` (gpt-5.5) — НЕ используется,
+  OPENAI_API_KEY отозван, конфиги пишем руками.
 
-## 2. Что ДОКАЗАНО (с пруфами)
-- **Свап-контроль 6×:** поведение И предметы следуют за конфигом, не за стороной. Матчи 8834418344 / 8834538636 / 8834873542 / 8834920653 / 8834938959.
-- **`respawn_behavior = tp_to_lane`:** бот телепортится после смерти. `teleports_used`=1 (8834920653), =2 (8834938959).
-- **`execute_threshold` (ветка, добивание ультом):** строка `AIB ult-finish triggered` (8834938959) — агро-бот скастовал Assassinate в убегающего лоу-хп.
-- **`item_build`** (билд из конфига заменяет хардкод героя): подтверждено по item-дампу (у агро нет ботинок, у пассива Power Treads).
+## 2. Архитектура (что где в коде, всё на ветке)
+- **`FunLib/aibattle_style.lua`** — загрузчик: парсит `dials` (clamp 0-1), `rules` (whitelist),
+  `item_build`, `item_rules`; `ScaleDesire`; `EvalItemCondition`; `Imp` (improvements, OFF по умолч.).
+- **`mode_laning_generic.lua`** — главный: `GetDials/GetRules/GetImp`; `AIB_HandleRespawn` (TP после
+  смерти с гардом канала); Think: last-hit/harass интерлив, shrapnel по `ability_aggro`, forwardness-
+  движение; cfg-анонс в чат. + LIVE-only impruvы (defensive_heal, anti_afk, tower_avoid, ability_on_dials).
+- **`mode_rune_generic.lua`** — `GetDesire = ScaleDesire(raw, rune_control)`.
+- **`mode_retreat_generic.lua`** — desire ×= retreat_caution.
+- **`BotLib/hero_sniper.lua`** — `ConsiderR` ветка execute_threshold. `ability_aggro` ХАРДКОД на
+  `sniper_shrapnel` → на мили не сработает (помечать Sniper-only). Спеллы хардкодны по героям.
+- **`item_purchase_generic.lua`** — подмена `sBuyList` на `item_build` (валидация GetItemCost);
+  хук `ItemPurchaseThink` для адаптивных `item_rules` (opt-in, спит).
+- **`Customize/general.lua`** — герои pos1 обе стороны, имена ChatGPT(Rad)/Gemini(Dire).
 
-## 3. Статус диалов Schema v2 (матрица валидации)
-6 диалов: `harass_desire`, `farm_focus`, `forwardness`, `ability_aggro`, `rune_control`, `retreat_caution`.
-Правила: `respawn_behavior` (tp_to_tower | tp_to_lane | walk_back). На ветке спят: `execute_threshold`, адаптивные `item_rules`.
+---
 
-| Диал/правило | Статус | Пруф/заметка |
+## 3. СТАТУС ВАЛИДАЦИИ ДИАЛОВ (МАТРИЦА ЗАКРЫТА)
+
+| Рычаг | Статус | Пруф (match id) |
 |---|---|---|
-| свап-контроль | ✅ 6× | см. §2 |
-| `tp_to_lane` | ✅ | teleports_used 1→2 |
-| `tp_to_tower` | ⏳ ТЕСТИТСЯ СЕЙЧАС | был ❌ (канал TP рвался), ПОЧИНЕН (см. §5), идёт проверочный матч |
-| `execute_threshold` (ветка) | ✅ | `AIB ult-finish` |
-| `ability_aggro` (Шрапнель) | 🟡 работает, градиент не измерен | оба шрапнелят 975–1350 маг.; чистый A/B 0.3 vs 0.9 не снят |
-| `harass_desire` | ❌ мёртв на Снайпере | физ-урон по герою = 0 даже при 0.90. Снайперы не сходятся на ~550, фарм на рейндже. Оживёт на МИЛИ |
-| `rune_control` | 🟡 фикс есть, не подтв. | в 1v1 руну не берёт никто (standoff) |
-| `retreat_caution` | ⬜ не прогнан | — |
-| `forwardness` (бинарный @0.5) | ⬜ не прогнан чисто | — |
-| `farm_focus` | ⬜ косвенно | проверится на мили |
+| Свап-контроль (база) | ✅ 8× | поведение И предметы за конфигом, не за стороной: 8834418344 / 8834538636 / 8834873542 / 8834920653 / 8834938959 / 8835623865 / 8835688565 |
+| `respawn_behavior=tp_to_lane` | ✅ | teleports_used=1 (8834920653), =2 (8834938959) у умирающего пассива |
+| `respawn_behavior=tp_to_tower` | ✅ 2× | teleports_used=2 (8835623865, Dire), =1 (8835688565, Radiant) после фикса гарда канала (Mac `89b5dc8`). Баг до фикса: =0 (8835293640) |
+| `execute_threshold` (ветка) | ✅ | строка `AIB ult-finish triggered` (8834938959) — Assassinate в убегающего лоу-хп |
+| `ability_aggro` (Шрапнель) | ✅ градиент ~11× | маг.урон Шрапнели 1200 (0.90) vs 110 (0.30) — зеркало 8835738321. Sniper-only |
+| `harass_desire` | ❌ дальник / ✅ мили ~6.5× | Sniper: физ.урон=0 даже при 0.90 (не сходятся). Juggernaut 8835850651: физ.урон 7891 (0.90) vs 1209 (0.30), вылилось в 2/0 vs 0/2 |
+| `forwardness` (бинарный @0.5) | ✅ (оговорка side) | зеркало 8836178214: пушер 0.90 = 38LH+4500 урона по вышке но умер 2×; холдер 0.10 безопасно, килл 1/0 |
+| `retreat_caution` | ✅ подтв. свапом | первый прогон нечисто (8836163050, осторожный всё равно занырнул); СВАП подтвердил: 0.20 ныряет+умирает 2×+4500tower / 0.80 выживает+0 tower, осторожный выиграл обе |
+| `rune_control` | ❌ структурно подавлен в 1v1 | КОРНЕВАЯ ПРИЧИНА (аудит): laning GetDesire в 1v1 = плоская 1.0 (mode_laning_generic ~164), руна капится 0.99 в ScaleDesire (aibattle_style ~138) → laning всегда выигрывает арбитраж. Чтобы тестить: поднять кап руны >1.0 при высоком rune_control. Отложено |
+| `farm_focus` | 🟡 косвенно | проявляется на мили (трейд vs ластхит); чистого A/B нет |
 
-## 4. Ключевые находки (почему буксует)
-1. **harass_desire — кластер laning+retreat, не ордеринг.** Снайперы (рейндж) не подходят на дистанцию автоатаки → ветка «бить героя если в радиусе» не триггерится. Чинить позиционно (подход к герою), но это сцеплено с retreat: подошёл→получил→`mode_retreat` увёл = «выстрелил и отбежал».
-2. **Денаи ≈ ласт-хиты** из-за асимметрии радиусов в `GetDesire` (`mode_laning_generic.lua`): свои крипы сканируются в **1200**, вражеские — в **800**. Стоя сзади, бот денаит, но не дотягивается до добивания.
-3. **Игры тянутся 30+ мин:** киллов нет (пассивны), вышка падает от крипов поздно. Победа 1v1 = **2 килла ИЛИ вышка** (нетворт ни при чём — НЕ путать победителя с богатым ботом!). Мили-герой даст киллы → короче.
-4. **TP докупаются стоковой логикой OHA** (не наша настройка), бесполезно в 1v1.
-5. **Вышки (задача на будущее):** бот не доламывает вражескую вышку, чтобы победить (пример 8835417950 ~29 мин: вышке 1 тычка, крипы под ней, бот проигнорировал). Не в текущих фиксах.
+---
 
-## 5. Что мы накодили (по файлам, всё на ветке)
-- **`FunLib/aibattle_style.lua`** — загрузчик: парсит `dials` (clamp 0-1), `rules` (whitelist), `item_build`, `item_rules`; `ScaleDesire`; `EvalItemCondition` (behind/ahead/dying/low_hp/enemy_magical/enemy_physical). Добавлен диал `execute_threshold` (дефолт 0).
-- **`mode_laning_generic.lua`** — главный: `GetDials/GetRules` через aibattle_style; `AIB_HandleRespawn` (TP после смерти, теперь с **гардом канала**: после каста держит бота пока `modifier_teleporting`+1с грейс, не даёт Think отменить TP — это фикс tp_to_tower); `aib_wasDead` ставится в death-guard `GetDesire`; Think: **last-hit/harass интерлив** (добить в радиусе → харас по `harass_desire` → подойти к крипу), shrapnel по `ability_aggro`, forwardness-движение; чат-конфиг `AIB harass=.. farm=.. fwd=.. abil=.. rune=.. retreat=.. exec=..` (виден в console.log как CLocalize::FindSafe).
-- **`mode_rune_generic.lua`** — `GetDesire = ScaleDesire(raw, rune_control)`; ослаблен «outnumbered»-гард при rune_control>0.6 (контест в 1v1).
-- **`mode_retreat_generic.lua`** — desire домножается на retreat_caution.
-- **`BotLib/hero_sniper.lua`** — в `ConsiderR` ветка execute_threshold (добив ультом убегающего лоу-хп). ВАЖНО: `ability_aggro` захардкожен на `sniper_shrapnel` → на мили НЕ сработает (это норм, помечать Sniper-only).
-- **`item_purchase_generic.lua`** — подмена `sBuyList` на `item_build` из конфига (валидация через GetItemCost); хук `ItemPurchaseThink` для адаптивных `item_rules` (opt-in, спит без правил).
-- **`Customize/general.lua`** — Sniper pos1 обе стороны, имена ChatGPT(Rad)/Gemini(Dire).
+## 4. Ключевые находки (почему laning буксует)
+1. **harass_desire = кластер laning+retreat, не диал-ордеринг.** Снайперы не сходятся на ~550
+   (фармят на рейндже). Чтобы харас работал — бот должен ПОДХОДИТЬ, но это сцеплено с retreat:
+   подошёл→получил→`mode_retreat` увёл = «выстрелил и отбежал».
+2. **Денаи ≈ ласт-хиты** из-за асимметрии радиусов в `GetDesire`: свои крипы сканируются в **1200**,
+   вражеские — в **800**. Стоя сзади, бот денаит, но не дотягивается до добивания. (Объясняет, почему
+   Dire денаил больше — плюс side-bias.)
+3. **Боты не знают радиус вышки.** В laning нет проверки на радиус вражеской вышки перед ударом по
+   герою → бьют под вышкой и огребают. retreat-шаг триггерится на урон от КРИПОВ, не от вышки.
+   `tower_avoid` импрув ❌ не работает (нужно перенести гард в боевой/retreat-слой, осознать радиус ~700).
+4. **Игры тянутся 30+ мин:** киллов нет (пассивны), вышка падает поздно. Победа 1v1 = 2 килла ИЛИ
+   вышка (НЕ нетворт — не путать победителя с богатым ботом).
+5. **TP докупаются стоковой логикой OHA**, бесполезно в 1v1.
 
-## 6. LIVE vs РЕПО (важно!)
-- **РЕПО** держит КАНОН: `playstyle_radiant` = агро, `playstyle_dire` = пассив.
-- **LIVE** сейчас = ТЕСТ-СОСТОЯНИЕ (идёт A/B-батч Снайпера, см. §7). После валидации вернуть канон из гита.
-- Код (mode_*, aibattle_style, hero_sniper, item_purchase, general) — LIVE синкнут с репо.
-- Имя бота Radiant не отображается в игре — клиентский рендер-квирк, НЕ кодовый баг (на сервере имя верное).
+## 5. Аудит кода — без блокеров
+- **rune_control** — см. §3 (арбитраж приоритета laning 1.0 > rune cap 0.99, не баг).
+- **item_rules `dying`** [latent] — зависит от `aib_deathCount`, инкремент в `ItemPurchaseThink` на
+  мёртвом фрейме; проверить, зовётся ли движком на мёртвом боте.
+- **item_rules вставки** [5v5 edge] — ARDM/pos-swap ребилд сбрасывает список, но `aib_ruleDone[item]`
+  остаётся true → ситуативный предмет теряется. К 1v1 не относится.
+- OK: clamp/whitelist/pcall, item_build override, execute_threshold — доказаны.
 
-## 7. АКТИВНЫЙ ПЛАН (что прямо сейчас)
-Идёт снайперский A/B-батч (юзер играет, потом разбираем ОДНИМ заходом):
-- **Игра 1 — tp_to_tower:** Radiant=агро, Dire=пассив+`tp_to_tower`. Пруф: `teleports_used>0` у slot 128 (Dire) + наблюдение «телепортнулся к вышке».
-- **Игры 2–4 — дуэльный A/B (симметрия):** оба бота = baseline (все диалы 0.50, forwardness 0.70, respawn walk_back, одинаковый item_build), меняется ОДИН диал (Radiant LOW / Dire HIGH): Т2 `ability_aggro` 0.3/0.9 (маг.урон), Т5 `retreat_caution` 0.2/0.8 (смерти/мин-HP), Т6 `forwardness` 0.1/0.9 (позиция, на глаз).
-- **Потом (после лимитов) — МИЛИ-герой** (sven/juggernaut, зеркало, правка `general.lua`): оживить **harass_desire** (физ-урон по герою — метрика, что была 0 на Снайпере) + `farm_focus` + проверка `item_build`-override на мили.
-- **Merge-gate:** мёрж в `main` только когда дуэльные диалы + tp_to_tower + мили-harass ✅ с пруфами. `rune_control` и ability_aggro-на-мили честно пометить deferred/hero-specific.
+---
 
-## 8. Правила работы (соблюдать)
-- **FREEZE фич:** новые диалы / расширения execute_threshold/item_rules / новые герои — НЕ добавляем, пока матрица не закрыта. Глубина перед шириной.
-- **Доказательство — только цифра из стат-дампа ИЛИ строка из `console.<id>.log`.** «На глаз»/«вроде работает» не принимается.
-- **Один тест = один диал** между двумя прогонами (или зеркальный A/B в одной игре: оба бота равны кроме одного диала).
-- **Игры — до конца** (нужен финальный стат-дамп). Прерванный лог = нет данных.
-- **Гит:** коммит локально, **пуш пачкой** по команде юзера «заливай». Перед работой — `git status` + `git log origin/<branch>..HEAD` (нет ли незапушенного). Sync LIVE→репо безопасен; робокопи репо→LIVE тоже ок (general.lua в репо актуален).
-- **Не переписывать вслепую:** если что-то не работает — сообщить НА КАКОМ ШАГЕ рвётся (с пруфом), предложить точечный фикс.
-- **Эффективность токенов:** один точный grep на лог (kills/deaths/last_hits/denies/teleports_used/hero_damage + физ/маг + runes + items), без больших чтений; батчить анализ нескольких игр в один заход.
+## 6. ИСТОРИЯ ИЗМЕНЕНИЙ
+**В гите (ветка `schema-v2-item-builds`):**
+- `9ec61f2` (HEAD) — scorecard диалов + match id.
+- `89b5dc8` — фикс tp_to_tower (гард канала ТП: `aib_tping`+`aib_tpCastTime` держат бота пока есть
+  `modifier_teleporting`; раньше `aib_wasDead` сбрасывался в тик каста и Think рвал канал).
+- `9fda74c` — фикс пассива (кайт от крипов, gate `retreat_caution>0.4`) + harass floor 0.05.
+- `75dfa0e` — фикс «stay busy» (агро бьёт героя / фармер бьёт крипов вместо простоя).
 
-## 9. Как читать лог (шпаргалка grep)
+**LIVE-only (НЕ в гите — держим до валидации):**
+- Вся подсистема **improvements**: `defensive_heal`, `anti_afk`, `tower_avoid`, `ability_on_dials`,
+  инфра `improvements={}` + `M.Imp`, хелпер `AIB_Diag`.
+- Juggernaut в `general.lua`.
+
+**Статус импрувов:**
+- `ability_on_dials` ✅ ПОДТВЕРЖДЁН (Blade Fury по диалам: маг-урон ON ~2500-3000 vs контроль ~450-560).
+- `tower_avoid` ❌ НЕ РАБОТАЕТ (towerDmg зависит от стороны не флага; дайв в боевом/пуш-режиме, гард
+  только в laning + исключение «добивание<35%»). Доработать.
+- `defensive_heal` — ПОЧИНЕН передёргивающий баг (heal-item 1533→69/57 за матч, чат не спамит; подтв.
+  2× на обеих сторонах). Свап-пара 8836787628 (Dire=ВКЛ) / 8836810347 (Radiant=ВКЛ): Radiant выиграл
+  ОБЕ → исход идёт за side-bias (Dire ныряет вышку, towerDmg 4500 + умирает), НЕ за флагом. Эффект
+  импрува НЕУБЕДИТЕЛЕН — замаскирован база-багами (дайв вышки + смерть на лоу-хп). Не валидирован.
+- `anti_afk` — отрабатывает (anti-afk R#441 / D#613), но эффект так же замаскирован. Не валидирован.
+
+---
+
+## 7. Изменения 03.06 — ЗАКОММИЧЕНЫ в ветку как dormant/unvalidated
+
+> Затащены в гит коммитом «wip: improvements subsystem + 03.06 fixes (dormant, unvalidated)»: вся
+> LIVE-only подсистема improvements + фиксы ниже. Флаги improvements OFF по умолчанию — едут как
+> помеченный неготовый код (как execute_threshold), валидацию НЕ прошли. Ниже — что именно сделано.
+
+**Контекст (матч 8836632303, Radiant=контроль / Dire=импрувы):** `heal-item` сработал **1533×** за
+~12 мин (~2/сек) — defensive_heal лупил каждый тик и пожирал фарм (импрув-сторона LH 20 vs 31, lvl 8
+vs 10, heroDmg 1499 vs 3144, смерть+TP, контроль победил). Старый одноразовый диаг это прятал; новые
+счётчики вскрыли. Отсюда фиксы ниже. (Оговорка: 1 игра + Dire = side-bias, нужна свап-игра; но `#1533`
+от стороны не зависит.)
+
+### Файл `bots/mode_laning_generic.lua`
+
+**7.1 Хелпер `AIB_Diag` + `AIB_SIDE`** — сразу после `local function GetImp(name) return Style.Imp(name) end`.
+Считает срабатывания тихо, шлёт ОДНУ сводную строку макс. раз в 60 сек (чтобы не спамить чат —
+`print()` в console.log не виден). Формат `AIB[R] anti-afk=15 heal-item=7`; последняя строка = итоги.
+```lua
+-- AIBattle diag: count each branch firing silently, then emit ONE combined summary line at most
+-- once per minute (only when something fired) so a TEST GAME yields measurable numbers without
+-- spamming chat. Format 'AIB[R] anti-afk=15 heal-item=7'; the LAST such line in console.<id>.log
+-- carries the cumulative totals. (print() is invisible in console.log, so chat is the only
+-- logging channel — keep it sparse.)
+local AIB_SIDE = (bot:GetTeam() == TEAM_RADIANT) and "R" or "D"
+local function AIB_Diag(key)
+	bot.aib_diagCnt = bot.aib_diagCnt or {}
+	bot.aib_diagCnt[key] = (bot.aib_diagCnt[key] or 0) + 1
+	local now = DotaTime()
+	if bot.aib_diagLast == nil or now - bot.aib_diagLast >= 60.0 then
+		bot.aib_diagLast = now
+		local parts = {}
+		for k, v in pairs(bot.aib_diagCnt) do parts[#parts + 1] = k .. "=" .. v end
+		table.sort(parts)
+		bot:ActionImmediate_Chat("AIB[" .. AIB_SIDE .. "] " .. table.concat(parts, " "), true)
+	end
+end
 ```
-# в LIVE-папке dota:
-L=$(ls -t console.8*.log | head -1)
-grep -n "player_slot:\|kills:\|deaths:\|last_hits:\|denies:\|teleports_used:\|hero_damage:\|net_worth:\|level:\|power_runes:\|water_runes:" "$L" | grep -v claimed
-grep -A3 "hero_damage_dealt {" "$L" | grep "pre_reduction\|damage_type"   # физ vs маг по герою
-grep "AIB " "$L"   # чат-диагностики (config announce и т.п.)
+
+**7.2 cfg-анонс** (в `Think`, блок `if not bot.aib_announced then`) — добавлены сторона + флаги импрувов:
+```lua
+		bot:ActionImmediate_Chat(string.format("AIB[%s] harass=%.2f farm=%.2f fwd=%.2f abil=%.2f rune=%.2f retreat=%.2f exec=%.2f heal=%d afk=%d tower=%d abildial=%d",
+			AIB_SIDE,
+			dials.harass_desire, dials.farm_focus, dials.forwardness, dials.ability_aggro,
+			dials.rune_control, dials.retreat_caution, dials.execute_threshold,
+			GetImp('defensive_heal') and 1 or 0, GetImp('anti_afk') and 1 or 0,
+			GetImp('tower_avoid') and 1 or 0, GetImp('ability_on_dials') and 1 or 0), true)
 ```
-player_slot 0 = Radiant, 128 = Dire. Нет `player_slot:` в логе → игра прервана (дампа нет).
 
-## 10. Стратегия на будущее (после валидации v2)
-По убыванию влияния на продукт:
-1. **5v5-пивот** — командные/руны/позиционные диалы оживают сами, матчи НЕДЕТЕРМИНИРОВАНЫ (основа ставок). Главный продуктовый рычаг.
-2. **Холистический laning/combat-фикс** — «подход-харас-добивание-отступление-пуш» как связный кластер (иначе боты пассивны и в 5v5).
-3. **Win-condition/вышки** — бот хочет победить, а не тянуть.
-4. **Разнообразие героев** — разные «личности» = интереснее ставки.
-5. **Prompt-UX** — готовая инструкция для ChatGPT (схема dials/rules/item_build/item_rules), чтобы юзер писал промпты. Юзер просил собрать такой текст, когда дойдём до промптов.
+**7.3 Блок `defensive_heal` — ГЛАВНЫЙ ФИКС (анти-передёргивание).** Кулдаун 2.5с + не лечиться при
+добиваемом крипе в радиусе + `hitCreep/moveToCreep` считаются один раз тут и переиспользуются
+интерливом ниже (поэтому из начала интерлива убрана повторная `local hitCreep, moveToCreep = …`).
+Полный финальный блок (на месте старого defensive_heal, ПЕРЕД комментом «Last-hit / harass interleave»):
+```lua
+	-- AIBattle improvement (opt-in defensive_heal, HERO-AGNOSTIC): at low HP recover IN LANE via
+	-- inventory items + pull back to safety, instead of plodding to fountain (which bleeds farm).
+	-- Threshold scales with retreat_caution (cautious heals earlier). No hero spells — items only.
+	-- Anti-thrash (fix for heal-item firing ~2x/s and starving farm): at most one heal attempt per
+	-- HEAL_CD seconds, and NEVER skip a securable in-range last-hit to heal (free CS > a wand tick).
+	-- Diag: 'heal-item' / 'heal-pullback'. NOTE: hitCreep/moveToCreep are computed once here and
+	-- reused by the last-hit/harass interleave below.
+	local HEAL_CD = 2.5
+	local hitCreep, moveToCreep = GetBestLastHitCreep(nEnemyCreeps)
+	local lhSecurable = J.IsValid(hitCreep) and not moveToCreep
+		and GetUnitToUnitDistance(bot, hitCreep) <= botAttackRange
+	if GetImp('defensive_heal') and not lhSecurable
+		and J.GetHP(bot) < (0.30 + 0.20 * (dials.retreat_caution or 0.5))
+		and (bot.aib_healLast == nil or DotaTime() - bot.aib_healLast >= HEAL_CD) then
+		-- instant items: safe to pop any time
+		for _, nm in ipairs({ "item_magic_wand", "item_magic_stick", "item_faerie_fire", "item_satanic" }) do
+			local it = bot:GetItemInSlot(bot:FindItemSlot(nm))
+			if it ~= nil and it:IsFullyCastable() then
+				bot.aib_healLast = DotaTime(); AIB_Diag("heal-item")
+				bot:Action_UseAbility(it); return
+			end
+		end
+		local safe = not (bot:WasRecentlyDamagedByAnyHero(1.0) or bot:WasRecentlyDamagedByCreep(1.0))
+		if safe then
+			-- channel items (break on damage): only when not being hit
+			local salve = bot:GetItemInSlot(bot:FindItemSlot("item_flask"))
+			if salve ~= nil and salve:IsFullyCastable() then
+				bot.aib_healLast = DotaTime(); AIB_Diag("heal-item")
+				bot:Action_UseAbilityOnEntity(salve, bot); return
+			end
+			local bottle = bot:GetItemInSlot(bot:FindItemSlot("item_bottle"))
+			if bottle ~= nil and bottle:IsFullyCastable() then
+				bot.aib_healLast = DotaTime()
+				bot:Action_UseAbility(bottle); return
+			end
+		else
+			-- being hit, no instant heal -> pull back toward own tower to regen, don't keep fighting
+			local back = AIB_ForwardSurvivingTowerLoc()
+			if back then
+				bot.aib_healLast = DotaTime(); AIB_Diag("heal-pullback")
+				bot:Action_MoveToLocation(back); return
+			end
+		end
+	end
+```
+И сразу после него интерлив, первая строка теперь СРАЗУ `local csAllowed = …` (без повторного hitCreep):
+```lua
+	-- Last-hit / harass interleave (AIBattle): secure an IN-RANGE last-hit first (free CS,
+	-- no repositioning), THEN harass with probability harass_desire, and only WALK to a
+	-- creep when not harassing. Lets the bot farm AND harass instead of one killing the other.
+	local csAllowed = J.IsValid(hitCreep) and (J.GetPosition(bot) <= 2 or not J.IsThereNonSelfCoreNearby(700))
+	local needMove = csAllowed and (GetUnitToUnitDistance(bot, hitCreep) > botAttackRange
+		or (moveToCreep and GetUnitToUnitDistance(bot, hitCreep) > botAttackRange * 0.8))
+```
 
-## 11. Подводные камни
-- 1v1 Solo Mid + «заполнить ботами» спавнит 5v5 → кикать лишних (`kick 1..4`, `kick 6..9`), остаются ChatGPT vs Gemini.
-- `print()` НЕ виден в console.log — диагностика только через `bot:ActionImmediate_Chat`.
-- «error in error handling» ×20 в логе — фоновый шум OHA, НЕ наш баг (столько же в рабочих логах).
-- Файлы LIVE — LF, репо — CRLF; git варнит, Lua ест оба.
-- Не путать победителя 1v1 с богатым ботом: победа = 2 килла / вышка.
+**7.4 anti-afk диаг** (в блоке `anti_afk`, ветка «walk to nearest creep»):
+было `if not bot.aib_afkDiag then bot.aib_afkDiag = true; bot:ActionImmediate_Chat("AIB anti-afk", true) end`
+стало:
+```lua
+				AIB_Diag("anti-afk")
+```
+(Прежние одноразовые `AIB heal-item` ×2 и `AIB heal-pullback` уже заменены на `AIB_Diag(...)` внутри 7.3.)
+
+### Файл `tools/match_stats.py` (в репо — можно пушить отдельно)
+**7.5 cfg-детект + diag-парсинг** под новый формат `AIB[R] …` и сводный `key=count` (+ легаси).
+Было:
+```python
+    cfg = [l.split("localize: ", 1)[1] for l in lines if "AIB harass" in l]
+    diag = sorted(set(re.findall(r"'(AIB (?:heal|anti|ult|respawn|fwd)[^']*)'", "\n".join(lines))))
+```
+Стало:
+```python
+    text = "\n".join(lines)
+    cfg = [l.split("localize: ", 1)[1] for l in lines if "harass=" in l]
+    # Diag: 'AIB[R] anti-afk=15 heal-item=7'. Aggregate per key -> {side: count}; combined lines
+    # carry 'key=N' (cumulative, keep max), legacy '<key> #N' / bare '<key>' handled too.
+    diag = {}
+    for side, body in re.findall(r"'AIB(\[[RD]\])?\s+([^']*)'", text):
+        if "harass=" in body:  # that's the cfg announce, not a diag
+            continue
+        s = side.strip("[]") or "?"
+        pairs = re.findall(r"([\w-]+)=(\d+)", body)  # combined format 'anti-afk=15 heal-item=7'
+        if pairs:
+            for key, val in pairs:
+                d = diag.setdefault(key, {})
+                d[s] = max(d.get(s, 0), int(val))
+        else:  # legacy: '<key> #N' (cumulative) or bare '<key>' (one occurrence)
+            m = re.search(r"#(\d+)$", body)
+            key = (body[:m.start()] if m else body).strip()
+            if key:
+                d = diag.setdefault(key, {})
+                d[s] = max(d.get(s, 0), int(m.group(1))) if m else d.get(s, 0) + 1
+```
+И печать diag в `main` (было `for d in diag: print("  diag:", d)`):
+```python
+        for key in sorted(diag):
+            sides = " ".join(f"{s}#{n}" for s, n in sorted(diag[key].items()))
+            print("  diag:", key, sides)
+```
+Проверено: парсит новый и старые логи, не падает.
+
+---
+
+## 8. НЕ КОММИТИТЬ (LIVE-only тест-состояние)
+- `bots/Customize/playstyle_radiant.lua` / `playstyle_dire.lua` в LIVE = ТЕСТ (свапнутая пара импрувов).
+  В РЕПО держится КАНОН (radiant=агро, dire=пассив). **НЕ перезаписывай канон тест-конфигами.**
+- `general.lua` — синк только LIVE→репо; repo→LIVE НЕ копировать (репо старее).
+
+## 9. GIT (ветка `schema-v2-item-builds`, личность don)
+```bash
+cd <репо>
+git status
+git log --oneline origin/schema-v2-item-builds..HEAD   # проверь незапушенное
+
+git add tools/match_stats.py            # + bots/mode_laning_generic.lua если вариант (А)
+git commit -m "diag: per-side cumulative counters (sparse summary) + defensive_heal anti-thrash
+
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
+git push origin schema-v2-item-builds
+```
+Пуш — ПОСЛЕ подтверждения пользователя (пуш пачкой раз в день). Merge в `main` — только когда матрица
++ impruвы валидированы с пруфами. `rune_control` и ability_aggro-на-мили — пометить deferred/hero-specific.
+
+## 10. Рабочий процесс (durable)
+- Конфиги пишем РУКАМИ в `playstyle_*.lua`; живую LLM-генерацию не юзаем (бережём лимиты).
+- Цикл: ставлю конфиг → юзер играет → шлёт ПАЧКУ match id → читаю за заход через `match_stats.py`.
+  Игры доигрывать ДО КОНЦА (нужен стат-дамп).
+- Метод A/B: зеркало — оба бота идентичны кроме ОДНОГО диала = 1 игра/тест. Baseline `forwardness 0.70`
+  (иначе не сходятся). item_build симметричный. Стороны свапать между прогонами (side-bias РЕАЛЕН:
+  slot128/Dire чаще ныряет вышку).
+- Беречь токены: правки кода через Grep+якорь, не чтением целиком; не плодить доки — обновлять ЭТОТ.
+
+## 11. Открытые задачи
+1. **База-баги, решающие 1v1 (приоритет — без них импрувы не валидировать):**
+   (а) бот умирает на крипах на лоу-хп — анти-крип-кайт гейтится `retreat_caution > 0.4`, а baseline =
+   ровно **0.40** → `0.40 > 0.4` = false → ветка ВЫКЛ; чинить: гейт `>= 0.4` ИЛИ отдельная реакция
+   «бьют крипы → отойти», не привязанная к dial-порогу.
+   (б) тупой заход в рендж вышки (Dire ныряет, towerDmg 4500 оба матча) — `tower_avoid` ❌; перенести
+   гард в боевой/retreat-слой + осознание радиуса вышки ~700 перед ударом по герою.
+   Затем дотестить **defensive_heal**/**anti_afk** свап-парой (эффект сейчас замаскирован этими багами).
+2. **rune_control** — поднять кап руны >1.0 при высоком rune_control, если решим тестить.
+3. adaptive **item_rules** — включить + протестить.
+4. **merge** ветки в main (после impruвов).
+5. Инструкция для ChatGPT (возврат к промптам): схема dials/rules/item_build/item_rules + пример Lua.
+6. **creep_aggro** диал (идея юзера).
+7. **Добивание вышки = победа** в 1v1 (бот игнорит почти снесённую вышку — пример 8835417950).
+8. **5v5-пивот** (главный продуктовый рычаг — командные/руны/позиционные диалы оживают, недетерминизм = ставки).
+
+## 12. Следующий тест (после применения фиксов §7)
+Свап-пара заново: Игра A (Dire=ВКЛ) → ждём `heal-item D#…` уже десятки, не тысячи; свапнуть;
+Игра B (Radiant=ВКЛ). Сравнить LH/lvl/deaths ВКЛ-стороны vs контроль — теперь, когда хил не жрёт
+фарм, видно, помогает defensive_heal или нет.
+
+## 13. Воспроизведение 1v1 / подводные камни
+Лобби 1v1 Solo Mid, читы ON, хост зрителем (Unassigned), залить Local Dev Script ботов, кикнуть лишних
+(`kick 1..4`, `kick 6..9`), launch options `-condebug -console`, читать `console.<matchid>.log`.
+Имена pos1: ChatGPT (Rad) / Gemini (Dire). «Заполнить ботами» в 1v1 = 5v5 → кикать лишних.
+Непоказ имени бота = клиентский рендер-квирк, не баг. «error in error handling» ×20 = фоновый шум OHA.
+`print()` в console.log НЕ виден — диагностика только через `bot:ActionImmediate_Chat`.

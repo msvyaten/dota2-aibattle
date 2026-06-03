@@ -63,7 +63,17 @@ local function buildStyle(raw)
         end
     end
 
-    return { dials = dials, rules = { respawn_behavior = respawn }, item_build = items, item_rules = item_rules }
+    -- Optional behaviour improvements (booleans, default OFF). Composable self-preservation /
+    -- ability layers, dormant unless a playstyle explicitly enables them, so they never disturb
+    -- the validated dials.
+    local IMPROVEMENT_KEYS = { tower_avoid = true, ability_on_dials = true, defensive_heal = true, anti_afk = true }
+    local improvements = {}
+    local rawImp = (type(raw) == "table" and type(raw.improvements) == "table") and raw.improvements or {}
+    for k in pairs(IMPROVEMENT_KEYS) do
+        improvements[k] = (rawImp[k] == true)
+    end
+
+    return { dials = dials, rules = { respawn_behavior = respawn }, item_build = items, item_rules = item_rules, improvements = improvements }
 end
 
 -- Returns the {dials, rules} config for the calling bot's team (cached, with safe defaults).
@@ -88,6 +98,13 @@ end
 -- Returns the situational purchase rules for the calling bot's team (may be empty).
 function M.GetItemRules()
     return M.Get().item_rules
+end
+
+-- Behaviour improvement flags (booleans). M.Imp(name) -> true only if explicitly enabled.
+function M.GetImprovements() return M.Get().improvements end
+function M.Imp(name)
+    local i = M.Get().improvements
+    return i ~= nil and i[name] == true
 end
 
 -- Evaluate a named situational condition for the CALLING bot. Returns boolean.
