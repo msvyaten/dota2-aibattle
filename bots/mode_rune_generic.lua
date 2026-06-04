@@ -404,6 +404,7 @@ function Think()
 				return
 			else
 				bot:Action_PickUpRune(rune.location)
+				AIBStyle.Diag(bot, "rune-grab")  -- AIBattle Phase 2: count rune pickups for rune_control A/B
 				return
 			end
 		else

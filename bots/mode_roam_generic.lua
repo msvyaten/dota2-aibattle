@@ -1,5 +1,6 @@
 local J = require( GetScriptDirectory()..'/FunLib/jmz_func')
 local Customize = require( GetScriptDirectory()..'/Customize/general' )
+local AIBStyle = require( GetScriptDirectory()..'/FunLib/aibattle_style')
 
 local bot = GetBot()
 local botName = bot:GetUnitName()
@@ -54,7 +55,8 @@ function GetDesire()
 	-- if DotaTime() > 30 and cachedVar ~= nil then return cachedVar end
 	local res = GetDesireHelper()
 	-- J.Utils.SetCachedVars(cacheKey, res)
-	return res
+	-- AIBattle Schema v2 (Phase 2): scale individual-roam/gank desire by gank_desire team dial.
+	return AIBStyle.ScaleDesire(res, AIBStyle.Get().dials.gank_desire)
 end
 function GetDesireHelper()
 	botName = bot:GetUnitName()

@@ -8,6 +8,7 @@ local bot = GetBot()
 local J = require(GetScriptDirectory()..'/FunLib/jmz_func')
 local W = require(GetScriptDirectory() ..'/FunLib/aba_ward_utility')
 local Customize = require(GetScriptDirectory()..'/Customize/general')
+local AIBStyle = require(GetScriptDirectory()..'/FunLib/aibattle_style')
 Customize.ThinkLess = Customize.Enable and Customize.ThinkLess or 1
 
 local nObserverWardCastRange = 500
@@ -26,6 +27,8 @@ function GetDesire()
 	-- if DotaTime() > 30 and cachedVar ~= nil then return cachedVar end
 	local res = GetDesireHelper()
 	-- J.Utils.SetCachedVars(cacheKey, res)
+	-- AIBattle Schema v2 (Phase 2): scale vision investment by the ward_desire team dial.
+	res = AIBStyle.ScaleDesire(res, AIBStyle.Get().dials.ward_desire)
 	return RemapValClamped(J.GetHP(bot) * res, 0, 1, BOT_MODE_DESIRE_NONE, res)
 end
 function GetDesireHelper()
@@ -115,6 +118,7 @@ function Think()
 				end
 
 				hTargetSpot.plant_time_obs = DotaTime()
+				AIBStyle.Diag(bot, "ward-place")  -- AIBattle Phase 2: count observer plants for ward_desire A/B
 				return
 			else
 				bot:Action_MoveToLocation(hTargetSpot.location)

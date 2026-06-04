@@ -8,6 +8,11 @@ return {
         rune_control      = 0.80,  -- 0-1: 0.5 = baseline, >0.5 contests runes more
         retreat_caution   = 0.20,  -- 0-1: 0.5 = baseline, <0.5 fights longer
         execute_threshold = 0.45,  -- 0-1: ult-finish a fleeing enemy below this HP fraction
+        -- Phase 2 team dials (0.5 = baseline x1). Canon leaves them neutral; A/B configs vary one.
+        gank_desire       = 0.50,  -- 0-1: roaming/ganking pressure (mode_roam + mode_team_roam)
+        push_desire       = 0.50,  -- 0-1: tower siege pressure (mode_push_tower_*)
+        defend_desire     = 0.50,  -- 0-1: defending own towers (mode_defend_tower_*)
+        ward_desire       = 0.50,  -- 0-1: vision investment (mode_ward)
     },
     rules = {
         respawn_behavior = "tp_to_tower",  -- tp_to_tower | tp_to_lane | walk_back

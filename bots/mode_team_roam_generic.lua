@@ -10,6 +10,7 @@ Customize.ThinkLess = Customize.Enable and Customize.ThinkLess or 1
 local J = require(GetScriptDirectory()..'/FunLib/jmz_func')
 local Item = require(GetScriptDirectory()..'/FunLib/aba_item')
 local Roles = require(GetScriptDirectory()..'/FunLib/aba_role')
+local AIBStyle = require(GetScriptDirectory()..'/FunLib/aibattle_style')
 local AttackSpecialUnit = dofile(GetScriptDirectory()..'/FunLib/aba_special_units')
 
 local X = {}
@@ -78,7 +79,8 @@ function GetDesire()
     res = CapForLanePush(res)
 
     -- J.Utils.SetCachedVars(cacheKey, res)
-    return res
+    -- AIBattle Schema v2 (Phase 2): scale team-roam/gank desire by gank_desire team dial.
+    return AIBStyle.ScaleDesire(res, AIBStyle.Get().dials.gank_desire)
 end
 function GetDesireHelper()
     if bot:IsInvulnerable() or not bot:IsHero() or not bot:IsAlive() or not string.find(botName, "hero") or bot:IsIllusion() then

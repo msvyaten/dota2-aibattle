@@ -9,6 +9,11 @@ return {
         rune_control      = 0.20,
         retreat_caution   = 0.80,
         execute_threshold = 0.00,
+        -- Phase 2 team dials (0.5 = baseline x1). Canon leaves them neutral; A/B configs vary one.
+        gank_desire       = 0.50,
+        push_desire       = 0.50,
+        defend_desire     = 0.50,
+        ward_desire       = 0.50,
     },
     rules = {
         respawn_behavior = "tp_to_tower",  -- TEST 7: expect teleports_used > 0 on Dire (slot 128)

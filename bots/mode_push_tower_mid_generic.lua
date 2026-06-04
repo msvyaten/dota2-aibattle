@@ -1,11 +1,15 @@
 local Push = require( GetScriptDirectory()..'/FunLib/aba_push')
+local AIBStyle = require( GetScriptDirectory()..'/FunLib/aibattle_style')
 local bot = GetBot()
 local botName = bot:GetUnitName()
 if bot == nil or bot:IsInvulnerable() or not bot:IsHero() or not bot:IsAlive() or not string.find(botName, "hero") or bot:IsIllusion() then return end
 if bot.PushLaneDesire == nil then bot.PushLaneDesire = {0, 0, 0} end
 
 function GetDesire()
-    bot.PushLaneDesire[LANE_MID] = Push.GetPushDesire(bot, LANE_MID)
-    return bot.PushLaneDesire[LANE_MID]
+    local raw = Push.GetPushDesire(bot, LANE_MID)
+    bot.PushLaneDesire[LANE_MID] = raw
+    -- AIBattle Schema v2 (Phase 2): scale by push_desire dial, then lead-aware finish override.
+    local d = AIBStyle.ScaleDesire(raw, AIBStyle.Get().dials.push_desire)
+    return AIBStyle.FinishPush(bot, d, raw)
 end
 function Think() Push.PushThink(bot, LANE_MID) end

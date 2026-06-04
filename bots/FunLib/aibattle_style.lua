@@ -18,6 +18,13 @@ local DEFAULT_DIALS = {
     -- Finish/ultimate aggression: cast Assassinate on a fleeing enemy below this HP
     -- fraction. 0 = never (conservative OHA default), 0.45 = finish enemies under 45%.
     execute_threshold = 0.0,
+    -- Phase 2 (team dials): each scales the matching OHA team-mode desire via ScaleDesire,
+    -- same proven pattern as rune_control/retreat_caution. 0.5 = baseline (x1), so a config
+    -- that leaves them at 0.5 behaves exactly like pre-Phase-2.
+    gank_desire       = 0.5,  -- mode_roam + mode_team_roam (roaming/ganking pressure)
+    push_desire       = 0.5,  -- mode_push_tower_{mid,top,bot} (siege/tower pressure)
+    defend_desire     = 0.5,  -- mode_defend_tower_{mid,top,bot} (defending own towers)
+    ward_desire       = 0.5,  -- mode_ward (vision investment)
 }
 
 local RESPAWN_VALUES = { tp_to_tower = true, tp_to_lane = true, walk_back = true }
@@ -143,6 +150,27 @@ function M.EvalItemCondition(cond)
     return false
 end
 
+-- Shared diagnostic counter (promoted from mode_laning so any mode file can report).
+-- Counts each branch firing silently on the bot handle, then emits ONE combined summary
+-- chat line at most once per 60s (only when something fired) so a TEST GAME yields
+-- measurable numbers without spamming. Format 'AIB[R] ward-place=4 rune-grab=2'; the LAST
+-- such line in console.<id>.log carries the cumulative totals (match_stats.py parses it).
+-- print() is invisible in console.log, so chat is the only logging channel — keep it sparse.
+function M.Diag(bot, key)
+    if bot == nil then return end
+    bot.aib_diagCnt = bot.aib_diagCnt or {}
+    bot.aib_diagCnt[key] = (bot.aib_diagCnt[key] or 0) + 1
+    local now = DotaTime()
+    if bot.aib_diagLast == nil or now - bot.aib_diagLast >= 60.0 then
+        bot.aib_diagLast = now
+        local side = (bot:GetTeam() == TEAM_RADIANT) and "R" or "D"
+        local parts = {}
+        for k, v in pairs(bot.aib_diagCnt) do parts[#parts + 1] = k .. "=" .. v end
+        table.sort(parts)
+        bot:ActionImmediate_Chat("AIB[" .. side .. "] " .. table.concat(parts, " "), true)
+    end
+end
+
 -- Scale a "soft" mode desire by a 0-1 dial: 0.5 = baseline (x1), 0 = off, 1 = x2.
 -- Leaves NONE (<=0) and hard overrides (>= ABSOLUTE) untouched, so we never break
 -- the engine's forced behaviours.
@@ -154,6 +182,35 @@ function M.ScaleDesire(desire, dial)
     local scaled = desire * (2 * d)
     if scaled > 0.99 then scaled = 0.99 end  -- keep strictly below ABSOLUTE
     return scaled
+end
+
+-- Lead-aware "finish" detector. Returns true once enough enemy heroes are dead that the team
+-- should stop farming/roaming and group-push to actually CLOSE the game. Intentionally
+-- DIAL-INDEPENDENT base competence: push_desire shapes mid-game sieging (enemies alive), this
+-- handles closeout. Fixes the '40k lead, game never ends' problem where push mode loses
+-- arbitration to fight/farm even at push_desire=0.90 (towerDmg ~549 in 39 min, 8838026385).
+-- Edge-triggered diag 'finish-push' so logs show how often the override engaged.
+local FINISH_DEAD = 2  -- engage once this many of the 5 enemy heroes are dead
+function M.IsFinishState(bot)
+    local enemyTeam = (bot:GetTeam() == TEAM_RADIANT) and TEAM_DIRE or TEAM_RADIANT
+    local dead = 0
+    for _, id in ipairs(GetTeamPlayers(enemyTeam)) do
+        if not IsHeroAlive(id) then dead = dead + 1 end
+    end
+    local active = dead >= FINISH_DEAD
+    if active and not bot.aib_finishActive then M.Diag(bot, "finish-push") end
+    bot.aib_finishActive = active
+    return active
+end
+
+-- Apply the finish override to a (already dial-scaled) push desire. In finish state, force the
+-- desire near ABSOLUTE so push mode wins arbitration; rank by rawLaneDesire (0.90..0.99) so the
+-- lane most ready to push wins and all bots converge on the SAME lane (group push) without any
+-- cross-lane queries. Outside finish state, returns the scaled desire untouched.
+function M.FinishPush(bot, scaledDesire, rawLaneDesire)
+    if not M.IsFinishState(bot) then return scaledDesire end
+    local forced = 0.90 + 0.09 * (clamp01(rawLaneDesire) or 0)
+    return (forced > scaledDesire) and forced or scaledDesire
 end
 
 return M

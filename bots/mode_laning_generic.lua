@@ -41,17 +41,11 @@ local function GetImp(name) return Style.Imp(name) end
 -- carries the cumulative totals. (print() is invisible in console.log, so chat is the only
 -- logging channel — keep it sparse.)
 local AIB_SIDE = (bot:GetTeam() == TEAM_RADIANT) and "R" or "D"
+-- Delegates to the shared counter (FunLib/aibattle_style M.Diag); kept as a thin local
+-- wrapper so existing call sites stay unchanged. Counters live on the bot handle, so
+-- laning + team-mode diags merge into the same summary line.
 local function AIB_Diag(key)
-	bot.aib_diagCnt = bot.aib_diagCnt or {}
-	bot.aib_diagCnt[key] = (bot.aib_diagCnt[key] or 0) + 1
-	local now = DotaTime()
-	if bot.aib_diagLast == nil or now - bot.aib_diagLast >= 60.0 then
-		bot.aib_diagLast = now
-		local parts = {}
-		for k, v in pairs(bot.aib_diagCnt) do parts[#parts + 1] = k .. "=" .. v end
-		table.sort(parts)
-		bot:ActionImmediate_Chat("AIB[" .. AIB_SIDE .. "] " .. table.concat(parts, " "), true)
-	end
+	Style.Diag(bot, key)
 end
 
 -- AIBattle improvement helper: nearest ALIVE enemy tower whose attack range threatens the bot
@@ -273,10 +267,11 @@ function Think()
 	-- AIBattle: announce the loaded config once in chat (visible in console.log).
 	if not bot.aib_announced then
 		bot.aib_announced = true
-		bot:ActionImmediate_Chat(string.format("AIB[%s] harass=%.2f farm=%.2f fwd=%.2f abil=%.2f rune=%.2f retreat=%.2f exec=%.2f heal=%d afk=%d tower=%d abildial=%d",
+		bot:ActionImmediate_Chat(string.format("AIB[%s] harass=%.2f farm=%.2f fwd=%.2f abil=%.2f rune=%.2f retreat=%.2f exec=%.2f gank=%.2f push=%.2f defend=%.2f ward=%.2f heal=%d afk=%d tower=%d abildial=%d",
 			AIB_SIDE,
 			dials.harass_desire, dials.farm_focus, dials.forwardness, dials.ability_aggro,
 			dials.rune_control, dials.retreat_caution, dials.execute_threshold,
+			dials.gank_desire, dials.push_desire, dials.defend_desire, dials.ward_desire,
 			GetImp('defensive_heal') and 1 or 0, GetImp('anti_afk') and 1 or 0,
 			GetImp('tower_avoid') and 1 or 0, GetImp('ability_on_dials') and 1 or 0), true)
 	end
