@@ -14,6 +14,7 @@ return {
         push_desire       = 0.50,
         defend_desire     = 0.50,
         ward_desire       = 0.50,
+        roshan_desire     = 0.50,
     },
     rules = {
         respawn_behavior = "tp_to_tower",  -- TEST 7: expect teleports_used > 0 on Dire (slot 128)

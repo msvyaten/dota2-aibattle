@@ -13,6 +13,7 @@ return {
         push_desire       = 0.50,  -- 0-1: tower siege pressure (mode_push_tower_*)
         defend_desire     = 0.50,  -- 0-1: defending own towers (mode_defend_tower_*)
         ward_desire       = 0.50,  -- 0-1: vision investment (mode_ward)
+        roshan_desire     = 0.50,  -- 0-1: Roshan priority (mode_roshan)
     },
     rules = {
         respawn_behavior = "tp_to_tower",  -- tp_to_tower | tp_to_lane | walk_back
