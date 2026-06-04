@@ -25,6 +25,7 @@ local DEFAULT_DIALS = {
     push_desire       = 0.5,  -- mode_push_tower_{mid,top,bot} (siege/tower pressure)
     defend_desire     = 0.5,  -- mode_defend_tower_{mid,top,bot} (defending own towers)
     ward_desire       = 0.5,  -- mode_ward (vision investment)
+    roshan_desire     = 0.5,  -- mode_roshan (Roshan priority; ABSOLUTE finish-pass-through untouched)
 }
 
 local RESPAWN_VALUES = { tp_to_tower = true, tp_to_lane = true, walk_back = true }
@@ -184,14 +185,16 @@ function M.ScaleDesire(desire, dial)
     return scaled
 end
 
--- Lead-aware "finish" detector. Returns true once enough enemy heroes are dead that the team
--- should stop farming/roaming and group-push to actually CLOSE the game. Intentionally
--- DIAL-INDEPENDENT base competence: push_desire shapes mid-game sieging (enemies alive), this
--- handles closeout. Fixes the '40k lead, game never ends' problem where push mode loses
--- arbitration to fight/farm even at push_desire=0.90 (towerDmg ~549 in 39 min, 8838026385).
+-- Lead-aware "finish" detector. Returns true once an enemy hero is dead AND game is past
+-- the early phase (>10 min Turbo-time). FINISH_DEAD=1 so a single kill in mid/late game
+-- triggers the push window immediately rather than waiting for 2 kills (which was causing
+-- 60+ min Turbo games). Time gate prevents early-game overreaction (one kill at min 5 → push).
+-- DIAL-INDEPENDENT base competence: push_desire shapes mid-game sieging; this handles closeout.
 -- Edge-triggered diag 'finish-push' so logs show how often the override engaged.
-local FINISH_DEAD = 2  -- engage once this many of the 5 enemy heroes are dead
+local FINISH_DEAD = 1       -- engage once this many of the 5 enemy heroes are dead
+local FINISH_MIN_TIME = 600 -- seconds: ~10 min Turbo = meaningful mid/late game
 function M.IsFinishState(bot)
+    if DotaTime() < FINISH_MIN_TIME then return false end
     local enemyTeam = (bot:GetTeam() == TEAM_RADIANT) and TEAM_DIRE or TEAM_RADIANT
     local dead = 0
     for _, id in ipairs(GetTeamPlayers(enemyTeam)) do

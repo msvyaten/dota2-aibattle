@@ -4,6 +4,7 @@ if bot == nil or bot:IsInvulnerable() or not bot:IsHero() or not bot:IsAlive() o
 
 local J = require( GetScriptDirectory()..'/FunLib/jmz_func' )
 local Customize = require( GetScriptDirectory()..'/Customize/general' )
+local AIBStyle = require( GetScriptDirectory()..'/FunLib/aibattle_style' )
 
 local killTime = 0.0
 local shouldKillRoshan = false
@@ -22,8 +23,20 @@ local Roshan
 
 function GetDesire()
 	local res = GetDesireHelper()
-	if res > 0.6 then J.ModeAnnounce(bot, 'say_roshan', 30) end
-	return res
+	if res > 0.6 then
+		J.ModeAnnounce(bot, 'say_roshan', 30)
+		-- Rate-limited diag: count Roshan "active windows" (once per 30s), not per-tick firings.
+		-- Gives meaningful "how many times the team wanted Roshan" rather than tick count.
+		local now = DotaTime()
+		if bot.aib_roshanDiagLast == nil or now - bot.aib_roshanDiagLast >= 30.0 then
+			bot.aib_roshanDiagLast = now
+			AIBStyle.Diag(bot, "roshan")
+		end
+	end
+	-- AIBattle Schema v2 (Phase 2): scale Roshan desire by roshan_desire team dial.
+	-- ABSOLUTE (Roshan near-dead, finish it) passes through ScaleDesire untouched — even at
+	-- roshan_desire=0.10 the team will finish a nearly-dead Roshan rather than walk away.
+	return AIBStyle.ScaleDesire(res, AIBStyle.Get().dials.roshan_desire)
 end
 function GetDesireHelper()
 	if bot:IsInvulnerable() or not bot:IsHero() or not bot:IsAlive() or not string.find(botName, "hero") or bot:IsIllusion() then return BOT_MODE_DESIRE_NONE end
