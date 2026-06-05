@@ -267,27 +267,26 @@ function Think()
 	-- AIBattle: announce the loaded config once in chat (visible in console.log).
 	if not bot.aib_announced then
 		bot.aib_announced = true
-		bot:ActionImmediate_Chat(string.format("AIB[%s] harass=%.2f farm=%.2f fwd=%.2f abil=%.2f rune=%.2f retreat=%.2f exec=%.2f gank=%.2f push=%.2f defend=%.2f ward=%.2f heal=%d afk=%d tower=%d abildial=%d",
+		bot:ActionImmediate_Chat(string.format("AIB[%s] harass=%.2f farm=%.2f fwd=%.2f abil=%.2f rune=%.2f retreat=%.2f exec=%.2f gank=%.2f push=%.2f defend=%.2f ward=%.2f roshan=%.2f dive=%s heal=%d afk=%d tower=%d abildial=%d",
 			AIB_SIDE,
 			dials.harass_desire, dials.farm_focus, dials.forwardness, dials.ability_aggro,
 			dials.rune_control, dials.retreat_caution, dials.execute_threshold,
 			dials.gank_desire, dials.push_desire, dials.defend_desire, dials.ward_desire,
+			dials.roshan_desire, tostring(Style.Get().rules.dive_policy) .. " smoke=" .. tostring(Style.Get().rules.smoke_usage) .. " bb=" .. tostring(Style.Get().rules.buyback_policy),
 			GetImp('defensive_heal') and 1 or 0, GetImp('anti_afk') and 1 or 0,
 			GetImp('tower_avoid') and 1 or 0, GetImp('ability_on_dials') and 1 or 0), true)
 	end
 
-	-- AIBattle improvement (opt-in tower_avoid): don't sit in enemy tower range without a kill
-	-- in progress. If inside an alive enemy tower's range and NOT finishing a low-HP hero, step
-	-- out. Fixes bots walking under the tower and dying to it for no reason.
-	if GetImp('tower_avoid') then
+	-- AIBattle rule (dive_policy): don't sit in enemy tower range unless the rule + situation allow
+	-- it. Fixes bots farming/standing under the tower and burning for no reason. Laning-only —
+	-- push/siege runs in another mode, so this never blocks taking towers. Style.MayDive applies the
+	-- policy (never/finish_only/when_grouped/when_ahead/always). Diag 'no-dive' counts pull-outs.
+	do
 		local twr = AIB_EnemyTowerDanger()
-		if twr ~= nil then
-			local he = bot:GetNearbyHeroes(botAttackRange + 50, true, BOT_MODE_NONE)
-			local finishing = he and #he > 0 and he[1]:IsAlive() and J.GetHP(he[1]) < 0.35
-			if not finishing then
-				bot:Action_MoveToLocation(J.VectorAway(bot:GetLocation(), twr:GetLocation(), 350))
-				return
-			end
+		if twr ~= nil and not Style.MayDive(bot) then
+			AIB_Diag("no-dive")
+			bot:Action_MoveToLocation(J.VectorAway(bot:GetLocation(), twr:GetLocation(), 350))
+			return
 		end
 	end
 

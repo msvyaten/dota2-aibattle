@@ -59,6 +59,22 @@ IMPORTANT: Never return all values at 0.5. The strategy text must meaningfully s
 - "tp_to_lane" — teleports back to lane quickly (standard)
 - "tp_to_tower" — teleports to own tower first (defensive)
 
+**dive_policy** — when a bot will go under the enemy tower to chase a kill (risk gradient):
+- "never" — never dives, stays safe even if it loses a kill
+- "finish_only" — dives only to secure a near-dead enemy (default)
+- "when_grouped" — dives when allies are nearby
+- "when_ahead" — dives when the team has a numbers/lead advantage
+- "always" — dives aggressively for any kill
+
+**smoke_usage** — whether the team uses Smoke of Deceit for ganks:
+- "for_ganks" — uses smoke to set up ganks (default)
+- "never" — never uses smoke
+
+**buyback_policy** — when a dead bot buys back to rejoin the fight:
+- "never" — never buys back
+- "default" — stock judgement (buys back to defend base / in key teamfights)
+- "always" — buys back aggressively whenever available
+
 ---
 
 ## EXAMPLE
@@ -83,7 +99,10 @@ Output:
     "roshan_desire": 0.45
   },
   "rules": {
-    "respawn_behavior": "tp_to_lane"
+    "respawn_behavior": "tp_to_lane",
+    "dive_policy": "always",
+    "smoke_usage": "for_ganks",
+    "buyback_policy": "always"
   }
 }
 
@@ -109,7 +128,10 @@ Return ONLY valid JSON. No explanation, no markdown, no extra text.
     "roshan_desire": 0.0
   },
   "rules": {
-    "respawn_behavior": "tp_to_lane"
+    "respawn_behavior": "tp_to_lane",
+    "dive_policy": "finish_only",
+    "smoke_usage": "for_ganks",
+    "buyback_policy": "default"
   }
 }
 ```

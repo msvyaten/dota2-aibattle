@@ -12,6 +12,7 @@ local Utils = require( GetScriptDirectory()..'/FunLib/utils' )
 local BotBuild = dofile( GetScriptDirectory().."/BotLib/"..string.gsub( botName, "npc_dota_", "" ) )
 local Localization = require( GetScriptDirectory()..'/FunLib/localization' )
 local Customize = require(GetScriptDirectory()..'/Customize/general')
+local AIBStyle = require(GetScriptDirectory()..'/FunLib/aibattle_style')
 Customize.ThinkLess = Customize.Enable and Customize.ThinkLess or 1
 if GAMEMODE_TURBO == nil then GAMEMODE_TURBO = 23 end
 if GAMEMODE_ARDM == nil then GAMEMODE_ARDM = 20 end
@@ -538,6 +539,10 @@ local function BuybackUsageComplement()
 
 	X.SetTalkMessage()
 
+	-- AIBattle rule (buyback_policy): never = suppress entirely; default = stock OHA logic below.
+	local aibBB = AIBStyle.Get().rules.buyback_policy
+	if aibBB == "never" then return end
+
 	if bot:GetLevel() <= 15
 		or bot:HasModifier( 'modifier_arc_warden_tempest_double' )
 		or not J.Role.ShouldBuyBack()
@@ -558,7 +563,6 @@ local function BuybackUsageComplement()
 	if bot:IsAlive() then return end
 
 	if not bot:HasBuyback() then return end
-
 
 	local ancient = GetAncient( GetTeam() )
 
@@ -8426,5 +8430,18 @@ X.AbilityLevelUpThink = AbilityLevelUpThink
 X.BuybackUsageThink = BuybackUsageThink
 X.AbilityUsageThink = AbilityUsageThink
 X.ItemUsageThink = ItemUsageThink
+
+-- AIBattle rule (smoke_usage): gate Smoke of Deceit by team config and count usage windows.
+-- Wraps the existing desire fn without touching its internals: 'never' suppresses smoke entirely;
+-- otherwise behaves as stock and the 'smoke' counter ticks (rate-limited 30s) when smoke is wanted.
+local _aibSmokeDesire = X.ConsiderItemDesire and X.ConsiderItemDesire['item_smoke_of_deceit']
+if _aibSmokeDesire ~= nil then
+	X.ConsiderItemDesire['item_smoke_of_deceit'] = function(item)
+		if AIBStyle.Get().rules.smoke_usage == "never" then return BOT_ACTION_DESIRE_NONE end
+		local d, a, b, c = _aibSmokeDesire(item)
+		if type(d) == "number" and d > 0 then AIBStyle.DiagRL(bot, "smoke", 30) end
+		return d, a, b, c
+	end
+end
 
 return X

@@ -31,6 +31,22 @@ local DEFAULT_DIALS = {
 local RESPAWN_VALUES = { tp_to_tower = true, tp_to_lane = true, walk_back = true }
 local DEFAULT_RESPAWN = "walk_back"
 
+-- dive_policy: under what conditions a bot may sit in enemy tower range (chase/farm under tower).
+-- Gradient of risk: never -> finish_only -> when_grouped -> when_ahead -> always. Default
+-- finish_only = don't burn under tower, but still secure a near-dead enemy. Aggressive prompts
+-- set 'always'. Used by M.MayDive in the laning guard (NOT during push/siege).
+local DIVE_VALUES = { never = true, finish_only = true, when_grouped = true, when_ahead = true, always = true }
+local DEFAULT_DIVE = "finish_only"
+
+-- smoke_usage: whether the team uses Smoke of Deceit (OHA already has the behaviour; this gates it).
+local SMOKE_VALUES = { for_ganks = true, never = true }
+local DEFAULT_SMOKE = "for_ganks"
+
+-- buyback_policy: never = suppress entirely; default = stock OHA logic (unchanged).
+-- 'always' was removed — it never fired in testing (always-side tended to win and not need buyback).
+local BUYBACK_VALUES = { never = true, default = true }
+local DEFAULT_BUYBACK = "default"
+
 local function clamp01(x)
     if type(x) ~= "number" then return nil end
     if x < 0 then return 0 end
@@ -49,6 +65,12 @@ local function buildStyle(raw)
     local rawRules = (type(raw) == "table" and type(raw.rules) == "table") and raw.rules or {}
     local rb = rawRules.respawn_behavior
     local respawn = (type(rb) == "string" and RESPAWN_VALUES[rb]) and rb or DEFAULT_RESPAWN
+    local dp = rawRules.dive_policy
+    local dive = (type(dp) == "string" and DIVE_VALUES[dp]) and dp or DEFAULT_DIVE
+    local sm = rawRules.smoke_usage
+    local smoke = (type(sm) == "string" and SMOKE_VALUES[sm]) and sm or DEFAULT_SMOKE
+    local bbk = rawRules.buyback_policy
+    local buyback = (type(bbk) == "string" and BUYBACK_VALUES[bbk]) and bbk or DEFAULT_BUYBACK
 
     -- Prompt-driven item build (ordered). Keep only "item_*" strings here; the
     -- purchaser validates each against GetItemCost so a bogus name can't break the buy loop.
@@ -81,7 +103,7 @@ local function buildStyle(raw)
         improvements[k] = (rawImp[k] == true)
     end
 
-    return { dials = dials, rules = { respawn_behavior = respawn }, item_build = items, item_rules = item_rules, improvements = improvements }
+    return { dials = dials, rules = { respawn_behavior = respawn, dive_policy = dive, smoke_usage = smoke, buyback_policy = buyback }, item_build = items, item_rules = item_rules, improvements = improvements }
 end
 
 -- Returns the {dials, rules} config for the calling bot's team (cached, with safe defaults).
@@ -172,6 +194,18 @@ function M.Diag(bot, key)
     end
 end
 
+-- Rate-limited counter: increments key at most once per `sec` seconds (per bot, per key).
+-- For per-frame events (desire functions, mode ticks) so the count reflects episodes, not frames.
+function M.DiagRL(bot, key, sec)
+    if bot == nil then return end
+    bot.aib_rlLast = bot.aib_rlLast or {}
+    local now = DotaTime()
+    if bot.aib_rlLast[key] == nil or now - bot.aib_rlLast[key] >= sec then
+        bot.aib_rlLast[key] = now
+        M.Diag(bot, key)
+    end
+end
+
 -- Scale a "soft" mode desire by a 0-1 dial: 0.5 = baseline (x1), 0 = off, 1 = x2.
 -- Leaves NONE (<=0) and hard overrides (>= ABSOLUTE) untouched, so we never break
 -- the engine's forced behaviours.
@@ -214,6 +248,42 @@ function M.FinishPush(bot, scaledDesire, rawLaneDesire)
     if not M.IsFinishState(bot) then return scaledDesire end
     local forced = 0.90 + 0.09 * (clamp01(rawLaneDesire) or 0)
     return (forced > scaledDesire) and forced or scaledDesire
+end
+
+-- dive_policy gate: may this bot currently be inside enemy tower range (chase/farm under tower)?
+-- Gradient: never < finish_only < when_grouped < when_ahead < always (each level adds permission).
+-- Finishing a near-dead enemy is allowed at every level except 'never'. Used by the LANING guard
+-- only — push/siege runs in a different mode, so sieging towers is never blocked by this.
+local DIVE_FINISH_HP = 0.35
+local function countNonSelfAllies(bot, radius)
+    local list = bot:GetNearbyHeroes(radius, false, BOT_MODE_NONE)
+    local n = 0
+    if list then for _, h in ipairs(list) do if h ~= bot and h:IsAlive() then n = n + 1 end end end
+    return n
+end
+function M.MayDive(bot)
+    local policy = M.Get().rules.dive_policy or DEFAULT_DIVE
+    if policy == "always" then return true end
+    if policy == "never" then return false end
+    -- finishing a low-HP enemy in range: allowed for finish_only and above
+    local he = bot:GetNearbyHeroes(900, true, BOT_MODE_NONE)
+    if he then
+        for _, e in ipairs(he) do
+            if e:IsAlive() and (e:GetHealth() / e:GetMaxHealth()) < DIVE_FINISH_HP then return true end
+        end
+    end
+    if policy == "finish_only" then return false end
+    if policy == "when_grouped" then
+        return countNonSelfAllies(bot, 1200) >= 1
+    end
+    if policy == "when_ahead" then
+        if countNonSelfAllies(bot, 1200) >= 1 then return true end  -- grouped subsumed
+        local myTeam = bot:GetTeam()
+        local enemyTeam = (myTeam == TEAM_RADIANT) and TEAM_DIRE or TEAM_RADIANT
+        local function alive(t) local n = 0 for _, id in ipairs(GetTeamPlayers(t)) do if IsHeroAlive(id) then n = n + 1 end end return n end
+        return alive(myTeam) > alive(enemyTeam)
+    end
+    return false
 end
 
 return M
