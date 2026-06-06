@@ -32,7 +32,7 @@ local gateWarp = bot:GetAbilityByName("twin_gate_portal_warp")
 local enableGateUsage = false -- twin_gate_portal_warp to be fixed
 local arriveGankLocTime = 0
 local gankTimeAfterArrival = 15 -- 15s stay at gank location (was 33s — too long doing nothing)
-local gankGapTime = 3 * 60 -- 3 min between ganks (was 6 min — too restrictive)
+local gankGapTime = 25 + (GetBot():GetPlayerID() % 5) * 3 -- AIBattle: 25-37s per bot (was 3 min); jitter prevents all 5 syncing on same cooldown
 local lastStaticLinkDebuffStack = 0
 local AnyUnitAffectedByChainFrost = false
 local HasPossibleWallOfReplicaAround = false
@@ -56,6 +56,13 @@ function GetDesire()
 	local res = GetDesireHelper()
 	-- J.Utils.SetCachedVars(cacheKey, res)
 	-- AIBattle Schema v2 (Phase 2): scale individual-roam/gank desire by gank_desire team dial.
+	-- During gankGapTime cooldown: GetDesireHelper returns 0 (CheckLaneToGank suppressed),
+	-- but we want Think() to run so active cooldown behavior fires (fight/assist/farm).
+	-- Return moderate desire (0.6) so roam Think() stays alive during cooldown while allowing
+	-- push/defend/ward modes to override when they have higher desire.
+	if lastGankDecisionTime ~= 0 and DotaTime() - lastGankDecisionTime < gankGapTime then
+		return 0.6
+	end
 	return AIBStyle.ScaleDesire(res, AIBStyle.Get().dials.gank_desire)
 end
 function GetDesireHelper()
@@ -146,9 +153,65 @@ function Think()
 
 	nInRangeEnemy = bot:GetNearbyHeroes(1200, true, BOT_MODE_NONE)
 
+	-- AIBattle: active behavior during gankGapTime cooldown.
+	-- Roam keeps its normal desire so Think() runs; instead of ganking it fights/assists/farms.
+	-- Replaces GetDesire=NONE approach which caused 100-200s idle (laning also idles in late game).
+	-- Counters: cooldown-combat / cooldown-assist / cooldown-farm / gank-cooldown-lane
+	if lastGankDecisionTime ~= 0 and DotaTime() - lastGankDecisionTime < gankGapTime then
+		-- P1: enemy hero visible and in range → attack
+		if nInRangeEnemy and #nInRangeEnemy > 0 and nInRangeEnemy[1]:IsAlive() then
+			bot:Action_AttackUnit(nInRangeEnemy[1], true)
+			AIBStyle.Diag(bot, "cooldown-combat")
+			return
+		end
+		-- P2: ally is in combat nearby → move to help
+		local nearAllies = bot:GetNearbyHeroes(1200, false, BOT_MODE_NONE)
+		for _, ally in ipairs(nearAllies) do
+			if ally:IsAlive() and ally ~= bot then
+				local ae = ally:GetNearbyHeroes(500, true, BOT_MODE_NONE)
+				if #ae > 0 then
+					bot:Action_MoveToLocation(ally:GetLocation())
+					AIBStyle.Diag(bot, "cooldown-assist")
+					return
+				end
+			end
+		end
+		-- P3: farm nearby enemy lane creeps (stay active, collect gold)
+		local ec = bot:GetNearbyCreeps(700, true)
+		if ec and #ec > 0 then
+			bot:Action_AttackUnit(ec[1], true)
+			AIBStyle.Diag(bot, "cooldown-farm")
+			return
+		end
+		-- P4: move toward assigned lane front (only if far, avoid no-op re-issue)
+		local lane = bot:GetAssignedLane()
+		if lane and lane ~= LANE_NONE then
+			local homeLoc = GetLaneFrontLocation(GetTeam(), lane, 0)
+			if GetUnitToLocationDistance(bot, homeLoc) > 500 then
+				bot:Action_MoveToLocation(homeLoc)
+				AIBStyle.Diag(bot, "gank-cooldown-lane")
+			end
+		end
+		return
+	end
+
 	ThinkIndividualRoaming() -- unit special abilities
 	ThinkGeneralRoaming() -- general items or conditions.
 	ThinkActualGankingInLanes()
+
+	-- AIBattle: late-game combat fallback (IsInLaningPhase()=false → ThinkActual exits early).
+	-- If no sub-function issued a meaningful action, engage visible enemies to prevent idle.
+	-- Counter: roam-combat
+	if not J.Utils.IsBotThinkingMeaningfulAction(bot, false, "roam") then
+		if nInRangeEnemy and #nInRangeEnemy > 0 and nInRangeEnemy[1]:IsAlive() then
+			bot:Action_AttackUnit(nInRangeEnemy[1], true)
+			AIBStyle.Diag(bot, "roam-combat")
+			return
+		end
+	end
+
+	AIBAntiAFK() -- last resort: walk to lane if still idle
+	AIBStyle.AntiIdleGlobal(bot) -- P1 attack nearby enemy / P2 assist ally in combat
 end
 
 function ThinkIndividualRoaming()
@@ -928,10 +991,15 @@ function ActualGankDesire()
 	and not bot:WasRecentlyDamagedByAnyHero(2)
 	and (botTarget == nil or #nInRangeEnemy <= 0 or nInRangeEnemy[1] ~= botTarget) then
 		local botLvl = bot:GetLevel()
-		if (J.GetPosition(bot) == 2 and botLvl >= 6 and J.GetHP(bot) > 0.7 and J.GetMP(bot) > 0.5) -- mid player roaming
-		or (J.GetPosition(bot) > 3 and botLvl > 3 and J.GetHP(bot) > 0.6 and J.GetMP(bot) > 0.5) -- supports roaming
-		then
-			return CheckLaneToGank(J.GetPosition(bot))
+		-- AIBattle: replaced hardcoded position checks with dial-driven logic.
+		-- farm_focus < 0.65 → support/offlane → wants to roam.
+		-- gank_desire > 0.55 → team configured for ganking → everyone eligible.
+		-- A carry configured with farm_focus >= 0.65 naturally never passes this.
+		-- No position numbers, no hero-specific hardcode.
+		local dials = AIBStyle.Get().dials
+		local wantsToGank = (dials.gank_desire or 0.5) > 0.55 or (dials.farm_focus or 0.5) < 0.65
+		if wantsToGank and botLvl >= 4 and J.GetHP(bot) > 0.6 and J.GetMP(bot) > 0.4 then
+			return CheckLaneToGank()
 		end
 	end
 	return BOT_MODE_DESIRE_NONE
@@ -960,11 +1028,22 @@ function ThinkActualGankingInLanes()
 		local nEnemiesInGankLane = J.GetEnemyCountInLane(laneToGank)
 		if nEnemiesInGankLane == 0 then
 			laneToGank = nil
+			bot.aib_gankStartTime = nil
 			return
 		end
 
 		local targetLoc = GetLaneFrontLocation(GetTeam(), laneToGank, -300)
 		local distanceToGankLoc = GetUnitToLocationDistance(bot, targetLoc)
+
+		-- AIBattle stuck detection: if bot hasn't closed distance for 20s, abort gank
+		-- (pathfinding blocked by neutral camp geometry or unreachable target)
+		if bot.aib_gankStartTime == nil then bot.aib_gankStartTime = DotaTime() end
+		if DotaTime() - bot.aib_gankStartTime > 20 and distanceToGankLoc > 1500 then
+			laneToGank = nil
+			bot.aib_gankStartTime = nil
+			AIBStyle.Diag(bot, "gank-stuck-abort")
+			return
+		end
 		if distanceToGankLoc > 5000 then
 			if J.GetPosition(bot) > 3
 			and targetGate ~= nil
@@ -991,7 +1070,47 @@ function ThinkActualGankingInLanes()
 		end
 		if DotaTime() - arriveGankLocTime > gankTimeAfterArrival then
 			laneToGank = nil
+			bot.aib_gankStartTime = nil
+			-- AIBattle anti-AFK: gank window expired — walk back to assigned lane
+			-- so the bot doesn't stand idle for the full gankGapTime cooldown.
+			local assignedLane = bot:GetAssignedLane()
+			if assignedLane and assignedLane ~= LANE_NONE then
+				local homeLoc = GetLaneFrontLocation(GetTeam(), assignedLane, 0)
+				if GetUnitToLocationDistance(bot, homeLoc) > 600 then
+					bot:Action_MoveToLocation(homeLoc)
+					AIBStyle.Diag(bot, "gank-done-retreat")
+				end
+			end
 		end
+	end
+end
+
+-- AIBattle anti-AFK for roam mode: if the bot hasn't moved >50 units in
+-- ANTIAFK_THRESHOLD seconds while roam mode is active, force a walk toward
+-- the assigned lane front. Prevents indefinite idle after gank gap / no target.
+local ANTIAFK_THRESHOLD = 8
+function AIBAntiAFK()
+	local now = DotaTime()
+	local pos = bot:GetLocation()
+	if bot.aib_afkLastPos then
+		local moved = (pos - bot.aib_afkLastPos):Length2D()
+		if moved > 50 then
+			bot.aib_afkLastMoveTime = now
+		end
+	end
+	bot.aib_afkLastPos = pos
+	if bot.aib_afkLastMoveTime == nil then bot.aib_afkLastMoveTime = now end
+	if now - bot.aib_afkLastMoveTime > ANTIAFK_THRESHOLD then
+		local assignedLane = bot:GetAssignedLane()
+		local fallbackLoc
+		if assignedLane and assignedLane ~= LANE_NONE then
+			fallbackLoc = GetLaneFrontLocation(GetTeam(), assignedLane, 0)
+		else
+			fallbackLoc = J.GetTeamFountain()
+		end
+		bot:Action_MoveToLocation(fallbackLoc)
+		bot.aib_afkLastMoveTime = now
+		AIBStyle.Diag(bot, "anti-afk")
 	end
 end
 
@@ -1010,7 +1129,7 @@ function IsInHealthyState()
 	return botName ~= 'npc_dota_hero_huskar' and J.GetHP(bot) > 0.7 and J.GetMP(bot) > 0.6
 end
 
-function CheckLaneToGank(botPosition)
+function CheckLaneToGank()
 
 	-- Don't gank if enemies are already near us (we're in a fight)
 	if #J.GetEnemiesNearLoc(bot:GetLocation(), 800) > 0 then
@@ -1030,26 +1149,14 @@ function CheckLaneToGank(botPosition)
 		return BOT_ACTION_DESIRE_VERYHIGH
 	end
 
-	-- Cores should NOT gank during laning — they lose too much farm/XP
-	local nPos = J.GetPosition(bot)
-	if J.IsInLaningPhase() then
-		if nPos == 1 or nPos == 2 then
-			return BOT_MODE_DESIRE_NONE
-		end
-	end
-
-	local botLvlTooLow = (nPos == 1 and botLevel < 10) or
-		(nPos == 2 and botLevel < 8) or
-		(nPos == 3 and botLevel < 6) or
-		(nPos == 4 and botLevel < 4) or
-		(nPos == 5 and botLevel < 3)
-
-	if (DotaTime() - lastGankDecisionTime < gankGapTime and lastGankDecisionTime ~= 0)
-		or botLvlTooLow then
+	-- AIBattle: removed duplicate pos/level gate (now handled in ActualGankDesire via dials).
+	-- Only keep the gank gap cooldown here.
+	if DotaTime() - lastGankDecisionTime < gankGapTime and lastGankDecisionTime ~= 0 then
 		return BOT_MODE_DESIRE_NONE
 	end
 
-	if not HasSufficientMana(300) then
+	-- Mana check: lowered 300→200 (early-game heroes rarely exceed 300 total mana)
+	if not HasSufficientMana(200) then
 		return BOT_MODE_DESIRE_NONE
 	end
 
@@ -1060,39 +1167,40 @@ function CheckLaneToGank(botPosition)
 	for _, lane in pairs(laneAndT1s) do
 		local enemyCountInLane = J.GetEnemyCountInLane(lane[1])
 		if enemyCountInLane > 0 then
-			local tTower = GetTower(GetTeam(), lane[2])
-			if tTower ~= nil then
-				local laneFront = GetLaneFrontLocation(GetTeam(), lane[1], 0)
-				local laneFrontToT1Dist = GetUnitToLocationDistance(tTower, laneFront)
-				local nInRangeAlly = J.GetAlliesNearLoc(laneFront, 1200)
-				local botDistToLane = GetUnitToLocationDistance(bot, laneFront)
+			local laneFront = GetLaneFrontLocation(GetTeam(), lane[1], 0)
+			local nInRangeAlly = J.GetAlliesNearLoc(laneFront, 1200)
+			local allyCountInLane = #nInRangeAlly
+			local botDistToLane = GetUnitToLocationDistance(bot, laneFront)
 
-				-- Skip this lane if it's too far (> 4000 units — would take too long)
-				if botDistToLane > 4000 and not J.HasItem(bot, 'item_tpscroll') then
-					goto continue_lane
-				end
+			-- Skip if too far without TP
+			if botDistToLane > 4000 and not J.HasItem(bot, 'item_tpscroll') then
+				goto continue_lane
+			end
 
-				-- Skip if this is our own assigned lane (don't "gank" our own lane)
-				if lane[1] == bot:GetAssignedLane() then
-					goto continue_lane
-				end
+			-- Skip own assigned lane
+			if lane[1] == bot:GetAssignedLane() then
+				goto continue_lane
+			end
 
-				-- Better gank conditions: enemy is pushed forward (closer to our tower)
-				-- AND we have at least 1 ally there to help
-				local bEnemyOverextended = laneFrontToT1Dist < 2500
-				local bAllyPresent = #nInRangeAlly >= 1
+			-- AIBattle: removed bEnemyOverextended (geographic check, only true when losing).
+			-- Safety: don't send bot into a fight where enemies outnumber allies+ganker.
+			-- enemyCount > allyCount+1 means even with this bot arriving, still outnumbered.
+			if enemyCountInLane > allyCountInLane + 1 then
+				goto continue_lane
+			end
 
-				if bEnemyOverextended and bAllyPresent then
-					local desire = RemapValClamped(botDistToLane, 4000, 600, BOT_ACTION_DESIRE_MODERATE, BOT_ACTION_DESIRE_HIGH)
-					-- Bonus desire if enemy is outnumbered
-					if enemyCountInLane <= #nInRangeAlly then
-						desire = desire + 0.1
-					end
-					if desire > bestDesire then
-						bestDesire = desire
-						bestLane = lane[1]
-					end
-				end
+			local desire = RemapValClamped(botDistToLane, 4000, 600, BOT_ACTION_DESIRE_MODERATE, BOT_ACTION_DESIRE_HIGH)
+			-- Bonus if ally already present to help
+			if allyCountInLane >= 1 then
+				desire = desire + 0.1
+			end
+			-- Bonus if enemy outnumbered
+			if enemyCountInLane <= allyCountInLane then
+				desire = desire + 0.1
+			end
+			if desire > bestDesire then
+				bestDesire = desire
+				bestLane = lane[1]
 			end
 		end
 		::continue_lane::
@@ -1101,6 +1209,7 @@ function CheckLaneToGank(botPosition)
 	if bestLane then
 		laneToGank = bestLane
 		lastGankDecisionTime = DotaTime()
+		AIBStyle.Diag(bot, "gank-decision")
 		return Clamp(bestDesire, 0, BOT_ACTION_DESIRE_VERYHIGH)
 	end
 
@@ -1573,11 +1682,32 @@ function ConsiderGeneralRoamingInConditions()
 		end
 	end
 
-	-- local actualGankingDesire = ActualGankDesire()
-	-- if actualGankingDesire > 0 then
-	-- 	lastGankDecisionTime = DotaTime()
-	-- 	return actualGankingDesire
-	-- end
+	-- AIBattle: activate lane-gank roaming (was commented out in OHA → lastGankDecisionTime
+	-- was always 0 → our gankGapTime/cooldown fixes were dead code). Now active: pos3-5
+	-- supports roam to overextended lanes during laning phase. CheckLaneToGank sets
+	-- laneToGank + lastGankDecisionTime when a good gank target is found.
+	local actualGankingDesire = ActualGankDesire()
+	if actualGankingDesire > 0 then
+		lastGankDecisionTime = DotaTime()
+		return actualGankingDesire
+	end
+
+	-- AIBattle Fix 4: late-game roaming (IsInLaningPhase()=false → ActualGankDesire always 0).
+	-- Gives pos2-5 a moderate desire so roam Think() runs with ThinkGeneralRoaming +
+	-- roam-combat fallback + AntiIdleGlobal.
+	-- ScaleDesire(0.4, gank_desire=0.95) ≈ 0.78 → wins over idle laning, yields to push/defend.
+	-- Carry (pos1) gets lower desire 0.2 — still roams but push/farm modes beat it easily.
+	if not J.IsInLaningPhase() and J.GetHP(bot) > 0.5 then
+		local pos = J.GetPosition(bot)
+		if pos >= 2 then
+			AIBStyle.Diag(bot, "roam-late")
+			return 0.4
+		elseif pos == 1 then
+			AIBStyle.Diag(bot, "roam-late-carry")
+			return 0.2
+		end
+	end
+
 	return BOT_ACTION_DESIRE_NONE
 end
 

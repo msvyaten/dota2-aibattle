@@ -461,6 +461,11 @@ function Think()
 	if fwd >= 0.5 then
 		bot:Action_MoveToLocation(target_loc + RandomVector(50))
 	end
+
+	-- AIBattle: anti-idle fallback — fires when laning mode has nothing to do (late game, empty
+	-- lane, bot already at assigned position). Attack a visible enemy or move to assist an ally
+	-- in combat. Covers the "bot stands under own T2 doing nothing for 2+ min" pattern.
+	Style.AntiIdleGlobal(bot)
 end
 
 

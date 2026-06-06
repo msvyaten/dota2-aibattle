@@ -1447,7 +1447,7 @@ function ItemOpsDesire()
             if droppedItem ~= nil then
                 local itemName = droppedItem.item:GetName()
                 if not J.Utils.SetContains(itemName) and not J.Utils.HasValue(Item['tEarlyConsumableItem'], itemName) then
-                    if itemName == 'item_aegis' and J.GetPosition(bot) <= 3 and not J.HasItem(bot, 'item_aegis') then
+                    if itemName == 'item_aegis' and AIBStyle.ShouldPickupAegis(bot) and not J.HasItem(bot, 'item_aegis') then
                         if J.Item.GetEmptyNonBackpackInventoryAmount(bot) == 0 then
                             local lessValItem = J.Item.GetMainInvLessValItemSlot(bot)
                             local emptySlot = J.Item.GetEmptyBackpackSlot(bot)
@@ -1500,7 +1500,7 @@ function ItemOpsThink()
             end
             if not Utils.SetContains(itemName) and not Utils.HasValue(Item['tEarlyConsumableItem'], itemName) then
                 if itemName == 'item_aegis' or itemName == 'item_cheese' then
-                    if J.GetPosition(bot) <= 3 and not J.HasItem(bot, 'item_aegis') then
+                    if AIBStyle.ShouldPickupAegis(bot) and not J.HasItem(bot, 'item_aegis') then
                         GoPickUpItem(PickedItem)
                     end
                 else

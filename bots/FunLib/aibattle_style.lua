@@ -47,6 +47,13 @@ local DEFAULT_SMOKE = "for_ganks"
 local BUYBACK_VALUES = { never = true, default = true }
 local DEFAULT_BUYBACK = "default"
 
+-- aegis_policy: who picks up Aegis of the Immortal after Roshan.
+-- carry_only = pos1 only; if dead nobody picks it up.
+-- core      = pos1 preferred, pos3/pos2 fallback if pos1 is dead (default).
+-- any       = no restriction — whoever is closest takes it (OHA original).
+local AEGIS_VALUES = { carry_only = true, core = true, any = true }
+local DEFAULT_AEGIS = "core"
+
 local function clamp01(x)
     if type(x) ~= "number" then return nil end
     if x < 0 then return 0 end
@@ -71,6 +78,8 @@ local function buildStyle(raw)
     local smoke = (type(sm) == "string" and SMOKE_VALUES[sm]) and sm or DEFAULT_SMOKE
     local bbk = rawRules.buyback_policy
     local buyback = (type(bbk) == "string" and BUYBACK_VALUES[bbk]) and bbk or DEFAULT_BUYBACK
+    local aeg = rawRules.aegis_policy
+    local aegis = (type(aeg) == "string" and AEGIS_VALUES[aeg]) and aeg or DEFAULT_AEGIS
 
     -- Prompt-driven item build (ordered). Keep only "item_*" strings here; the
     -- purchaser validates each against GetItemCost so a bogus name can't break the buy loop.
@@ -103,7 +112,7 @@ local function buildStyle(raw)
         improvements[k] = (rawImp[k] == true)
     end
 
-    return { dials = dials, rules = { respawn_behavior = respawn, dive_policy = dive, smoke_usage = smoke, buyback_policy = buyback }, item_build = items, item_rules = item_rules, improvements = improvements }
+    return { dials = dials, rules = { respawn_behavior = respawn, dive_policy = dive, smoke_usage = smoke, buyback_policy = buyback, aegis_policy = aegis }, item_build = items, item_rules = item_rules, improvements = improvements }
 end
 
 -- Returns the {dials, rules} config for the calling bot's team (cached, with safe defaults).
@@ -221,15 +230,28 @@ end
 
 -- Lead-aware "finish" detector. Returns true once an enemy hero is dead AND game is past
 -- the early phase (>10 min Turbo-time). FINISH_DEAD=1 so a single kill in mid/late game
--- triggers the push window immediately rather than waiting for 2 kills (which was causing
--- 60+ min Turbo games). Time gate prevents early-game overreaction (one kill at min 5 → push).
+-- triggers the push window immediately rather than waiting for 2 kills.
+-- Net-worth gate: must NOT be losing by >15% NW — prevents a losing team from pushing after
+-- a lucky kill while already down 30k gold (they should defend, not rush enemy base).
 -- DIAL-INDEPENDENT base competence: push_desire shapes mid-game sieging; this handles closeout.
 -- Edge-triggered diag 'finish-push' so logs show how often the override engaged.
 local FINISH_DEAD = 1       -- engage once this many of the 5 enemy heroes are dead
 local FINISH_MIN_TIME = 600 -- seconds: ~10 min Turbo = meaningful mid/late game
+local FINISH_NW_RATIO = 0.85 -- must have >= 85% of enemy net worth to push
 function M.IsFinishState(bot)
     if DotaTime() < FINISH_MIN_TIME then return false end
-    local enemyTeam = (bot:GetTeam() == TEAM_RADIANT) and TEAM_DIRE or TEAM_RADIANT
+    local myTeam = bot:GetTeam()
+    local enemyTeam = (myTeam == TEAM_RADIANT) and TEAM_DIRE or TEAM_RADIANT
+    -- Net-worth gate
+    local myNW, enNW = 0, 0
+    for _, id in ipairs(GetTeamPlayers(myTeam)) do
+        myNW = myNW + (PlayerResource:GetNetWorth(id) or 0)
+    end
+    for _, id in ipairs(GetTeamPlayers(enemyTeam)) do
+        enNW = enNW + (PlayerResource:GetNetWorth(id) or 0)
+    end
+    if enNW > 0 and myNW < enNW * FINISH_NW_RATIO then return false end
+    -- Kill gate
     local dead = 0
     for _, id in ipairs(GetTeamPlayers(enemyTeam)) do
         if not IsHeroAlive(id) then dead = dead + 1 end
@@ -284,6 +306,63 @@ function M.MayDive(bot)
         return alive(myTeam) > alive(enemyTeam)
     end
     return false
+end
+
+-- Aegis pickup eligibility, driven by aegis_policy rule.
+-- carry_only: pos1 only; if dead nobody takes it.
+-- core (default): pos1 preferred; pos2/pos3 fallback only if pos1 is dead; pos4/5 never.
+-- any: no restriction — whoever is closest (OHA original behaviour).
+-- Call from ItemOpsDesire/ItemOpsThink in mode_team_roam_generic.lua.
+function M.ShouldPickupAegis(bot)
+    local policy = M.Get().rules.aegis_policy or DEFAULT_AEGIS
+    local pos = J.GetPosition(bot)
+
+    if policy == "any" then return true end
+
+    if policy == "carry_only" then
+        return pos == 1
+    end
+
+    -- policy == "core" (default): pos1 always; pos2/3 only if no pos1 alive
+    if pos >= 4 then return false end
+    if pos == 1 then return true end
+    for i = 1, 5 do
+        local ally = GetTeamMember(i)
+        if ally ~= nil and ally ~= bot and ally:IsAlive() and J.GetPosition(ally) == 1 then
+            return false  -- carry alive → let them take it
+        end
+    end
+    return true  -- carry dead → pos2/3 eligible
+end
+
+-- Anti-idle global fallback: call at the END of any mode's Think() as a last resort.
+-- Covers late-game AFK (IsInLaningPhase=false → roam/gank never activates) and empty-lane
+-- idle (bot reached assigned position, no creeps, no enemies in attack range).
+-- P1: attack a visible enemy hero within 1200 units (pro-active combat).
+-- P2: move to a nearby ally who has an enemy within 600 (assist in fight).
+-- No J.Utils.IsBotThinkingMeaningfulAction gate — caller must place this AFTER all mode logic
+-- so it only fires when the mode itself has nothing to do.
+-- Counters: anti-idle-combat / anti-idle-assist
+function M.AntiIdleGlobal(bot)
+    local enemies = bot:GetNearbyHeroes(1200, true, BOT_MODE_NONE)
+    if enemies and #enemies > 0 and enemies[1]:IsAlive() then
+        bot:Action_AttackUnit(enemies[1], true)
+        M.Diag(bot, "anti-idle-combat")
+        return
+    end
+    local allies = bot:GetNearbyHeroes(1500, false, BOT_MODE_NONE)
+    if allies then
+        for _, a in ipairs(allies) do
+            if a:IsAlive() and a ~= bot then
+                local ae = a:GetNearbyHeroes(600, true, BOT_MODE_NONE)
+                if ae and #ae > 0 then
+                    bot:Action_MoveToLocation(a:GetLocation())
+                    M.Diag(bot, "anti-idle-assist")
+                    return
+                end
+            end
+        end
+    end
 end
 
 return M
