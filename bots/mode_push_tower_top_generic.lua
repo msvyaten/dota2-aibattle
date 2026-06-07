@@ -17,10 +17,7 @@ function GetDesire()
 	if not J.IsInLaningPhase() then
 		local pushLane = AIBStyle.GetGroupPushLane()
 		if pushLane == LANE_TOP then
-			if raw > 0 then
-				d = Clamp(d + 0.3, 0, BOT_ACTION_DESIRE_VERYHIGH)
-				AIBStyle.Diag(bot, "group-push-rally")
-			end
+			d = Clamp(d + 0.3, 0, BOT_ACTION_DESIRE_VERYHIGH)
 		else
 			d = d * 0.15
 		end

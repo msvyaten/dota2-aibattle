@@ -210,6 +210,23 @@ function Think()
 		end
 	end
 
+	-- AIBattle: late-game group push rally.
+	-- When not ganking and no enemies in range, navigate toward the lane with fewest
+	-- surviving enemy towers so bots GATHER before pushing. Once 2+ allies arrive,
+	-- OHA's push mode fires naturally (alliesHere >= 2 → raw > 0 → push desire wins).
+	-- Counter: 'group-push-rally' counts ticks while actively navigating to rally point.
+	if not J.IsInLaningPhase() and laneToGank == nil then
+		if not nInRangeEnemy or #nInRangeEnemy == 0 then
+			local pushLane = AIBStyle.GetGroupPushLane()
+			local pushFront = GetLaneFrontLocation(GetTeam(), pushLane, 0)
+			if GetUnitToLocationDistance(bot, pushFront) > 1200 then
+				bot:Action_MoveToLocation(pushFront + RandomVector(100))
+				AIBStyle.Diag(bot, "group-push-rally")
+				return
+			end
+		end
+	end
+
 	AIBAntiAFK() -- last resort: walk to lane if still idle
 	AIBStyle.AntiIdleGlobal(bot) -- P1 attack nearby enemy / P2 assist ally in combat
 end
