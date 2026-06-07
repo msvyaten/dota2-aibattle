@@ -200,13 +200,25 @@ function Think()
 	ThinkActualGankingInLanes()
 
 	-- AIBattle: late-game combat fallback (IsInLaningPhase()=false → ThinkActual exits early).
-	-- If no sub-function issued a meaningful action, engage visible enemies to prevent idle.
-	-- Counter: roam-combat
+	-- P1: attack enemy in 1200 range (roam-combat).
+	-- P2: late-game Ganker hunt — pursue visible enemies in 2500 range (late-hunt).
+	--     Fires only when gank_desire>=0.7 and bot has enough HP to engage.
 	if not J.Utils.IsBotThinkingMeaningfulAction(bot, false, "roam") then
 		if nInRangeEnemy and #nInRangeEnemy > 0 and nInRangeEnemy[1]:IsAlive() then
 			bot:Action_AttackUnit(nInRangeEnemy[1], true)
 			AIBStyle.Diag(bot, "roam-combat")
 			return
+		end
+		if not J.IsInLaningPhase() and J.GetHP(bot) >= 0.35 then
+			local gankDial = AIBStyle.Get().dials.gank_desire
+			if gankDial and gankDial >= 0.7 then
+				local farEnemies = bot:GetNearbyHeroes(2500, true, BOT_MODE_NONE)
+				if farEnemies and #farEnemies > 0 and farEnemies[1]:IsAlive() then
+					bot:Action_MoveToLocation(farEnemies[1]:GetLocation())
+					AIBStyle.Diag(bot, "late-hunt")
+					return
+				end
+			end
 		end
 	end
 
