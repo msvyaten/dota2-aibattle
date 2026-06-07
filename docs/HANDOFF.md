@@ -2,7 +2,7 @@
 
 > Единственная точка входа и единственный поддерживаемый док проекта. Обновлять ЕГО, новых
 > статус/план-доков не плодить. Он же — то, что отдаём другому Claude (мак/новое окно).
-> Последнее обновление: 2026-06-06 (system prompt v2, anti-AFK фикс, swap run 2, AFK-наблюдения в матче — см. §15; второй матч с фиксами — §16: AFK короче но есть, осцилляция, Aegis policy).
+> Последнее обновление: 2026-06-07 (phase-8: фикс push арбитража + Ganker late-hunt — см. §17; матч 10 = стресс-тест all-0.99 vs дефолт).
 > Машина: Windows/Shadow PC (тут LIVE Dota). По-русски.
 >
 > Доказательство = ТОЛЬКО цифра из финального стат-дампа ИЛИ строка из `console.<matchid>.log`.
@@ -86,8 +86,11 @@ AIBattle — «ставки на ИИ-агентов»: игрок промпт�
 ---
 
 ## 6. ИСТОРИЯ ИЗМЕНЕНИЙ
-**В гите (ветка `schema-v2-item-builds`):**
-- `9ec61f2` (HEAD) — scorecard диалов + match id.
+**В гите (ветка `phase-2-team-dials`):**
+- `4435e8e` (HEAD) — phase-8: фикс push арбитража (raw>0 guard) + Ganker late-hunt (2500-range pursuit в roam Think).
+- `90ebc6b` — phase-7: LLM item builds (per-hero buy order).
+- `98314c9` — grouped push v2: push boost 0.45 + push-lane-active counter.
+- `9ec61f2` — scorecard диалов + match id.
 - `89b5dc8` — фикс tp_to_tower (гард канала ТП: `aib_tping`+`aib_tpCastTime` держат бота пока есть
   `modifier_teleporting`; раньше `aib_wasDead` сбрасывался в тик каста и Think рвал канал).
 - `9fda74c` — фикс пассива (кайт от крипов, gate `retreat_caution>0.4`) + harass floor 0.05.
@@ -467,9 +470,13 @@ retreat0.25+fwd0.85 = ныряет, не закрывает; агро-архет
 ПОРЯДОК ЖЁСТКИЙ: Фаза 0 → 1 → 2 → 3. Фаза 2 строится только если Фаза 1 показала смысл. После каждой
 фазы — обновить HANDOFF статусом с пруфами, в main мёржить осознанно.
 
-## 12. Текущая позиция (05.06.2026)
+## 12. Текущая позиция (07.06.2026)
 **Фаза 3 В РАБОТЕ** (ветка `phase-2-team-dials`). Фаза 2 DONE. Схема: **12 диалов + 3 rules** (buyback
 упрощён до 2 значений). LLM-пайплайн доказан (§11 3.4). closeout-фикс затюнен.
+
+**Сессия 07.06 — статус:**
+Phase-8 фиксы реализованы и закоммичены (`4435e8e`). Матч 10 запущен (Radiant=all 0.99 / Dire=all 0.5,
+стресс-тест). Ожидаем `push-lane-wait` и `push-lane-active` в диагах — первая валидация нового механизма.
 
 **Сессия 05.06 — итоги:**
 
@@ -558,21 +565,63 @@ consumable_save, ability_save (=mana_conserve; сложно, hero-specific — �
 БАТЧ-ПРИНЦИП: несколько правил в одну игру МОЖНО, если у каждого СВОЙ независимый счётчик.
 
 ### 14.6 Продукт / долгое будущее (для документации)
-- **Карточка агента:** 12 диалов + rules + item_build + драфт из curated-пула + имя + реплики в чат.
+- **Карточка агента:** 12 диалов + rules + item_build + talent_build + драфт из curated-пула + имя + реплики в чат.
 - **Драфт от LLM** возможен (general.lua Radiant_Heros/Dire_Heros — разные стороны), но из curated-пула
   (OHA формально играет всех 127, но качество разное; микро/комбо-герои — плохо). Curated определить тестами.
 - **Конфиг по ролям** возможен (GetPosition уже есть; варды УЖЕ только пос4-5 нативно). Разделять общие→
   командные/ролевые — НЕ сейчас, а когда правил наберётся достаточно.
 - **Потолок OHA (нужен свой бот):** командные комбо/координация, адаптация по ходу, контр-сборка, мульти-юнит.
 - **Captains Mode** — проверить, как LLM играют драфт (баны/пики). Долгое будущее.
-- **LLM-driven talent selection** — сейчас таланты захардкожены на героя в BotLib-файлах (`tTalentTreeList`
-  с `{left_weight, right_weight}` на уровни t10/t15/t20/t25; `GetTalentBuild` в `aba_skill.lua` переводит
-  в фиксированный порядок — конфиг не влияет). План: добавить опциональное поле `talent_preferences` в
-  playstyle-конфиг (напр. `{ t10="right", t15="left", t20="right", t25="right" }`) и научить `GetTalentBuild`
-  читать его если задано, иначе падать на дефолт из `tTalentTreeList`. LLM сможет явно выбирать сторону
-  дерева — агрессивный конфиг берёт урон, защитный — выживаемость. Реализация: ~5 строк патч в
-  `aba_skill.lua` + новый ключ в лоадере `aibattle_style.lua`. Ценность небольшая (таланты влияют поздно
-  и редко), поэтому — долгое будущее, только когда промпт это потребует.
+
+### 14.7 Очевидные места кастомизации для LLM (бэклог, 07.06)
+Всё что ниже — конкретный код + путь проверки. Сортировка: сложность реализации × ценность.
+
+| # | Фича | Сложность | Верификация | Приоритет |
+|---|------|-----------|-------------|-----------|
+| 1 | **Таланты** | Низкая | Сложная | После item_build |
+| 2 | **TP-защита** | Средняя | Простая | Следующий |
+| 3 | **Назначение лейнов** | Средняя | Простая | После TP |
+| 4 | **Gank start timing** | Низкая | Средняя | После лейнов |
+| 5 | **Roshan min time** | Низкая | Средняя | Deferred |
+| 6 | **Ward priorities** | Высокая | Средняя | Deferred |
+| 7 | **Split push** | Высокая | Средняя | Долгое будущее |
+
+**#1 Таланты** — хук уже есть (`SetUserHeroInit` / `J.GetTalentBuildList`). Формат:
+```lua
+talent_build = { npc_dota_hero_axe = {"r","r","l","r"} }  -- t10/t15/t20/t25
+```
+Реализация: 5 строк в `jmz_func.lua` (тот же паттерн что item_build) + 5 строк в `aibattle_style.lua`.
+LLM знает таланты без парсера. Верификация сложная: нет diag-счётчика, нужно смотреть UI в матче.
+
+**#2 TP-защита** (`tp_defense`) — rule: при атаке вышки T2+ бот телепортируется на защиту.
+```lua
+rules.tp_defense = "t2_plus"  -- "never" / "t3_only" / "t2_plus" / "always"
+```
+Реализация: хук в `mode_defend_tower_*` или `mode_laning` — проверять `GetNearbyTowers(enemyTeam, 800)`
+атакуется ли своя вышка; если да и бот далеко → `Action_UseAbilityOnLocation(tp, tower)`.
+Верификация простая: счётчик `tp-defend`, видно в diag.
+
+**#3 Назначение лейнов** — rule: какой бот (по позиции) идёт в какой лейн.
+```lua
+rules.lane_assignment = { pos1 = "bot", pos2 = "mid", pos3 = "top" }
+```
+Реализация: в `bot_generic.lua` или `mode_laning_generic.lua` переопределить GetAssignedLane().
+Верификация: счётчик/лог куда пошли боты в первые 5 мин.
+
+**#4 Gank start timing** — rule: до минуты X все фармят, после — ганки разрешены.
+```lua
+rules.gank_start_min = 8  -- default nil (без ограничения)
+```
+Реализация: в `mode_roam_generic.lua` GetDesire: `if DotaTime() < gank_start_min*60 then return 0 end`.
+Верификация: первый diag `rune-grab`/`gank-*` появляется после минуты X.
+
+**#5 Roshan min time** — расширение roshan_desire: `roshan_min_time = 20` (мин).
+Реализация: в `mode_roshan_generic.lua` GetDesire: дополнительный gate `DotaTime() > min_time * 60`.
+
+**Почему таланты "низкая сложность но сложная верификация":**
+Реализация = 10 мин (copy-paste jmz_func pattern). Верификация = нет auto-diag.
+Нужно либо добавить diag-счётчик который пишет в чат выбранный талант, либо смотреть UI в матче.
+Без счётчика = не по нашему методу (proof = цифра из лога).
 
 ---
 
@@ -876,3 +925,110 @@ AIBAntiAFK()
 - `docs/llm_system_prompt.md` — v2
 - `Customize/general.lua` — имена ChatGPT_1..5 / Gemini_1..5
 - ⚠️ НЕ коммитить playstyle_radiant/dire тест-конфигами
+
+---
+
+## 17. Сессия 07.06 — Phase-8: фикс push арбитража + Ganker hunt
+
+### 17.1 Контекст: матчи 7–9 (Pusher vs Ganker, фазы 6–7)
+
+| Match | ID | Radiant | Dire | Результат |
+|---|---|---|---|---|
+| 7 | 8842264348 | Ganker | Ganker | Ganker vs Ganker, push=0 |
+| 8 | 8842539868 | Pusher | Ganker | Pusher победил |
+| 9 | 8842686799 | Ganker | Pusher | Инверсия: Ганкер 8237 tower dmg, Пушер 30 tower dmg |
+
+**Аномалия матча 9:** Пушер (push=0.95) сделал **30 tower damage**, Ганкер (gank=0.95) — **8237 tower damage**.
+Pusher 26 kilов (выигрывал файты), Ганкер 9 (почти не ганкал), но Ганкер пушил. Два подтверждённых бага.
+
+### 17.2 Bug 1 — push-lane-active=0 (Pusher АФК у трона)
+
+**Наблюдение:** в матчах 7–9 счётчик `push-lane-active=0` во всех матчах. Боты Pusher'а стояли у трона ~24 мин (наблюдение зрителя).
+
+**Диагностика:** debug-счётчики `push-gd` / `push-late` добавлены в `mode_push_tower_bot_generic.lua` (не запускались).
+
+**Корень:**
+```
+push mode GetDesire(): raw=0 (волны нет) → d += 0.45 → d = 0.45
+roam mode GetDesire(): late-game fallback → 0.4
+
+Push (0.45) > Roam (0.40) → push выигрывает арбитраж
+PushThink() вызывается → нет волны → ничего не делает
+Roam Think() НИКОГДА не вызывается → group-push-rally не работает
+```
+
+**Фикс (`mode_push_tower_{bot,mid,top}_generic.lua`):**
+```lua
+if raw > 0 then
+    -- Волна есть: выигрываем арбитраж, PushThink реально пушит
+    d = Clamp(d + 0.45, 0, BOT_ACTION_DESIRE_VERYHIGH)
+    AIBStyle.Diag(bot, "push-lane-active")
+else
+    -- Волны нет: уступаем roam (0.40 > 0.15), group-push-rally навигирует к фронту
+    d = 0.15
+    AIBStyle.Diag(bot, "push-lane-wait")
+end
+```
+
+Новый поток:
+```
+raw=0 → d=0.15 → roam (0.40) выигрывает → group-push-rally идёт к фронту лайна
+raw>0 (волна пришла) → d=0.45 → push выигрывает → PushThink реально пушит
+```
+
+### 17.3 Bug 2 — Ganker не ганкает в поздней игре
+
+**Корень:** `ActualGankDesire()` содержит `if not J.IsInLaningPhase() then return 0 end` (OHA).
+После 8–10 мин Turbo — 22 минуты без направленного поведения. Ganker пассивно ждёт пока враг войдёт в 1200.
+
+**Фикс (`mode_roam_generic.lua`, внутри `IsBotThinkingMeaningfulAction` блока):**
+```lua
+-- P1: атакуем врага в 1200 (roam-combat, было)
+if nInRangeEnemy and #nInRangeEnemy > 0 and nInRangeEnemy[1]:IsAlive() then
+    bot:Action_AttackUnit(nInRangeEnemy[1], true)
+    AIBStyle.Diag(bot, "roam-combat"); return
+end
+-- P2: НОВОЕ — late-game hunt: преследуем врага в 2500 при gank_desire>=0.7
+if not J.IsInLaningPhase() and J.GetHP(bot) >= 0.35 then
+    local gankDial = AIBStyle.Get().dials.gank_desire
+    if gankDial and gankDial >= 0.7 then
+        local farEnemies = bot:GetNearbyHeroes(2500, true, BOT_MODE_NONE)
+        if farEnemies and #farEnemies > 0 and farEnemies[1]:IsAlive() then
+            bot:Action_MoveToLocation(farEnemies[1]:GetLocation())
+            AIBStyle.Diag(bot, "late-hunt"); return
+        end
+    end
+end
+```
+
+HP-guard 0.35 предотвращает суицидальное преследование при низком здоровье.
+
+### 17.4 Счётчики (новые в этой сессии)
+
+| Счётчик | Где | Когда срабатывает |
+|---|---|---|
+| `push-gd` | mode_push_tower_{bot,mid,top} | GetDesire() вызван (DiagRL 10с) |
+| `push-late` | mode_push_tower_{bot,mid,top} | IsInLaningPhase()=false (DiagRL 10с) |
+| `push-lane-active` | mode_push_tower_{bot,mid,top} | raw>0 + правильный лайн → boost +0.45 |
+| `push-lane-wait` | mode_push_tower_{bot,mid,top} | raw=0 + правильный лайн → yield 0.15 |
+| `late-hunt` | mode_roam_generic | преследование врага в 2500 (gank_desire≥0.7) |
+
+### 17.5 Коммит
+
+`4435e8e` — "fix: push arbitration idle + Ganker late-game hunt (phase-8 bugs)" (07.06.2026)
+4 файла: mode_push_tower_{bot,mid,top}_generic.lua + mode_roam_generic.lua
+
+### 17.6 Матч 10 — стресс-тест all-0.99 vs дефолт
+
+| Сторона | Конфиг | Цель |
+|---|---|---|
+| Radiant | Все диалы 0.99, dive=always, smoke=for_ganks | Видеть противоречия (fwd=0.99 + retreat=0.99) |
+| Dire | Все диалы 0.5 (нейтраль) | Контрольная группа |
+
+**Ожидаемые счётчики:**
+- `push-lane-wait` > 0 → первая валидация нового механизма (raw=0 guard)
+- `push-lane-active` > 0 → push с волной работает
+- `late-hunt` > 0 → Ganker/все боты преследуют врагов в поздней игре
+- `push-late` + `push-gd` > 0 → путь кода проходится
+
+**⏭️ СЛЕДУЮЩЕЕ ДЕЙСТВИЕ:** запустить матч 10, получить ID, `python tools/match_stats.py <id>`.
