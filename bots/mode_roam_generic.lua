@@ -149,6 +149,11 @@ end
 
 function Think()
     if J.CanNotUseAction(bot) then return end
+	-- AIBattle: AIBAntiAFK MUST run before IsBotThinkingMeaningfulAction gate.
+	-- If a stale MoveToLocation is in the action queue, OHA considers the bot "busy"
+	-- and Think() exits early → anti-AFK never fires → bot can idle indefinitely.
+	-- Running it unconditionally fixes the Zeus-style idle observed in match 10.
+	AIBAntiAFK()
 	if J.Utils.IsBotThinkingMeaningfulAction(bot, Customize.ThinkLess, "roam") then return end
 
 	nInRangeEnemy = bot:GetNearbyHeroes(1200, true, BOT_MODE_NONE)
@@ -244,7 +249,6 @@ function Think()
 		end
 	end
 
-	AIBAntiAFK() -- last resort: walk to lane if still idle
 	AIBStyle.AntiIdleGlobal(bot) -- P1 attack nearby enemy / P2 assist ally in combat
 end
 
