@@ -344,6 +344,8 @@ end
 -- so it only fires when the mode itself has nothing to do.
 -- Counters: anti-idle-combat / anti-idle-assist
 function M.AntiIdleGlobal(bot)
+    -- AIBattle #7: don't pick fights at low HP — let retreat logic handle it
+    if J.GetHP(bot) < 0.25 then return end
     local enemies = bot:GetNearbyHeroes(1200, true, BOT_MODE_NONE)
     if enemies and #enemies > 0 and enemies[1]:IsAlive() then
         bot:Action_AttackUnit(enemies[1], true)
@@ -356,13 +358,42 @@ function M.AntiIdleGlobal(bot)
             if a:IsAlive() and a ~= bot then
                 local ae = a:GetNearbyHeroes(600, true, BOT_MODE_NONE)
                 if ae and #ae > 0 then
-                    bot:Action_MoveToLocation(a:GetLocation())
+                    -- AIBattle #6: RandomVector avoids creep-collision stalling
+                    bot:Action_MoveToLocation(a:GetLocation() + RandomVector(100))
                     M.Diag(bot, "anti-idle-assist")
                     return
                 end
             end
         end
     end
+end
+
+-- Returns the lane with the most push progress (fewest enemy towers remaining).
+-- Used in late-game so bots rally to the most advanced lane instead of
+-- dispersing back to original assigned lanes after ganks / AFK recovery.
+function M.GetGroupPushLane()
+    local enemy = GetOpposingTeam()
+    local bestLane = LANE_MID
+    local fewestTowers = 99
+    local laneData = {
+        { LANE_TOP, { TOWER_TOP_1, TOWER_TOP_2, TOWER_TOP_3 } },
+        { LANE_MID, { TOWER_MID_1, TOWER_MID_2, TOWER_MID_3 } },
+        { LANE_BOT, { TOWER_BOT_1, TOWER_BOT_2, TOWER_BOT_3 } },
+    }
+    for _, entry in ipairs(laneData) do
+        local lane = entry[1]
+        local towers = entry[2]
+        local count = 0
+        for _, tSlot in ipairs(towers) do
+            local t = GetTower(enemy, tSlot)
+            if t ~= nil and t:IsAlive() then count = count + 1 end
+        end
+        if count < fewestTowers then
+            fewestTowers = count
+            bestLane = lane
+        end
+    end
+    return bestLane
 end
 
 return M

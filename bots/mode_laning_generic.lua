@@ -48,6 +48,9 @@ local function AIB_Diag(key)
 	Style.Diag(bot, key)
 end
 
+-- AIBattle: tower aggro drop cooldown (per bot instance)
+local aib_lastAggroDrop = 0
+
 -- AIBattle improvement helper: nearest ALIVE enemy tower whose attack range threatens the bot
 -- (range ~700 + buffer). Returns the tower handle or nil.
 local function AIB_EnemyTowerDanger()
@@ -60,6 +63,27 @@ local function AIB_EnemyTowerDanger()
 		end
 	end
 	return nil
+end
+
+-- AIBattle: tower aggro drop — attack an allied creep to redirect enemy tower fire onto it.
+-- Only fires when bot is in actual tower attack range (not just detection range).
+-- Throttled to 2.5s so it doesn't spam and interrupt last-hits every tick.
+-- Returns true if action was issued.
+local function AIB_TowerAggroDrop(twr)
+	if twr == nil then return false end
+	if DotaTime() - aib_lastAggroDrop < 2.5 then return false end
+	if GetUnitToUnitDistance(bot, twr) > twr:GetAttackRange() + 100 then return false end
+	local alliedCreeps = bot:GetNearbyCreeps(800, false)
+	if not alliedCreeps or #alliedCreeps == 0 then return false end
+	for _, creep in ipairs(alliedCreeps) do
+		if creep:IsAlive() and not creep:IsHero() then
+			bot:Action_AttackUnit(creep, false)
+			aib_lastAggroDrop = DotaTime()
+			AIB_Diag("tower-aggro-drop")
+			return true
+		end
+	end
+	return false
 end
 
 -- AIBattle: returns the location of the most-forward SURVIVING friendly tower (closest to fight)
@@ -288,6 +312,8 @@ function Think()
 			bot:Action_MoveToLocation(J.VectorAway(bot:GetLocation(), twr:GetLocation(), 350))
 			return
 		end
+		-- AIBattle: if staying under enemy tower (dive allowed), attack an allied creep to redirect tower fire
+		if twr ~= nil and AIB_TowerAggroDrop(twr) then return end
 	end
 
 	-- AIBattle improvement (opt-in defensive_heal, HERO-AGNOSTIC): at low HP recover IN LANE via

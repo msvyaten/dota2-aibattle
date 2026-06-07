@@ -1091,7 +1091,14 @@ function ____exports.GetDefendDesireHelper(bot, lane)
         return BotModeDesire.VeryLow
     end
     if #lEnemies == 1 and (nEffAllies > #lEnemies or jmz.IsAnyAllyDefending(bot, lane) and jmz.GetAverageLevel(false) >= jmz.GetAverageLevel(true)) then
-        return BotModeDesire.VeryLow
+        -- AIBattle #12: always defend T3/barracks regardless of enemy count —
+        -- a solo pusher can destroy the base if nobody responds.
+        -- T1/T2 with 1 enemy: still VeryLow (don't over-defend early towers).
+        if buildingTier >= 3 then
+            -- skip early return, run full desire calculation
+        else
+            return BotModeDesire.VeryLow
+        end
     end
     local capBoost = shouldDef and 0.1 or 0
     local maxDesire = (buildingTier >= 3 and nEffAllies >= #lEnemies and 1 or MAX_DESIRE_CAP) + capBoost

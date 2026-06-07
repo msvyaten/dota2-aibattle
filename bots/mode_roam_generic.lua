@@ -1069,17 +1069,28 @@ function ThinkActualGankingInLanes()
 			arriveGankLocTime = DotaTime()
 		end
 		if DotaTime() - arriveGankLocTime > gankTimeAfterArrival then
+			-- AIBattle #2: don't abandon an active fight mid-combat
+			if bot:WasRecentlyDamagedByAnyHero(3.0) then
+				arriveGankLocTime = DotaTime()  -- reset timer, stay in fight
+				return
+			end
 			laneToGank = nil
 			bot.aib_gankStartTime = nil
-			-- AIBattle anti-AFK: gank window expired — walk back to assigned lane
-			-- so the bot doesn't stand idle for the full gankGapTime cooldown.
-			local assignedLane = bot:GetAssignedLane()
-			if assignedLane and assignedLane ~= LANE_NONE then
-				local homeLoc = GetLaneFrontLocation(GetTeam(), assignedLane, 0)
-				if GetUnitToLocationDistance(bot, homeLoc) > 600 then
-					bot:Action_MoveToLocation(homeLoc)
-					AIBStyle.Diag(bot, "gank-done-retreat")
+			-- AIBattle #9: late-game → rally to push lane; laning → own lane
+			local retreatLoc
+			if not J.IsInLaningPhase() then
+				local pushLane = AIBStyle.GetGroupPushLane()
+				retreatLoc = GetLaneFrontLocation(GetTeam(), pushLane, 0)
+			else
+				local assignedLane = bot:GetAssignedLane()
+				if assignedLane and assignedLane ~= LANE_NONE then
+					retreatLoc = GetLaneFrontLocation(GetTeam(), assignedLane, 0)
 				end
+			end
+			if retreatLoc and GetUnitToLocationDistance(bot, retreatLoc) > 600 then
+				-- AIBattle #6: RandomVector avoids creep-collision stalling
+				bot:Action_MoveToLocation(retreatLoc + RandomVector(100))
+				AIBStyle.Diag(bot, "gank-done-retreat")
 			end
 		end
 	end
@@ -1101,14 +1112,22 @@ function AIBAntiAFK()
 	bot.aib_afkLastPos = pos
 	if bot.aib_afkLastMoveTime == nil then bot.aib_afkLastMoveTime = now end
 	if now - bot.aib_afkLastMoveTime > ANTIAFK_THRESHOLD then
-		local assignedLane = bot:GetAssignedLane()
 		local fallbackLoc
-		if assignedLane and assignedLane ~= LANE_NONE then
-			fallbackLoc = GetLaneFrontLocation(GetTeam(), assignedLane, 0)
+		-- AIBattle #9: late-game → rally to most advanced push lane
+		-- laning phase → own assigned lane
+		if not J.IsInLaningPhase() then
+			local pushLane = AIBStyle.GetGroupPushLane()
+			fallbackLoc = GetLaneFrontLocation(GetTeam(), pushLane, 0)
 		else
-			fallbackLoc = J.GetTeamFountain()
+			local assignedLane = bot:GetAssignedLane()
+			if assignedLane and assignedLane ~= LANE_NONE then
+				fallbackLoc = GetLaneFrontLocation(GetTeam(), assignedLane, 0)
+			else
+				fallbackLoc = J.GetTeamFountain()
+			end
 		end
-		bot:Action_MoveToLocation(fallbackLoc)
+		-- AIBattle #6: RandomVector avoids creep-collision stalling
+		bot:Action_MoveToLocation(fallbackLoc + RandomVector(100))
 		bot.aib_afkLastMoveTime = now
 		AIBStyle.Diag(bot, "anti-afk")
 	end
@@ -1182,13 +1201,8 @@ function CheckLaneToGank()
 				goto continue_lane
 			end
 
-			-- AIBattle: removed bEnemyOverextended (geographic check, only true when losing).
-			-- Safety: don't send bot into a fight where enemies outnumber allies+ganker.
-			-- enemyCount > allyCount+1 means even with this bot arriving, still outnumbered.
-			if enemyCountInLane > allyCountInLane + 1 then
-				goto continue_lane
-			end
-
+			-- AIBattle: removed outnumbered gate — HasSufficientMana + HP checks are enough safety.
+			-- Desire calculation naturally prefers good situations (closer, ally present).
 			local desire = RemapValClamped(botDistToLane, 4000, 600, BOT_ACTION_DESIRE_MODERATE, BOT_ACTION_DESIRE_HIGH)
 			-- Bonus if ally already present to help
 			if allyCountInLane >= 1 then
@@ -1197,6 +1211,10 @@ function CheckLaneToGank()
 			-- Bonus if enemy outnumbered
 			if enemyCountInLane <= allyCountInLane then
 				desire = desire + 0.1
+			end
+			-- Penalty if outnumbered (but still gank — desire just lower)
+			if enemyCountInLane > allyCountInLane + 1 then
+				desire = desire - 0.15
 			end
 			if desire > bestDesire then
 				bestDesire = desire

@@ -2,7 +2,7 @@
 
 > Единственная точка входа и единственный поддерживаемый док проекта. Обновлять ЕГО, новых
 > статус/план-доков не плодить. Он же — то, что отдаём другому Claude (мак/новое окно).
-> Последнее обновление: 2026-06-05 (Game A закрыта, Game B rules валидированы, buyback=always удалён — см. §12/§14).
+> Последнее обновление: 2026-06-06 (system prompt v2, anti-AFK фикс, swap run 2, AFK-наблюдения в матче — см. §15; второй матч с фиксами — §16: AFK короче но есть, осцилляция, Aegis policy).
 > Машина: Windows/Shadow PC (тут LIVE Dota). По-русски.
 >
 > Доказательство = ТОЛЬКО цифра из финального стат-дампа ИЛИ строка из `console.<matchid>.log`.
@@ -539,6 +539,18 @@ roshan_desire диалом). Цель ~15–20 rules. Принцип: добав
 Диалы-кандидаты из реклассификации: chase_desire (возможно дублирует forwardness+retreat — проверить),
 consumable_save, ability_save (=mana_conserve; сложно, hero-specific — отложено с ability usage).
 
+**📌 ПЛАН: tower_avoid — два конкретных фикса (06.06, одобрено)**
+Текущее состояние: tower_avoid ❌ (§6) — гард только в laning, нет проверки радиуса, retreat триггерится
+на крипа а не на башню. Радиус башни = **700** (атака), ~900 (aggro). Боты заходят под башню и умирают.
+- **Фикс 1 — dive_policy в roam-режиме:** добавить `M.MayDive(bot)` гейт в `mode_roam_generic.lua`
+  перед преследованием цели. Уже работает в laning — перенести ту же логику. ~3–5 строк.
+  Закрывает: бот преследует героя под башню во время ганка.
+- **Фикс 3 — distance check перед advance в laning:** перед выдачей команды "двигаться вперёд к врагу"
+  в `mode_laning_generic.lua` проверить: `GetNearestTower(enemyTeam) < 800` И нет дружественных крипов
+  в 400 единицах → не двигаться вперёд. ~5–7 строк.
+  Закрывает: бот стоит/заходит в зону башни в лейнинге без танкующих крипов (матч 06.06, ~19 мин, Radiant).
+Реализовывать после завершения текущих матчей — не блокер для анализа.
+
 ### 14.5 Game B — ЗАКРЫТА (05.06, пруфы в §12)
 `bots/Customize/playstyle_GameB_rules_aggressive.lua` (dive=always / smoke=for_ganks / buyback=default) vs
 `..._passive.lua` (dive=never / smoke=never / buyback=never). push=0.50, диалы нейтральны → только правила.
@@ -553,3 +565,314 @@ consumable_save, ability_save (=mana_conserve; сложно, hero-specific — �
   командные/ролевые — НЕ сейчас, а когда правил наберётся достаточно.
 - **Потолок OHA (нужен свой бот):** командные комбо/координация, адаптация по ходу, контр-сборка, мульти-юнит.
 - **Captains Mode** — проверить, как LLM играют драфт (баны/пики). Долгое будущее.
+- **LLM-driven talent selection** — сейчас таланты захардкожены на героя в BotLib-файлах (`tTalentTreeList`
+  с `{left_weight, right_weight}` на уровни t10/t15/t20/t25; `GetTalentBuild` в `aba_skill.lua` переводит
+  в фиксированный порядок — конфиг не влияет). План: добавить опциональное поле `talent_preferences` в
+  playstyle-конфиг (напр. `{ t10="right", t15="left", t20="right", t25="right" }`) и научить `GetTalentBuild`
+  читать его если задано, иначе падать на дефолт из `tTalentTreeList`. LLM сможет явно выбирать сторону
+  дерева — агрессивный конфиг берёт урон, защитный — выживаемость. Реализация: ~5 строк патч в
+  `aba_skill.lua` + новый ключ в лоадере `aibattle_style.lua`. Ценность небольшая (таланты влияют поздно
+  и редко), поэтому — долгое будущее, только когда промпт это потребует.
+
+---
+
+## 15. Сессия 06.06 — наблюдения и статус
+
+### 15.1 Что сделано в коде (LIVE, не закоммичено)
+- **System prompt v2** (`docs/llm_system_prompt.md`): добавлен явный win-goal («ты играешь в Dota 2, цель — ПОБЕДИТЬ»), COHERENCE RULES (4 проверки перед выводом), calibration с реальными числами, REASONING EXAMPLE со стрелочной нотацией. Удалён `buyback=always`.
+- **Переименование ботов** (`Customize/general.lua`): `ChatGPT_1..5` (Radiant) / `Gemini_1..5` (Dire) — нейтральные номера вместо позиций (позиции OHA не совпадают со слотами).
+- **Anti-AFK фикс** (`mode_roam_generic.lua`): (1) gank-done-retreat — при истечении gankTimeAfterArrival бот идёт к своему лейну; (2) `AIBAntiAFK()` — если бот не двигался >8 сек (порог 50 единиц), идёт к назначенному лейну. **Оценка после матча: НЕ ДОСТАТОЧНО** — проблема системнее.
+
+### 15.2 LLM-конфиги run 2 (swap: Gemini=Radiant, ChatGPT=Dire)
+Оба конфига «Ганкер», системный промпт v2, одинаковый пользовательский промпт:
+- **Radiant = Gemini Gankers**: gank=0.95, push=0.40, fwd=0.85, retreat=0.40, farm=0.20, ability_aggro=0.75
+- **Dire = ChatGPT Gankers**: gank=0.92, push=0.45, fwd=0.82, retreat=0.40, farm=0.20, ability_aggro=0.65
+- dive=always, smoke=for_ganks, buyback=default (оба)
+
+### 15.3 Match ID (TBD) — AFK-наблюдения в реальном времени
+**Match ID: ?** — матч шёл 60+ мин, компьютер автовыключился, финальный дамп может отсутствовать.
+Нужно: получить ID из истории Dota, открыть `console.<matchid>.log`, разобрать каждый эпизод.
+
+**Хронология AFK-эпизодов (наблюдения зрителя):**
+| Время | Бот | Длительность | Контекст |
+|---|---|---|---|
+| 19:20–19:53 | Lion Dire (Gemini) | ~33 сек | — |
+| 22:14–22:24 | Warlock Dire (Gemini) | ~10 сек | — |
+| 24:07–24:41 | Warlock Radiant (ChatGPT) | ~34 сек | — |
+| 25:38–28:00 | **Zeus Radiant (ChatGPT)** | **~2 мин 22 сек ⚠️** | — |
+| ~30:xx–?? | **Zeus Radiant (ChatGPT)** | ? | второй эпизод, позиция уточнить по логу |
+| 28:54–29:13 | Lion Radiant (ChatGPT) | ~19 сек | под атакой Centaur — нет реакции ⚠️ |
+| 29:44–30:21 | Lion Dire + Zeus Dire | ~37 сек | под атакой крипов — нет реакции ⚠️ |
+| ~33:50–34:03+ | Axe + PA Dire | ? | **застряли в нейтральном кемпе** ⚠️ |
+| ~38:00–39:00 | Axe Radiant | ~1 мин | поднял руну иллюзий, иллюзии двигались, сам стоял |
+| ~38:10+–38:40+ | Axe Radiant | ~30 сек | второй эпизод через 10–15 сек после первого |
+| ~50:00 | PA Radiant | ~30 сек | подобрала руну Double Damage |
+| 46:54–47:14+ | **Все 5 Dire (Gemini)** | **~20 сек+ ⚠️** | массовый AFK одновременно, 2 раздуплились, 3 стояли |
+| 48:52 | Warlock + PA Dire | — | прошли мимо Axe Radiant, не атаковали (ночь?) |
+| 59:17–59:30 | 3 бота Radiant | ~13 сек | сразу после убийства Axe ⚠️ |
+| + множество | оба конфига | — | пользователь: «застреваний было больше, не все записал» |
+
+**Общая картина матча:**
+- Матч: 60+ мин, ничья де-факто (никто не закрыл), счёт ~28-26 на 59 мин, Radiant +14k нетворс
+- 44 мин: все 10 ботов в разных точках карты, никакого групп-пуша
+- 41 мин: Radiant 9k преимущества, фармят джунгли по отдельности; 41:30 Dire 2 килла → 4k
+- 50 мин: Рошан так и не взяли (roshan_desire=0.40-0.45 проигрывает gank_desire в арбитраже)
+- Боты фармят нейтральных крипов вместо лейна (farm_focus=0.20 + поздняя стадия)
+- На 59:33 ночь (подтверждено скрином) — важно для эпизода 48:52
+
+### 15.4 Выводы по AFK — приоритеты для фикса
+
+**Корень проблемы: `gankGapTime=3 мин` в `mode_roam_generic.lua` (OHA хардкод)**
+Anti-AFK фикс (8 сек порог) НЕ решает проблему — бот выдаёт `Action_MoveToLocation` на ту же/недостижимую
+точку, двигается 0 единиц, порог `moved > 50` не проходит → продолжает стоять.
+
+**Паттерны AFK (4 типа):**
+1. **gankGapTime cooldown** — 3 мин без fallback-действия. Бот видит врагов, игнорирует.
+2. **Недостижимая/уже достигнутая точка** — anti-AFK шлёт на точку куда бот уже пришёл или не может дойти.
+3. **Нейтральный кемп** — бот заходит в кемп и не может выйти (pathfinding / цель внутри кемпа).
+4. **После убийства** — гангкилл → gankGapTime cooldown → мгновенный AFK победителей ⚠️ парадокс.
+
+**Дополнительный баг: нет реакции на получение урона** (Lion под Centaur, Dire под крипами) — retreat/combat
+не триггерится когда бот в gankGapTime кулдауне. Режим roam блокирует реакцию на входящий урон.
+
+**Ночное зрение**: дальность 800 единиц (днём 1800). Эпизод 48:52 — вероятно Warlock/PA не видели Axe.
+Проверить по логу: `DotaTime() % 600` > 300 = ночь.
+
+**Ганкер vs Ганкер = структурная проблема**: оба конфига убивают, никто не пушит → игра не закрывается
+→ матч 60+ мин → для ставок нужен хотя бы один объектный конфиг в паре.
+
+**Правильный фикс gankGapTime (три уровня):**
+1. Уменьшить кулдаун: 3 мин → 30–45 сек
+2. Явный fallback в laning на время кулдауна
+3. Bypass кулдауна если враг виден в радиусе X (не «не ищи цель», а «не игнорируй пришедшую»)
+
+**✅ РЕАЛИЗОВАНО (06.06, LIVE `mode_roam_generic.lua`):**
+```lua
+-- 1. gankGapTime с jitter по PlayerID (десинхронизация)
+local gankGapTime = 25 + (GetBot():GetPlayerID() % 5) * 3
+-- итог: боты получают 25/28/31/34/37 сек (было 3 мин)
+
+-- 2. GetDesire() = 0 во время кулдауна → OHA переключает на laning/push сам
+--    Emergency (tango/fountain, res > 0.99) проходят без изменений
+if (res == nil or res <= 0.99)
+    and lastGankDecisionTime ~= 0
+    and DotaTime() - lastGankDecisionTime < gankGapTime then
+    return BOT_MODE_DESIRE_NONE
+end
+
+-- 3. Think() fallback: идти к лейну если роам-кулдаун активен (страховка)
+--    Счётчик: gank-cooldown-lane
+if lastGankDecisionTime ~= 0 and DotaTime() - lastGankDecisionTime < gankGapTime then
+    -- move to assigned lane, return
+
+-- 4. Stuck detection в ThinkActualGankingInLanes: если >20 сек не приблизился на <1500 ед. — бросить ганк
+--    Счётчик: gank-stuck-abort
+if DotaTime() - bot.aib_gankStartTime > 20 and distanceToGankLoc > 1500 then
+    laneToGank = nil; bot.aib_gankStartTime = nil
+```
+
+**Метрики следующего матча:**
+- idle пики < 30 сек → основной фикс работает (было 316 сек)
+- `gank-cooldown-lane` > 0 → страховка нужна
+- `gank-stuck-abort` > 0 → кемп-патфайндинг подтверждён
+- `anti-afk` = 0 → старый механизм вытеснен
+
+**Закрытый вопрос — нетворс как триггер:** боты не знают чужой нетворс (туман войны). Альтернативный
+finish-trigger: `вражеских вышек упало больше чем своих` + `DotaTime() > 2000` → форсить push.
+
+### 15.5 Что коммитить в конце дня (накопленные изменения)
+Все LIVE, в репо не перенесены:
+- `mode_roam_generic.lua` — gankGapTime фикс (5 изменений, см. §15.4) + старый anti-AFK
+- `docs/llm_system_prompt.md` — v2
+- `Customize/general.lua` — имена ChatGPT_1..5 / Gemini_1..5
+- `bots/Customize/playstyle_radiant.lua` / `playstyle_dire.lua` — ⚠️ НЕ коммитить канон-конфиги тест-состоянием
+
+**⏭️ СЛЕДУЮЩЕЕ ДЕЙСТВИЕ:**
+1. Запустить матч с теми же конфигами (Gemini Ganker Rad / ChatGPT Ganker Dire)
+2. `python tools/match_stats.py <id>` — смотреть duration + диаги
+3. Проверить idle пики в логе (должны быть < 30 сек)
+4. После подтверждения AFK-фикса → Pusher vs Ganker для bettability
+
+---
+
+## 16. Сессия 06.06 — Матч 2 (с AFK-фиксами, наблюдения в реальном времени)
+
+### 16.1 Контекст
+**Конфиги:** те же — Gemini Ganker (Radiant) vs ChatGPT Ganker (Dire).  
+**Фиксы LIVE:** gankGapTime=25-37 сек (jitter по PlayerID), GetDesire=0 во время кулдауна,
+Think() fallback к лейну, stuck detection (20 сек / 1500 ед).  
+**Match ID: TBD** — матч ещё не завершён / ID не получен.
+
+### 16.2 AFK-эпизоды (хронология)
+
+| Время | Бот | Длительность | Контекст |
+|---|---|---|---|
+| 32:33 → 33:03-34:03 | PA Dire | ~1 мин (с паузами) | несколько коротких эпизодов подряд |
+| 34:42–35:08 | Axe Radiant | ~26 сек | на фонтане (мог ресниться или хилиться — не подтверждено) |
+| 35:28–36:11 | Zeus + Lion Radiant | ~43 сек | вместе, одновременно |
+| 36:11–36:36 | Zeus Radiant | ~25 сек | сделал 1 шаг и снова встал |
+| 44:44–45:50+ | **Zeus Radiant** | **>1 мин ⚠️** | стоял пока рядом Lion бил Warlock — нет реакции на бой союзника |
+| ~44-45 мин | Zeus + Lion + PA Dire | продолжительно | **осцилляция под T2** (см. 16.3) |
+
+**Вывод:** фикс сократил idle с 180-316 сек до 25-43 сек в большинстве случаев.
+Но Zeus на 44:44 — >1 мин = новый баг-класс (не gankGapTime, а отсутствие combat-реакции).
+
+### 16.3 Новый баг: осцилляция ("пейсинг под вышкой")
+**Что:** Zeus + Lion + PA Dire ходят туда-сюда под T2 ≈ 44-45 мин. Не АФК (двигаются),
+но полностью бесполезно. AntiAFK не триггерит (бот движется).
+
+**Механика (action oscillation):**
+```
+Tick N:   кулдаун кончил → GetDesire > 0 → шаг вперёд (гангнуть)
+Tick N+k: stuck detection / unsafe → abort → GetDesire=0 → laning
+Tick N+m: GetLaneFrontLocation у T2 в поздней игре → шаг назад к T2
+Tick N+p: кулдаун снова кончил → шаг вперёд
+...
+```
+Три бота одновременно = потому что все вместе закончили одно действие (Рошан?).
+
+**Почему хуже простого AFK:** выглядит "активно", но 0 полезных действий.
+
+### 16.4 Роль Рошана: Dire убили, Aegis взял Lion (саппорт)
+- Dire убили Рошана (~44-45 мин, с Aegis).
+- **Aegis подобрал Lion** — саппорт, не кор. Текущая логика: берёт ближайший к телу.
+- Aegis на саппорте = потраченный Рошан (саппорт умирает первым в файте).
+
+**📌 ПЛАН: Aegis Policy (будущая rule)**
+```lua
+-- Псевдологика: пропускать Aegis если рядом есть более богатый союзник
+function ShouldPickUpAegis(bot)
+    local myNW = bot:GetNetWorth()
+    for _, ally in ipairs(GetTeamMemberList()) do
+        if ally:IsAlive() and ally ~= bot
+           and ally:GetNetWorth() > myNW * 1.15 then
+            return false  -- кор рядом — пусть берёт он
+        end
+    end
+    return true
+end
+```
+Реализация: хук в `ability_item_usage_generic.lua` (ConsiderItemPickup или аналог).
+Счётчик: `aegis-skip` (саппорт пропустил) / `aegis-take` (подобрал).
+Приоритет: низкий, реализовывать когда Roshan policy будет часто триггерить.
+
+### 16.5 Match 8840957972 — данные (второй матч, с фиксами)
+```
+duration=4562s (76 мин, комп выключился до конца — winner_team=0)
+Radiant: gank=0.95, push=0.40, fwd=0.85 (Gemini Ganker)
+Dire:    gank=0.92, push=0.45, fwd=0.82 (ChatGPT Ganker)
+
+Диаги:
+  anti-afk  D#1          (старый механизм почти не триггерит)
+  roshan    D#21
+  rune-grab D#11 R#3
+  smoke     D#1  R#1
+  ward-place D#42 R#33   (очень активное вардение благодаря GetDesire=0)
+  gank-cooldown-lane: 0  (объяснение ниже)
+  gank-stuck-abort:   0
+
+Idle (server-side, max/avg/cnt>60s):
+  Radiant: slot0=111s, slot1=119s, slot2=202s (PA), slot3=142s (Zeus), slot4=127s (Lion)
+  Dire:    slot5=173s, slot6=108s, slot7=104s, slot8=112s, slot9=113s
+  → было 316s (матч без фиксов) → теперь 202s MAX (улучшение есть, но недостаточно)
+```
+
+**Почему gank-cooldown-lane=0:** Fix 2 (GetDesire=0) работал — roam Think() не вызывался во
+время кулдауна → счётчик внутри Think() = 0. Это ожидаемо. Но OHA передавал laning, который
+в поздней игре (76 мин, lvl 30) тоже ничего не делает → idle накапливается.
+
+**Почему idle всё ещё 100-200s при gankGapTime=25-37s:**
+Две независимые причины:
+1. Во время кулдауна: GetDesire=0 → laning берёт → laning в late game иссылает
+   `MoveToLocation` на ту же точку = server no-op = idle накапливается через несколько циклов
+2. Вне кулдауна в late game: `IsInLaningPhase()=false` → `ThinkActualGankingInLanes` выходит
+   без команды → `ThinkGeneralRoaming` тоже → roam Think() заканчивается без Action_* → idle
+
+### 16.6 Корневой анализ: почему Zeus стоял >1 мин при бое рядом
+**Ситуация:** Zeus Radiant, 44:44, Lion рядом бьёт Warlock, Zeus стоит >1 мин.
+
+**Причина (вероятно):** GetDesire=0 (gankGapTime кулдаун) → OHA отдаёт laning.
+Laning в поздней игре не видит "союзник в бою рядом" как причину двигаться.
+Результат: OHA молча выбирает "ничего не делать" в laning.
+
+**Это прямой аргумент против GetDesire=0 как финального решения.**
+
+### 16.7 ✅ РЕАЛИЗОВАНО: "роам сам действует" (LIVE, не закоммичено)
+**Реализован после анализа match 8840957972. Два изменения в `mode_roam_generic.lua`:**
+
+**⚠️ КРИТИЧЕСКАЯ НАХОДКА (06.06, матч 3):** `lastGankDecisionTime` ВСЕГДА = 0 — `CheckLaneToGank`
+никогда не вызывается (закомментировано на строке 1685 OHA). Весь наш cooldown-блок в Think()
+был МЁРТВЫМ КОДОМ в матчах 1 и 2. Zeus AFK 9:37-11:37 = laning mode idle, не roam cooldown.
+
+**Исправления (06.06, матч 3):**
+1. Раскомментирован `ActualGankDesire()` в ConsiderGeneralRoamingInConditions — теперь pos3-5
+   саппорты реально роамят к перетянутым лейнам в laning phase; `lastGankDecisionTime` наконец
+   устанавливается → cooldown-блок в Think() становится активным.
+2. GetDesire() возвращает 0.6 во время кулдауна (было 0) → Think() вызывается → P1-P4 активны.
+
+**Изменение A — убрана GetDesire=0 супрессия:**
+```lua
+-- Было: return BOT_MODE_DESIRE_NONE во время кулдауна
+-- Стало: всегда возвращаем ScaleDesire (роам конкурирует за арбитраж даже в кулдауне)
+return AIBStyle.ScaleDesire(res, AIBStyle.Get().dials.gank_desire)
+```
+Трейдофф: ward-place будет меньше (раньше ward выигрывал арбитраж во время GetDesire=0).
+Оправдан: активная боёвка > ≥200с idle.
+
+**Изменение B — Think(): 4-уровневый cooldown + late-game fallback:**
+```lua
+if inGankCooldown then
+    -- P1: враг в 1200 ед → атаковать        [cooldown-combat]
+    -- P2: союзник бьётся рядом → помочь     [cooldown-assist]
+    -- P3: вражеский крип в 700 → фармить    [cooldown-farm]
+    -- P4: далеко от лейна (>500) → идти     [gank-cooldown-lane]
+    return
+end
+ThinkIndividualRoaming(); ThinkGeneralRoaming(); ThinkActualGankingInLanes()
+-- Поздняя игра: IsInLaningPhase()=false → ThinkActual* выходит без команды
+if not IsBotThinkingMeaningfulAction() and enemyVisible then
+    bot:Action_AttackUnit(enemy, true)  [roam-combat]
+end
+AIBAntiAFK()
+```
+
+**Метрики следующего матча (цели):**
+- `cooldown-combat/assist/farm` > 0 → активное поведение работает
+- `roam-combat` > 0 → late-game fallback сработал
+- idle max < 40 сек (было 202с → было 316с без фиксов)
+- `ward-place` меньше (ожидаемый трейдофф)
+
+### 16.8 Наблюдения матча 3 (live, с исправленным ActualGankDesire)
+- 9:37–11:37 Zeus Radiant АФК под своей T2 — laning mode idle в safe-зоне (ActualGankDesire не
+  помогает: бот не находит gank-цель → desire=0 → laning берёт → laning тоже ничего не делает)
+- 45 мин: Axe + Warlock + Zeus Dire одновременно лагали — late game idle (IsInLaningPhase=false
+  → ActualGankDesire возвращает 0 → cooldown-блок не активен → те же проблемы что и раньше)
+- Dire не защищали бараки когда их атаковали: defend_desire=0.30 → scaled ≈ 0.78 < roam 0.99
+  → roam выигрывает арбитраж → бот идёт ганкать вместо защиты. OHA даёт ABSOLUTE только для
+  Ancient, не для бараков → defend_desire снижает и tier3-защиту.
+
+### 16.9 Что делать после матча (план)
+1. Получить match ID, запустить `python tools/match_stats.py <id>`
+2. Смотреть: cooldown-combat/assist/farm, roam-combat, idle max (цель < 40с)
+3. **AIBAntiIdleGlobal (Вариант 3)** — хелпер в `aibattle_style.lua`:
+   - Проверяет: союзник в бою рядом (1200) → помочь / враг виден (900) → атаковать
+   - Вызывать из конца Think() в `mode_laning_generic.lua` и `mode_roam_generic.lua`
+   - Счётчики: `anti-idle-assist`, `anti-idle-combat`
+   - Это устраняет idle в ЛЮБОМ режиме без выигрыша арбитража
+4. **Force-defend для Tier3** — аналог finish-push:
+   - Когда T3 (бараки/трон) под атакой → форсировать defend desire до 0.95 независимо от диала
+   - `defend_desire` остаётся "насколько активно защищаем лайн-вышки в мидгейме"
+   - Реализация: в `mode_defend_tower_*_generic.lua` или через M.ForceDefend() в AIBStyle
+   - Счётчик: `force-defend`
+5. Dive_policy в roam (§14.4 фикс 1) — после подтверждения idle-фикса
+
+### 16.10 Что коммитить в конце дня
+
+### 16.11 Что коммитить в конце дня
+- `mode_roam_generic.lua` — все накопленные фиксы:
+  - gankGapTime=25-37s с jitter (PlayerID-based)
+  - stuck detection (20s / 1500 ед)
+  - активное cooldown поведение (P1-P4) + late-game roam-combat fallback
+- `docs/llm_system_prompt.md` — v2
+- `Customize/general.lua` — имена ChatGPT_1..5 / Gemini_1..5
+- ⚠️ НЕ коммитить playstyle_radiant/dire тест-конфигами
