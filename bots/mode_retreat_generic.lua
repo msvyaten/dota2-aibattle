@@ -119,12 +119,20 @@ end
 -- === existing functions, now reusing context ===
 
 function GetDesire()
+    -- AIBattle: fight_back = never retreat (for max-aggression builds with dive=always).
+    if AIBStyle.Get().rules.low_hp_behavior == "fight_back" then
+        return BOT_MODE_DESIRE_NONE
+    end
     -- local cacheKey = 'GetRetreatDesire'..tostring(bot:GetPlayerID())
     -- local cachedVar = J.Utils.GetCachedVars(cacheKey, 0.35 * (1 + Customize.ThinkLess))
     -- if DotaTime() > 30 and cachedVar ~= nil then return cachedVar end
     local res = GetDesireHelper()
     -- J.Utils.SetCachedVars(cacheKey, res)
     -- AIBattle Schema v2: scale retreat desire by the retreat_caution dial.
+    -- Counter: low-hp-run fires when retreat is active under run_to_tower rule (bot runs, no TP).
+    if res > 0 and AIBStyle.Get().rules.low_hp_behavior == "run_to_tower" then
+        AIBStyle.DiagRL(bot, "low-hp-run", 5)
+    end
     return AIBStyle.ScaleDesire(res, AIBStyle.Get().dials.retreat_caution)
 end
 

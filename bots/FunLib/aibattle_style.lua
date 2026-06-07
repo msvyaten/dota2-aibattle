@@ -54,6 +54,16 @@ local DEFAULT_BUYBACK = "default"
 local AEGIS_VALUES = { carry_only = true, core = true, any = true }
 local DEFAULT_AEGIS = "core"
 
+-- low_hp_behavior: what the bot does when health is critically low.
+-- tp_fountain = current OHA: use TP scroll to go to base (fast but cancellable by damage — a Golem
+--               or chasing hero can cancel the channel and the bot dies standing still).
+-- run_to_tower = suppress TP escape, just run toward nearest friendly tower. Safer when
+--               there are nearby units that would cancel the channel anyway.
+-- fight_back   = don't activate retreat mode at all — keep fighting to the end.
+--               Pair with dive_policy=always for max-aggression builds.
+local LOW_HP_VALUES = { tp_fountain = true, run_to_tower = true, fight_back = true }
+local DEFAULT_LOW_HP = "tp_fountain"
+
 local function clamp01(x)
     if type(x) ~= "number" then return nil end
     if x < 0 then return 0 end
@@ -80,6 +90,8 @@ local function buildStyle(raw)
     local buyback = (type(bbk) == "string" and BUYBACK_VALUES[bbk]) and bbk or DEFAULT_BUYBACK
     local aeg = rawRules.aegis_policy
     local aegis = (type(aeg) == "string" and AEGIS_VALUES[aeg]) and aeg or DEFAULT_AEGIS
+    local lhb = rawRules.low_hp_behavior
+    local low_hp = (type(lhb) == "string" and LOW_HP_VALUES[lhb]) and lhb or DEFAULT_LOW_HP
 
     -- Prompt-driven item build: per-hero ordered buy list.
     -- Format: { npc_dota_hero_axe = {"item_blink", ...}, npc_dota_hero_cm = {...} }
@@ -122,7 +134,7 @@ local function buildStyle(raw)
         improvements[k] = (rawImp[k] == true)
     end
 
-    return { dials = dials, rules = { respawn_behavior = respawn, dive_policy = dive, smoke_usage = smoke, buyback_policy = buyback, aegis_policy = aegis }, item_build = items, item_rules = item_rules, improvements = improvements }
+    return { dials = dials, rules = { respawn_behavior = respawn, dive_policy = dive, smoke_usage = smoke, buyback_policy = buyback, aegis_policy = aegis, low_hp_behavior = low_hp }, item_build = items, item_rules = item_rules, improvements = improvements }
 end
 
 -- Returns the {dials, rules} config for the calling bot's team (cached, with safe defaults).

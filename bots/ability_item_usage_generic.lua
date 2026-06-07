@@ -564,6 +564,15 @@ local function BuybackUsageComplement()
 
 	if not bot:HasBuyback() then return end
 
+	-- AIBattle rule (buyback_policy=always): buy back as soon as available with a meaningful
+	-- respawn timer, regardless of game state. Counter 'buyback' ticks on the actual buyback.
+	if aibBB == "always" and bot:GetRespawnTime() >= 25 then
+		J.Role['lastbbtime'] = DotaTime()
+		AIBStyle.Diag(bot, "buyback")
+		bot:ActionImmediate_Buyback()
+		return
+	end
+
 	local ancient = GetAncient( GetTeam() )
 
 	local nFullRespawnTime = bot:GetRespawnTime()
@@ -5313,6 +5322,8 @@ X.ConsiderItemDesire["item_tpscroll"] = function( hItem )
 	then
 
 		--第一种情况:无敌人无大药回家恢复
+		-- AIBattle: run_to_tower skips TP escape (bot runs on foot; avoids dying while channeling
+		-- against summons like Warlock Golem that OHA doesn't count in nEnemyCount).
 		if botHP < 0.19
 			and ( bot:WasRecentlyDamagedByAnyHero( 8.0 ) or botHP < 0.12 )
 			and botName ~= 'npc_dota_hero_huskar'
@@ -5325,6 +5336,7 @@ X.ConsiderItemDesire["item_tpscroll"] = function( hItem )
 			and not bot:HasModifier( "modifier_item_urn_heal" )
 			and not bot:HasModifier( "modifier_item_spirit_vessel_heal" )
 			and bot:DistanceFromFountain() > nMinTPDistance
+			and AIBStyle.Get().rules.low_hp_behavior ~= "run_to_tower"
 		then
 			tpLoc = J.GetTeamFountain()
 			sCastMotive = '撤退:1'
@@ -5360,6 +5372,7 @@ X.ConsiderItemDesire["item_tpscroll"] = function( hItem )
 			and not bot:HasModifier( "modifier_item_spirit_vessel_heal" )
 			and not bot:HasModifier( "modifier_juggernaut_healing_ward_heal" )
 			and bot:DistanceFromFountain() > nMinTPDistance - 600
+			and AIBStyle.Get().rules.low_hp_behavior ~= "run_to_tower"
 		then
 			tpLoc = J.GetTeamFountain()
 			sCastMotive = '撤退:2'

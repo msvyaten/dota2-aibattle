@@ -1022,12 +1022,12 @@ function ActualGankDesire()
 	and (botTarget == nil or #nInRangeEnemy <= 0 or nInRangeEnemy[1] ~= botTarget) then
 		local botLvl = bot:GetLevel()
 		-- AIBattle: replaced hardcoded position checks with dial-driven logic.
-		-- farm_focus < 0.65 → support/offlane → wants to roam.
-		-- gank_desire > 0.55 → team configured for ganking → everyone eligible.
-		-- A carry configured with farm_focus >= 0.65 naturally never passes this.
-		-- No position numbers, no hero-specific hardcode.
+		-- gank_desire > 0.5  → explicitly configured for ganking → allow roam.
+		-- farm_focus < 0.5   → explicitly suppressing farm → bot wants to be active.
+		-- Thresholds are STRICT (not >= 0.5) so neutral 0.5/0.5 defaults preserve
+		-- OHA's stock behaviour (carry stays in lane, supports roam via other gates).
 		local dials = AIBStyle.Get().dials
-		local wantsToGank = (dials.gank_desire or 0.5) > 0.55 or (dials.farm_focus or 0.5) < 0.65
+		local wantsToGank = (dials.gank_desire or 0.5) > 0.5 or (dials.farm_focus or 0.5) < 0.5
 		if wantsToGank and botLvl >= 4 and J.GetHP(bot) > 0.6 and J.GetMP(bot) > 0.4 then
 			return CheckLaneToGank()
 		end
