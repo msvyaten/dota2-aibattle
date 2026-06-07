@@ -216,7 +216,8 @@ function Think()
 	-- OHA's push mode fires naturally (alliesHere >= 2 → raw > 0 → push desire wins).
 	-- Counter: 'group-push-rally' counts ticks while actively navigating to rally point.
 	if not J.IsInLaningPhase() and laneToGank == nil then
-		if not nInRangeEnemy or #nInRangeEnemy == 0 then
+		local immediateEnemies = bot:GetNearbyHeroes(400, true, BOT_MODE_NONE)
+		if not immediateEnemies or #immediateEnemies == 0 then
 			local pushLane = AIBStyle.GetGroupPushLane()
 			local pushFront = GetLaneFrontLocation(GetTeam(), pushLane, 0)
 			if GetUnitToLocationDistance(bot, pushFront) > 1200 then
