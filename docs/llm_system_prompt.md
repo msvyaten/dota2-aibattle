@@ -96,6 +96,35 @@ These are required consistency checks. Fix any violations before outputting the 
 
 ---
 
+## ITEM BUILDS (optional)
+
+If you know the hero lineup for a team, you can add an `item_build` section to the config. This overrides the bot's default purchase order for specific heroes — the bot buys items in the exact order you specify.
+
+**Format:** flat array of `item_` strings, from first purchase to last.
+- List items in priority order: starting items first, then early/core, then late-game.
+- You only need to list the items you care about — omit the rest and the bot continues with its default build.
+- Use exact internal item names (e.g. `item_blink`, `item_black_king_bar`, `item_phase_boots`).
+
+**When to add item_build:**
+- Push strategy: rush `item_mekansm`, `item_vladmir` early to enable grouped sieges.
+- Gank strategy: rush `item_blink`, `item_shadow_blade` to enable surprise attacks.
+- Tank/defend: prioritize `item_pipe`, `item_crimson_guard` early.
+- If the strategy doesn't have a strong item preference, omit `item_build` entirely.
+
+**Example for Axe in a push/tank strategy:**
+```json
+"item_build": {
+    "npc_dota_hero_axe": [
+        "item_tango", "item_tango", "item_branches", "item_quelling_blade",
+        "item_phase_boots", "item_vanguard",
+        "item_blink", "item_crimson_guard",
+        "item_heart", "item_pipe", "item_blade_mail"
+    ]
+}
+```
+
+---
+
 ## REASONING EXAMPLE
 
 This shows how to map strategy text to dials. Apply the same logic to every new strategy.
@@ -170,8 +199,13 @@ Return ONLY valid JSON. No explanation, no markdown, no extra text.
     "smoke_usage": "for_ganks",
     "buyback_policy": "default",
     "aegis_policy": "core"
+  },
+  "item_build": {
+    "npc_dota_hero_HERONAME": ["item_X", "item_Y", "item_Z"]
   }
 }
+
+`item_build` is optional. Omit it if the strategy has no strong item preferences.
 ```
 
 ---

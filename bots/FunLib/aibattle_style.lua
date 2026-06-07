@@ -81,13 +81,23 @@ local function buildStyle(raw)
     local aeg = rawRules.aegis_policy
     local aegis = (type(aeg) == "string" and AEGIS_VALUES[aeg]) and aeg or DEFAULT_AEGIS
 
-    -- Prompt-driven item build (ordered). Keep only "item_*" strings here; the
-    -- purchaser validates each against GetItemCost so a bogus name can't break the buy loop.
+    -- Prompt-driven item build: per-hero ordered buy list.
+    -- Format: { npc_dota_hero_axe = {"item_blink", ...}, npc_dota_hero_cm = {...} }
+    -- Only keeps "item_*" strings; bogus names from LLM are dropped silently.
+    -- Consumed by jmz_func.lua SetUserHeroInit (reads items[botName] per hero).
     local items = {}
     local rawItems = (type(raw) == "table" and type(raw.item_build) == "table") and raw.item_build or {}
-    for _, name in ipairs(rawItems) do
-        if type(name) == "string" and string.match(name, "^item_") then
-            items[#items + 1] = name
+    for heroName, heroList in pairs(rawItems) do
+        if type(heroName) == "string" and type(heroList) == "table" then
+            local filtered = {}
+            for _, name in ipairs(heroList) do
+                if type(name) == "string" and string.match(name, "^item_") then
+                    filtered[#filtered + 1] = name
+                end
+            end
+            if #filtered > 0 then
+                items[heroName] = filtered
+            end
         end
     end
 

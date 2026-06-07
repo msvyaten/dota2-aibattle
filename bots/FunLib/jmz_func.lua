@@ -51,6 +51,15 @@ function J.SetUserHeroInit( nAbilityBuildList, nTalentBuildList, sBuyList, sSell
 		nTalentBuildList = J.GetTalentBuildList( tBotSet.Talent )
 		sBuyList = tBotSet.PurchaseList
 		sSellList = tBotSet.SellList
+	else
+		-- AIBattle: if no per-hero Customize file, apply item_build from playstyle config
+		local ok_style, AIBStyle = pcall(require, GetScriptDirectory()..'/FunLib/aibattle_style')
+		if ok_style and AIBStyle then
+			local itemBuild = AIBStyle.Get().item_build
+			if itemBuild and itemBuild[botName] then
+				sBuyList = itemBuild[botName]
+			end
+		end
 	end
 	return nAbilityBuildList, nTalentBuildList, sBuyList, sSellList
 end
