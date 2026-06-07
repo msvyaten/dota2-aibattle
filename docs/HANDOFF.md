@@ -2,7 +2,7 @@
 
 > Единственная точка входа и единственный поддерживаемый док проекта. Обновлять ЕГО, новых
 > статус/план-доков не плодить. Он же — то, что отдаём другому Claude (мак/новое окно).
-> Последнее обновление: 2026-06-07 (phase-8: фикс push арбитража + Ganker late-hunt — см. §17; матч 10 = стресс-тест all-0.99 vs дефолт).
+> Последнее обновление: 2026-06-07 (phase-9: фикс idle поддержек + AIBAntiAFK gate + push диагностика — см. §18; матч 10 завершён, id=8842784895).
 > Машина: Windows/Shadow PC (тут LIVE Dota). По-русски.
 >
 > Доказательство = ТОЛЬКО цифра из финального стат-дампа ИЛИ строка из `console.<matchid>.log`.
@@ -1032,3 +1032,72 @@ HP-guard 0.35 предотвращает суицидальное преслед
 - `push-late` + `push-gd` > 0 → путь кода проходится
 
 **⏭️ СЛЕДУЮЩЕЕ ДЕЙСТВИЕ:** запустить матч 10, получить ID, `python tools/match_stats.py <id>`.
+
+---
+
+## 18. Phase-9: фикс idle поддержек, AIBAntiAFK gate, push диагностика (07.06)
+
+### Матч 10 (id=8842784895)
+- Конфиг: Radiant all-0.99 (стресс) vs Dire all-0.50 (контроль)
+- Результат: **Dire (0.5) победил**, 34 мин
+- Вывод: all-0.99 хуже all-0.5 — конфликт режимов (retreat=0.99 + forward=0.99 + push=0.99 одновременно)
+- Zeus (Dire, slot132): 13/3, 91k magic dmg — несмотря на idle 2+ мин на 13-й мин
+- Диагностика: `anti-afk=0` несмотря на визуальный idle — подтверждает баг AIBAntiAFK gate
+
+### Баг 1: AIBAntiAFK gate (0d744db)
+```
+Симптом: Zeus Dire стоял 2+ мин, counter anti-afk=0
+Причина: AIBAntiAFK() стоял ПОСЛЕ IsBotThinkingMeaningfulAction. Стухший
+         MoveToLocation в очереди → OHA считает бота "занятым" → Think()
+         выходит рано → AIBAntiAFK никогда не достигается
+Фикс:    Переместить AIBAntiAFK() ДО gate — работает на каждом тике
+```
+
+### Баг 2: Support idle при neutral 0.5 (a13ae61)
+```
+Симптом: Zeus (pos3-5, gank_desire=0.5) не ганкает и не преследует в поздней игре
+Причина: Предыдущий фикс (> 0.5 строго) чинил PA-кэрри, но сломал поддержек.
+         late-hunt: gank_desire >= 0.7 тоже не срабатывал для нейтрального 0.5
+Фикс:    Добавить позиционный fallback:
+         ActualGankDesire: + (pos >= 3 AND gank >= 0.5)  [OHA stock для саппортов]
+         late-hunt:        + (pos >= 3 AND gank >= 0.5)  [преследование в пост-лейнинге]
+         Guard: gank < 0.5 = явное подавление, уважаем
+```
+
+### Баг 3: low_hp_behavior rule (f235976)
+```
+Симптом: Golem Warlock убил 2 героев на 8-й мин через TP-отмену
+Причина: OHA TP-escape проверяет nEnemyCount (только герои). Golem — саммон →
+         nEnemyCount=0 → TP срабатывает → Golem отменяет уроном → бот умирает
+Фикс:    Новое правило low_hp_behavior:
+         tp_fountain  — TP на базу (дефолт)
+         run_to_tower — подавить TP, бежать к башне (для матчей с саммонами)
+         fight_back   — подавить режим отхода полностью
+```
+
+### Push диагностика (HEAD)
+```
+Наблюдение: push-gd=204 total ≈ ровно 8мин×5ботов = только лейнинг-фаза
+             push-late=0, push-lane-active=0, push-lane-wait=0
+Гипотеза:   OHA не вызывает push GetDesire после лейнинга (кэширует desire=0)
+Фикс:       Разделить push-gd на push-gd-laning + push-gd-late (раздельные DiagRL(10))
+            Следующий матч: если push-gd-late=0 → гипотеза подтверждена → мёртвый код
+            Если push-gd-late>0 → нужно расследовать почему push-lane-active не срабатывал
+```
+
+### Таблица counter-ов (актуальная)
+
+| Counter | Файл | Что значит |
+|---|---|---|
+| push-gd-laning | push_tower_*/GetDesire | push GetDesire в лейнинг-фазе |
+| push-gd-late | push_tower_*/GetDesire | push GetDesire в пост-лейнинге (0=мёртвый код) |
+| push-lane-active | push_tower_*/GetDesire | волна есть + правильная лейн = boost |
+| push-lane-wait | push_tower_*/GetDesire | волны нет = yield to roam |
+| roam-late | roam/GetDesireHelper | pos2-5 получает 0.4 desire в пост-лейнинге |
+| roam-late-carry | roam/GetDesireHelper | pos1 получает 0.2 desire в пост-лейнинге |
+| late-hunt | roam/Think | преследование врага 2500 range (gank>=0.7 OR pos3+) |
+| gank-decision | roam/CheckLaneToGank | выбран ганк в лейн |
+| anti-afk | roam/AIBAntiAFK | бот стоял 8s → принудительная навигация |
+| low-hp-run | retreat/GetDesire | run_to_tower режим активен |
+| cooldown-combat | roam/Think | атака в gankGapTime |
+| group-push-rally | roam/Think | навигация к push front |

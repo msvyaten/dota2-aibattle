@@ -7,26 +7,20 @@ if bot == nil or bot:IsInvulnerable() or not bot:IsHero() or not bot:IsAlive() o
 if bot.PushLaneDesire == nil then bot.PushLaneDesire = {0, 0, 0} end
 
 function GetDesire()
-	AIBStyle.DiagRL(bot, "push-gd", 10)
 	local raw = Push.GetPushDesire(bot, LANE_MID)
 	bot.PushLaneDesire[LANE_MID] = raw
-	-- AIBattle Schema v2 (Phase 2): scale by push_desire dial, then lead-aware finish override.
 	local d = AIBStyle.ScaleDesire(raw, AIBStyle.Get().dials.push_desire)
 	d = AIBStyle.FinishPush(bot, d, raw)
-	-- AIBattle: in late game, converge all bots on the weakest enemy lane (group push).
-	-- Boost this lane's desire; suppress all other push lanes so bots rally together.
-	-- IMPORTANT: only boost when raw>0 (wave present). When raw=0, yield to roam so
-	-- group-push-rally can navigate bots to the lane front and wait for the next wave.
-	if not J.IsInLaningPhase() then
-		AIBStyle.DiagRL(bot, "push-late", 10)
+	if J.IsInLaningPhase() then
+		AIBStyle.DiagRL(bot, "push-gd-laning", 10)
+	else
+		AIBStyle.DiagRL(bot, "push-gd-late", 10)
 		local pushLane = AIBStyle.GetGroupPushLane()
 		if pushLane == LANE_MID then
 			if raw > 0 then
-				-- Wave present: win arbitration so PushThink() actually pushes
 				d = Clamp(d + 0.45, 0, BOT_ACTION_DESIRE_VERYHIGH)
 				AIBStyle.Diag(bot, "push-lane-active")
 			else
-				-- No wave: yield to roam so group-push-rally navigates bot to lane front
 				d = 0.15
 				AIBStyle.Diag(bot, "push-lane-wait")
 			end

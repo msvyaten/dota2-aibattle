@@ -94,6 +94,11 @@ These are required consistency checks. Fix any violations before outputting the 
 - "core" — carry preferred; if dead, offlane/mid takes it; supports never take it (default)
 - "any" — no restriction, whoever is closest takes it
 
+**low_hp_behavior** — what the bot does when its HP is critically low (summons/non-hero units can cancel TP channels):
+- "tp_fountain" — teleports back to fountain to heal (default; standard safe behavior)
+- "run_to_tower" — suppresses TP escape; runs to the nearest allied tower instead (use when enemy summons would cancel TP, or for aggressive "never leave the fight" styles)
+- "fight_back" — suppresses retreat mode entirely; bot stays and fights regardless of HP (high risk — only for tanky heroes or "berserker" archetypes)
+
 ---
 
 ## ITEM BUILDS (optional)
