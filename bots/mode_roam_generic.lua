@@ -210,8 +210,12 @@ function Think()
 			return
 		end
 		if not J.IsInLaningPhase() and J.GetHP(bot) >= 0.35 then
-			local gankDial = AIBStyle.Get().dials.gank_desire
-			if gankDial and gankDial >= 0.7 then
+			local gankDial = AIBStyle.Get().dials.gank_desire or 0.5
+			local lhPos    = J.GetPosition(bot)
+			-- Fires for: gank_desire >= 0.7 (explicit Ganker) OR pos >= 3 with gank >= 0.5
+			-- (support at neutral/high config → OHA stock late-game roam behavior).
+			-- Guard: gank >= 0.5 means gank not explicitly suppressed by user.
+			if gankDial >= 0.7 or (lhPos >= 3 and gankDial >= 0.5) then
 				local farEnemies = bot:GetNearbyHeroes(2500, true, BOT_MODE_NONE)
 				if farEnemies and #farEnemies > 0 and farEnemies[1]:IsAlive() then
 					bot:Action_MoveToLocation(farEnemies[1]:GetLocation())
@@ -1021,13 +1025,17 @@ function ActualGankDesire()
 	and not bot:WasRecentlyDamagedByAnyHero(2)
 	and (botTarget == nil or #nInRangeEnemy <= 0 or nInRangeEnemy[1] ~= botTarget) then
 		local botLvl = bot:GetLevel()
-		-- AIBattle: replaced hardcoded position checks with dial-driven logic.
-		-- gank_desire > 0.5  → explicitly configured for ganking → allow roam.
-		-- farm_focus < 0.5   → explicitly suppressing farm → bot wants to be active.
-		-- Thresholds are STRICT (not >= 0.5) so neutral 0.5/0.5 defaults preserve
-		-- OHA's stock behaviour (carry stays in lane, supports roam via other gates).
+		-- AIBattle: dial-driven gank gate + position fallback for neutral 0.5 configs.
+		-- gank_desire > 0.5        → explicitly configured for ganking → allow roam.
+		-- farm_focus < 0.5         → explicitly suppressing farm → wants to be active.
+		-- pos >= 3 AND gank >= 0.5 → support at neutral/high → OHA stock (roam naturally).
+		--   gank >= 0.5 guard: if user explicitly suppressed gank < 0.5, respect that.
+		-- Result: pos1/carry at neutral 0.5 stays in lane; pos3-5 support roams as OHA stock.
 		local dials = AIBStyle.Get().dials
-		local wantsToGank = (dials.gank_desire or 0.5) > 0.5 or (dials.farm_focus or 0.5) < 0.5
+		local gankD = dials.gank_desire or 0.5
+		local farmD = dials.farm_focus  or 0.5
+		local botPos = J.GetPosition(bot)
+		local wantsToGank = gankD > 0.5 or farmD < 0.5 or (botPos >= 3 and gankD >= 0.5)
 		if wantsToGank and botLvl >= 4 and J.GetHP(bot) > 0.6 and J.GetMP(bot) > 0.4 then
 			return CheckLaneToGank()
 		end
