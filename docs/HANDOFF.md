@@ -2,7 +2,7 @@
 
 > Единственная точка входа и единственный поддерживаемый док проекта. Обновлять ЕГО, новых
 > статус/план-доков не плодить. Он же — то, что отдаём другому Claude (мак/новое окно).
-> Последнее обновление: 2026-06-07 (phase-9: фикс idle поддержек + AIBAntiAFK gate + push диагностика — см. §18; матч 10 завершён, id=8842784895).
+> Последнее обновление: 2026-06-07 (phase-9 done; матч 11 завершён id=8842893188 — фиксы валидированы; план на след. сессию — §19).
 > Машина: Windows/Shadow PC (тут LIVE Dota). По-русски.
 >
 > Доказательство = ТОЛЬКО цифра из финального стат-дампа ИЛИ строка из `console.<matchid>.log`.
@@ -1101,3 +1101,64 @@ HP-guard 0.35 предотвращает суицидальное преслед
 | low-hp-run | retreat/GetDesire | run_to_tower режим активен |
 | cooldown-combat | roam/Think | атака в gankGapTime |
 | group-push-rally | roam/Think | навигация к push front |
+
+---
+
+## 19. Матч 11 — валидация phase-9 + план след. сессии (07.06)
+
+### Матч 11 (id=8842893188)
+- Конфиг: Radiant = ChatGPT Pusher, Dire = Gemini Pusher (оба push=0.90, fight_back)
+- Результат: **Dire (Gemini) победил**, 31.5 мин
+- Radiant: 26K/61D, tower dmg 457 — разгром из-за fight_back+forwardness=0.82 (61 смерть)
+- Dire: 58K/31D, tower dmg 6499 — slot130 16/3, 118 LH, 4113 tower dmg
+
+### Валидация фиксов phase-9
+
+| Счётчик | M10 | M11 | Статус |
+|---|---|---|---|
+| anti-afk | 0 | D#25 R#10 | ✅ gate-фикс работает |
+| push-gd-late | 0 | D#10 R#6 | ✅ OHA вызывает push GetDesire post-laning |
+| push-lane-active | 0 | D#140 R#0 | ✅ boost при raw>0 работает (Dire) |
+| push-lane-wait | 0 | D#165 R#170 | ✅ yield to roam работает |
+| late-hunt | 0 | 0 | ❌ всё ещё не срабатывает |
+
+**push-gd-late > 0**: гипотеза мёртвого кода НЕВЕРНА. OHA вызывает push GetDesire post-laning,
+просто реже (диал laning vs late ≈ 66:10). Код активен.
+
+**push-lane-active R#0**: не баг — у Radiant только 6 late-game push-вызовов, ни один
+не пришёлся на момент с активной волной (тайминг). При следующем матче должно выровняться.
+
+### Причина late-hunt=0 (известный баг)
+late-hunt стоит после `IsBotThinkingMeaningfulAction` gate. После того как AIBAntiAFK
+выдаёт MoveToLocation, следующий тик OHA считает движение «осмысленным действием»
+→ Think() выходит рано → late-hunt не достигается. Та же проблема что была с anti-afk.
+
+### fight_back + высокий forwardness = опасно
+Radiant: fight_back + forwardness=0.82 → бот лезет в каждую драку до смерти → 61 смерть.
+fight_back подходит только для танковых героев.
+
+### 📋 ПЛАН СЛЕДУЮЩЕЙ СЕССИИ (phase-10)
+
+**Фикс 1 (приоритет HIGH): late-hunt → встроить в AIBAntiAFK как P1**
+```
+Текущее поведение AIBAntiAFK при idle 8s:
+  → идти к push front
+
+Новое поведение:
+  P1: если post-laning + HP≥35% + gank≥0.7 OR (pos≥3 AND gank≥0.5) + враг в 2500
+      → преследовать врага (late-hunt)
+  P2: иначе → идти к push front (текущее)
+
+Результат: late-hunt срабатывает именно когда нужен — бот простоял 8s и видит врага
+```
+
+**Фикс 2 (приоритет LOW): fight_back coherence rule в system prompt**
+```
+Добавить в COHERENCE RULES:
+5. fight_back requires tank: если low_hp_behavior = "fight_back" →
+   forwardness должен быть ≤ 0.65 (агрессивное позиционирование + no retreat = постоянная смерть)
+```
+
+**Матч 12 (план):**
+- Конфиги: два разных разумных конфига (не fight_back без обоснования)
+- Ожидаем: late-hunt > 0 после фикса P1

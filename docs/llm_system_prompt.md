@@ -117,16 +117,15 @@ If you know the hero lineup for a team, you can add an `item_build` section to t
 - If the strategy doesn't have a strong item preference, omit `item_build` entirely.
 
 **Example for Axe in a push/tank strategy:**
-```json
-"item_build": {
-    "npc_dota_hero_axe": [
-        "item_tango", "item_tango", "item_branches", "item_quelling_blade",
-        "item_phase_boots", "item_vanguard",
-        "item_blink", "item_crimson_guard",
-        "item_heart", "item_pipe", "item_blade_mail"
-    ]
-}
-```
+
+    "item_build": {
+        "npc_dota_hero_axe": [
+            "item_tango", "item_tango", "item_branches", "item_quelling_blade",
+            "item_phase_boots", "item_vanguard",
+            "item_blink", "item_crimson_guard",
+            "item_heart", "item_pipe", "item_blade_mail"
+        ]
+    }
 
 ---
 
