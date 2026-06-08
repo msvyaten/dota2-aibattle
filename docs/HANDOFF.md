@@ -1468,12 +1468,37 @@ end
 
 ### 21.8 Открытые задачи (phase-11)
 
+#### Фокус на завтра: улучшение 1v1 (SF)
+
+**Шаг 0 — закрыть валидацию execute:**
 | # | Задача | Приоритет |
 |---|---|---|
-| 1 | **Матч 15** — execute_threshold swap (Radiant=0.60, Dire=0.00) — запустить, получить ID, `match_stats.py` | NEXT |
-| 2 | **5v5 полный матч** — Pusher vs Ganker до победы, проверить item_build | HIGH |
-| 3 | **LLM item_build** — сгенерировать `item_build`+`item_rules` для Pusher/Ganker через LLM | MEDIUM |
-| 4 | **stay_regen** — 4-е значение для `low_hp_behavior` (отступить 400 ед., ждать регена) | LOW |
-| 5 | **skill_build в cfg-announce** — добавить в чат-анонс при старте матча | LOW |
-| 6 | **fight_back coherence rule** в system prompt | LOW |
-| 7 | **1v1 системный промпт** — отдельный с 3 win-conditions (2 убийства / 1 вышка / 100 CS) | MEDIUM |
+| 0 | **Матч 15** — execute_threshold swap (Radiant=0.60, Dire=0.00) → `match_stats.py` → закрыть §20.5 | NEXT |
+
+**Шаг 1 — item_build SF (высокий эффект, быстро):**
+| # | Задача | Приоритет |
+|---|---|---|
+| 1 | Задать стартовые предметы + кор-сборку SF через `skill_build` в playstyle | HIGH |
+| 2 | Матч с item_build vs OHA-дефолт — сравнить фарм за 15 мин (GPM/CS) | HIGH |
+
+**Шаг 2 — rune_control (1 dial, 1 матч):**
+| # | Задача | Приоритет |
+|---|---|---|
+| 3 | `rune_control=1.0` для 1v1 SF (бутылка критична) — сравнить с =0.5 | MEDIUM |
+
+**Шаг 3 — creep last-hit / deny:**
+| # | Задача | Приоритет |
+|---|---|---|
+| 4 | Изучить что OHA поддерживает по deny/last-hit параметрам | MEDIUM |
+| 5 | Если есть параметры — протестировать; если нет — добавить свою логику | MEDIUM |
+| 6 | Добавить `denied` счётчик в `match_stats.py` для замера | LOW |
+
+**Дальше (не горит):**
+| # | Задача | Приоритет |
+|---|---|---|
+| 7 | **Lane equilibrium** — заморозка крипов / позиция на линии | LOW |
+| 8 | **Kill timing** — агрессия при level 6 (Requiem открыт) | LOW |
+| 9 | **5v5 полный матч** — Pusher vs Ganker до победы | MEDIUM |
+| 10 | **LLM item_build для 5v5** — Pusher/Ganker составы | MEDIUM |
+| 11 | **stay_regen** — 4-е значение для `low_hp_behavior` | LOW |
+| 12 | **fight_back coherence rule** в system prompt | LOW |
