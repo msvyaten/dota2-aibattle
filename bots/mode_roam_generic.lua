@@ -206,28 +206,13 @@ function Think()
 
 	-- AIBattle: late-game combat fallback (IsInLaningPhase()=false → ThinkActual exits early).
 	-- P1: attack enemy in 1200 range (roam-combat).
-	-- P2: late-game Ganker hunt — pursue visible enemies in 2500 range (late-hunt).
-	--     Fires only when gank_desire>=0.7 and bot has enough HP to engage.
+	-- Note: late-hunt (pursue 2500 range) was moved to AIBAntiAFK P1 (§19 fix).
+	--       It ran dead here because IsBotThinkingMeaningfulAction was always true.
 	if not J.Utils.IsBotThinkingMeaningfulAction(bot, false, "roam") then
 		if nInRangeEnemy and #nInRangeEnemy > 0 and nInRangeEnemy[1]:IsAlive() then
 			bot:Action_AttackUnit(nInRangeEnemy[1], true)
 			AIBStyle.Diag(bot, "roam-combat")
 			return
-		end
-		if not J.IsInLaningPhase() and J.GetHP(bot) >= 0.35 then
-			local gankDial = AIBStyle.Get().dials.gank_desire or 0.5
-			local lhPos    = J.GetPosition(bot)
-			-- Fires for: gank_desire >= 0.7 (explicit Ganker) OR pos >= 3 with gank >= 0.5
-			-- (support at neutral/high config → OHA stock late-game roam behavior).
-			-- Guard: gank >= 0.5 means gank not explicitly suppressed by user.
-			if gankDial >= 0.7 or (lhPos >= 3 and gankDial >= 0.5) then
-				local farEnemies = bot:GetNearbyHeroes(2500, true, BOT_MODE_NONE)
-				if farEnemies and #farEnemies > 0 and farEnemies[1]:IsAlive() then
-					bot:Action_MoveToLocation(farEnemies[1]:GetLocation())
-					AIBStyle.Diag(bot, "late-hunt")
-					return
-				end
-			end
 		end
 	end
 
@@ -1154,9 +1139,23 @@ function AIBAntiAFK()
 	bot.aib_afkLastPos = pos
 	if bot.aib_afkLastMoveTime == nil then bot.aib_afkLastMoveTime = now end
 	if now - bot.aib_afkLastMoveTime > ANTIAFK_THRESHOLD then
+		-- P1: late-game hunt — fires inside AIBAntiAFK to bypass IsBotThinkingMeaningfulAction gate.
+		-- When idle 8s, first look for an enemy to chase before falling back to lane-walk.
+		if not J.IsInLaningPhase() and J.GetHP(bot) >= 0.35 then
+			local gankDial = AIBStyle.Get().dials.gank_desire or 0.5
+			local lhPos    = J.GetPosition(bot)
+			if gankDial >= 0.7 or (lhPos >= 3 and gankDial >= 0.5) then
+				local farEnemies = bot:GetNearbyHeroes(2500, true, BOT_MODE_NONE)
+				if farEnemies and #farEnemies > 0 and farEnemies[1]:IsAlive() then
+					bot:Action_MoveToLocation(farEnemies[1]:GetLocation())
+					bot.aib_afkLastMoveTime = now
+					AIBStyle.Diag(bot, "late-hunt")
+					return
+				end
+			end
+		end
+		-- P2: fallback — rally to lane front (prevents indefinite idle)
 		local fallbackLoc
-		-- AIBattle #9: late-game → rally to most advanced push lane
-		-- laning phase → own assigned lane
 		if not J.IsInLaningPhase() then
 			local pushLane = AIBStyle.GetGroupPushLane()
 			fallbackLoc = GetLaneFrontLocation(GetTeam(), pushLane, 0)

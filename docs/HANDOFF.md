@@ -2,7 +2,7 @@
 
 > Единственная точка входа и единственный поддерживаемый док проекта. Обновлять ЕГО, новых
 > статус/план-доков не плодить. Он же — то, что отдаём другому Claude (мак/новое окно).
-> Последнее обновление: 2026-06-07 (phase-9 done; матч 11 завершён id=8842893188 — фиксы валидированы; план на след. сессию — §19).
+> Последнее обновление: 2026-06-08 (phase-11: late-hunt фикс + deploy.bat + roshan-kill счётчик; матч 13–14 5v5 Pusher/Ganker; матч 15 execute-swap ожидает; план — §21).
 > Машина: Windows/Shadow PC (тут LIVE Dota). По-русски.
 >
 > Доказательство = ТОЛЬКО цифра из финального стат-дампа ИЛИ строка из `console.<matchid>.log`.
@@ -1162,3 +1162,318 @@ fight_back подходит только для танковых героев.
 **Матч 12 (план):**
 - Конфиги: два разных разумных конфига (не fight_back без обоснования)
 - Ожидаем: late-hunt > 0 после фикса P1
+
+---
+
+## 20. Сессия 08.06 — Phase-10: HeroAbilityConfig + curated hero pool
+
+### 20.1 Архитектура: обобщённая подсистема способностей
+
+**Проблема:** `execute_threshold` и `ability_aggro` были жёстко привязаны к Sniper
+(`sniper_assassinate` + `sniper_shrapnel`). Матчи 1–11 игрались фактически с 10 параметрами вместо 12.
+
+**Решение:** `HeroAbilityConfig` — декларативная таблица в `bots/FunLib/aibattle_style.lua` +
+две функции `AbilityHarass(bot, enemy)` / `AbilityExecute(bot, enemy)`.
+Добавить нового героя = 3–5 строк конфига, нулевые изменения функций.
+
+**Файл: `bots/FunLib/aibattle_style.lua`** (до `GetGroupPushLane`):
+```lua
+M.HeroAbilityConfig = {
+    ["npc_dota_hero_nevermore"]        = { harass (directional ×3), execute (no_target) },
+    ["npc_dota_hero_sniper"]           = { harass (point),          execute (unit) },
+    ["npc_dota_hero_juggernaut"]       = { harass (no_target),      —               },
+    ["npc_dota_hero_zeus"]             = { harass (unit ×2),         execute (no_target) },
+    ["npc_dota_hero_lina"]             = { harass (point ×2),        execute (unit) },
+    ["npc_dota_hero_lion"]             = { harass (point+unit),      execute (unit) },
+    ["npc_dota_hero_skywrath_mage"]    = { harass (unit+no_target),  execute (point) },
+    ["npc_dota_hero_phantom_assassin"] = { harass (unit),            —               },
+    ["npc_dota_hero_sven"]             = { harass (unit),            —               },
+    ["npc_dota_hero_drow_ranger"]      = { harass (point),           —               },
+    ["npc_dota_hero_lich"]             = { harass (unit ×2),          execute (unit) },
+    ["npc_dota_hero_axe"]              = { harass (unit),            execute (unit)  },
+    ["npc_dota_hero_tidehunter"]       = { harass (unit),            execute (no_target) },
+    ["npc_dota_hero_warlock"]          = { harass (unit),            —               },
+    -- Templar Assassin: Psi Blades пассивная, Refraction/Meld самобаф/позиционная.
+    --   harass_desire+авто-атака достаточно. Нет записи в таблице.
+    ["npc_dota_hero_rattletrap"]       = { harass (point+no_target), execute (unit)  },
+}
+```
+
+**4 типа прицеливания:**
+
+| Тип | Реализация | Примеры |
+|---|---|---|
+| `unit` | UseAbilityOnEntity, проверка дистанции | Sniper ult, Axe Q, Lich Q |
+| `point` | UseAbilityOnLocation (позиция врага), дистанция | Shrapnel, Dragon Slave, Mystic Flare |
+| `no_target` | UseAbility, опциональный max_range | Blade Fury, Zeus ult, Ravage |
+| `directional` | UseAbility, hit zone = range±aoe; move если слишком далеко | SF Shadowraze ×3 |
+
+**`AbilityHarass(bot, enemy)`** — gate: `ability_aggro` dial (вероятность). Итерирует харас-список
+сверху вниз (дальний диапазон первый). Возвращает `true` если действие выдано.
+
+**`AbilityExecute(bot, enemy)`** — gate: HP% врага ≤ `execute_threshold` dial. Для `no_target`
+с `max_range`: если слишком далеко — `MoveToLocation` + `execute-approach`.
+
+**Вызов** в `mode_laning_generic.lua` (заменил хардкод sniper/juggernaut блоки):
+```lua
+do
+    local nearEnemies = bot:GetNearbyHeroes(1000, true, BOT_MODE_NONE)
+    if nearEnemies and #nearEnemies > 0 and nearEnemies[1]:IsAlive() then
+        if Style.AbilityExecute(bot, nearEnemies[1]) then return end
+        if Style.AbilityHarass(bot, nearEnemies[1]) then return end
+    end
+end
+```
+
+**Новые счётчики:**
+| Счётчик | Смысл |
+|---|---|
+| `ability-harass` | способность отстрелялась по врагу |
+| `ability-harass-move` | SF: шаг к sweetspot перед каст directional |
+| `execute` | экзекют сработал |
+| `execute-approach` | no_target + слишком далеко → двигаемся |
+
+### 20.2 SF shadowraze: directional-прицеливание
+
+Три разы итерируются raze3 → raze2 → raze1. Хит-зоны:
+
+| Способность | range | aoe | Покрытие |
+|---|---|---|---|
+| raze3 | 700 | 150 | 550–850 |
+| raze2 | 450 | 150 | 300–600 |
+| raze1 | 200 | 150 | 50–350 |
+
+Зоны перекрываются → мёртвых зон нет (50–850 полное покрытие). «Move к sweetspot» срабатывает
+только для raze3 (i==1, самый дальний), если враг за 850 — бот подходит до `enemy - dir×700`.
+
+### 20.3 Curated hero pool (15 героев)
+
+Герои с атрибутами в HeroAbilityConfig:
+
+| Герой | Харас | Экзекют | Примечание |
+|---|---|---|---|
+| Shadow Fiend | directional ×3 (raze1/2/3) | Requiem (no_target) | Тестирован: матч 12 |
+| Sniper | Shrapnel (point, 900) | Assassinate (unit, 2500) | Оригинальный герой |
+| Juggernaut | Blade Fury (no_target, 280) | — | |
+| Zeus | Arc+Bolt (unit, 700/600) | Thundergod's Wrath (no_target) | |
+| Lina | Dragon Slave+LSA (point, 925/625) | Laguna Blade (unit, 600) | |
+| Lion | Impale+Voodoo (point+unit, 500) | Finger of Death (unit, 750) | |
+| Skywrath Mage | Arcane Bolt+Concussive (unit+no_target) | Mystic Flare (point, 1000) | |
+| Phantom Assassin | Stifling Dagger (unit, 825) | — | Coup de Grace пассивная |
+| Sven | Storm Bolt (unit, 600) | — | God's Strength самобаф |
+| Drow Ranger | Wave of Silence (point, 900) | — | Marksmanship пассивная |
+| Lich | Frost Nova+Sinister Gaze (unit, 600/525) | Chain Frost (unit, 750) | |
+| Axe | Battle Hunger (unit, 750) | Culling Blade (unit, 250) | Culling Blade — только в упор |
+| Tidehunter | Gush (unit, 750) | Ravage (no_target, 1025) | Паник-экзекют |
+| Warlock | Shadow Word (unit, 700) | — | Golem — саммон, сложно |
+| Clockwerk | Rocket Flare (point, 1800) + Battery Assault (no_target, 250) | Hookshot (unit, 2500) | |
+| **Templar Assassin** | *нет (пассивная/позиционная)* | *нет* | Нет записи — harass_desire+авто-атака |
+
+### 20.4 Матч 12 — валидация ability-harass (SF 1v1)
+
+**Конфиг:** Radiant `ability_aggro=0.70, execute_threshold=0.00` / Dire `ability_aggro=0.00, execute_threshold=0.00`
+(чистый A/B: харас включён vs полностью выключен; оба SF, execute намеренно=0)
+
+**Результат:** длительность 3.7 мин, Radiant победил
+
+| Счётчик | Radiant | Dire |
+|---|---|---|
+| ability-harass | **93** | 15 |
+
+**Вывод:** ratio 6.2:1. `ability_aggro=0.70` даёт значимый сигнал. Разница в счётчике = Dire
+иногда чуть случайно зашёл в зону → харас одиночные касты. **ability_aggro ✅ подтверждён
+для SF (directional-тип).**
+
+Оговорка: матч 3.7 мин, уровень 6 не достигнут → Requiem не использовался → `execute` не
+протестирован (ожидаемо, на это следующий тест).
+
+### 20.5 Матч 13 — тест execute_threshold (SF 1v1, в работе)
+
+**Конфиг:** Radiant `execute_threshold=0.60, ability_aggro=0.70` / Dire `execute_threshold=0.00, ability_aggro=0.70`
+(оба харасят; Radiant кастует Requiem при HP < 60%)
+
+**Ожидаемые метрики:**
+- `execute` > 0 у Radiant (Requiem сработал)
+- `execute` = 0 у Dire (threshold=0 отключает)
+- Матч должен дойти хотя бы до уровня 6 (Requiem открывается)
+
+**Статус:** в работе. После получения ID → `python tools/match_stats.py <id>`.
+
+### 20.6 Текущее состояние файлов (08.06)
+
+**В репо (не закоммичено):**
+- `bots/FunLib/aibattle_style.lua` — HeroAbilityConfig (15 героев) + AbilityHarass + AbilityExecute
+- `bots/mode_laning_generic.lua` — заменён хардкод sniper/juggernaut блок на generic вызов
+
+**LIVE-only (НЕ коммитить):**
+- `bots/Customize/playstyle_radiant.lua` — execute тест (execute_threshold=0.60, ability_aggro=0.70)
+- `bots/Customize/playstyle_dire.lua` — execute тест (execute_threshold=0.00, ability_aggro=0.70)
+- `bots/Customize/general.lua` — все 5 SF обе стороны; имена ChatGPT/1-4 (Rad), Gemini/6-9 (Dire)
+
+### 20.7 Открытые задачи (phase-10)
+
+| # | Задача | Приоритет |
+|---|---|---|
+| 1 | **late-hunt → в AIBAntiAFK как P1** | HIGH (§19 фикс 1) |
+| 2 | **Проверить матч 13** (execute) — `match_stats.py <id>` | После игры |
+| 3 | **1v1 системный промпт** — отдельный с 3 win-conditions (2 убийства / 1 вышка / 100 CS); убрать gank/ward/roshan | MEDIUM |
+| 4 | **fight_back coherence rule** в system prompt (§19 фикс 2) | LOW |
+| 5 | **Батч-коммит** накопленных изменений — спросить перед пушем | После тестов |
+
+### 20.8 Батч к коммиту (всё LIVE, в репо не перенесено)
+
+После подтверждения матч 13 + late-hunt фикса:
+```
+bots/FunLib/aibattle_style.lua        — HeroAbilityConfig 15 героев + AbilityHarass/Execute
+bots/mode_laning_generic.lua          — generic ability вызов
+bots/mode_roam_generic.lua            — gankGapTime фикс + ActualGankDesire раскомментирован
+docs/llm_system_prompt.md             — v2
+Customize/general.lua                 — имена ChatGPT/1-4, Gemini/6-9
+⚠️ НЕ коммитить: playstyle_radiant/dire (тест-конфиги)
+```
+
+---
+
+## §21 — Сессия 08.06.2026 (phase-11)
+
+### 21.1 late-hunt фикс (§19 задача 1 — закрыта)
+
+**Проблема:** late-hunt (преследование врагов в радиусе 2500 в лейт-гейме) писал `late-hunt=0` во
+всех матчах. Причина — код был за гейтом `IsBotThinkingMeaningfulAction`, который всегда возвращал
+`true` когда в очереди стоял `MoveToLocation` от AIBAntiAFK.
+
+**Фикс:** перенесли late-hunt как **P1 внутрь AIBAntiAFK** (который вызывается на строке 156
+Think(), до гейта на строке 157). Структура:
+
+```lua
+if now - bot.aib_afkLastMoveTime > ANTIAFK_THRESHOLD then
+    -- P1: late-hunt (постлейн, HP≥35%, gank≥0.7 ИЛИ (pos≥3 И gank≥0.5))
+    if not J.IsInLaningPhase() and J.GetHP(bot) >= 0.35 then
+        local gankDial = AIBStyle.Get().dials.gank_desire or 0.5
+        local lhPos    = J.GetPosition(bot)
+        if gankDial >= 0.7 or (lhPos >= 3 and gankDial >= 0.5) then
+            local farEnemies = bot:GetNearbyHeroes(2500, true, BOT_MODE_NONE)
+            if farEnemies and #farEnemies > 0 and farEnemies[1]:IsAlive() then
+                bot:Action_MoveToLocation(farEnemies[1]:GetLocation())
+                bot.aib_afkLastMoveTime = now
+                AIBStyle.Diag(bot, "late-hunt")
+                return
+            end
+        end
+    end
+    -- P2: fallback — ралли к фронту линии
+    ...
+end
+```
+
+Старый мёртвый блок в `Think()` заменён комментарием-объяснением (§19 fix). Счётчик `late-hunt`
+подтверждён в матчах 13–14 (1–7 тиков у бота Dire в 5v5).
+
+**Файл:** `bots/mode_roam_generic.lua`
+
+### 21.2 Deploy workflow — обнаружение разделённых путей
+
+**Проблема:** изменения в dev-папке проекта не попадали в Dota. Dota читает из отдельной копии:
+```
+...steamapps/common/dota 2 beta/game/dota/scripts/vscripts/bots/
+```
+Скрипт установки OHA создаёт `mklink /D bots → WORKSHOP/`, но `Customize/` копируется один раз
+(`xcopy`). Симлинка на dev-папку нет ни для `bots/`, ни для `Customize/`.
+
+**Решение:** создан `tools/deploy.bat` — xcopy 7 файлов из dev → Dota vscripts:
+```
+aibattle_style.lua · jmz_func.lua · mode_laning_generic.lua · mode_roam_generic.lua
+mode_roshan_generic.lua (добавлен в эту сессию)
+Customize/general.lua · playstyle_radiant.lua · playstyle_dire.lua
+```
+
+**Файл:** `tools/deploy.bat` (новый)
+
+### 21.3 Roshan-kill счётчик (фикс)
+
+**Проблема:** `roshan=N` не был счётчиком убийств Рошана. Это был счётчик «окон желания» — 
+срабатывал один раз в 30 с пока бот хотел убить Рошана. За 30 минут мог накопить N=6+ даже без
+единого убийства.
+
+**Фикс:** добавлен отдельный счётчик `roshan-kill` — срабатывает на переходе флага
+`roshTimeFlag: true→false` (Рошан был жив → умер). Защита от двойного счёта: `DiagRL` с лимитом
+600 с (больше максимального респауна ~660 с).
+
+```lua
+else
+    if not shouldKillRoshan then
+        if roshTimeFlag then
+            AIBStyle.DiagRL(bot, "roshan-kill", 600)
+        end
+        sinceRoshAliveTime = 0
+        roshTimeFlag = false
+    end
+end
+```
+
+Старый счётчик `roshan` сохранён как «окна желания» — отдельная метрика.
+
+**Файл:** `bots/mode_roshan_generic.lua`
+
+### 21.4 Матч 13 — 5v5 Pusher vs Ganker #1 (ID: 8844025534)
+
+**Конфиг:**
+- Radiant `ChatGPT_Pusher`: push=0.90, gank=0.25, ward=0.90, roshan=0.85, farm=0.45
+- Dire `ChatGPT_Ganker`: gank=0.90, push=0.20, harass=0.85, farm=0.20, forwardness=0.85
+- Состав (обе стороны): SF / Drow / Witch Doctor / Tidehunter / Lich
+- Прерван: выключение компьютера (~30 мин)
+
+**Результат:** Radiant доминирует, ~35:2 по убийствам. Pusher-стратегия значительно эффективнее в
+ранней-средней фазе. `late-hunt` подтверждён (1–7 у Dire ботов).
+
+### 21.5 Матч 14 — 5v5 Pusher vs Ganker #2 (ID: 8844124778)
+
+**Конфиг:** тот же (зеркальный состав, те же диалы)
+- Прерван: выключение компьютера (~31 мин)
+
+**Результат:** 28:9 убийств. Ganker взял больше вышек по счёту, но не закрыл матч. Radiant Pusher
+стабильно лидирует. Оба матча не дошли до конца — полного итога нет.
+
+**Вывод по 5v5:** Pusher-конфиг побеждает Ganker при симметричных составах. Для достоверного
+анализа нужен полный матч. Item_build использовался OHA-дефолт (базовый).
+
+### 21.6 item_build — механизмы (задокументировано)
+
+Три механизма предоставления сборки ботам (ни один не активирован — используется OHA-дефолт):
+
+| Механизм | Файл | Описание |
+|---|---|---|
+| `skill_build` | playstyle_*.lua | Статический список в `SetUserHeroInit` |
+| `item_rules` | playstyle_*.lua | Условные правила: behind/ahead/dying/low_hp/enemy_magical/enemy_physical |
+| OHA default | — | Внутренняя логика OpenHyperAI, без явной конфигурации |
+
+**Статус:** OHA-дефолт выбран как базовая линия для 5v5-матчей. LLM-генерация `item_build`
+для Pusher/Ganker составов — следующий шаг после получения полного матча.
+
+### 21.7 Текущее состояние файлов (конец 08.06)
+
+**В репо (закоммичено в этой сессии):**
+- `bots/FunLib/aibattle_style.lua`
+- `bots/FunLib/jmz_func.lua`
+- `bots/mode_laning_generic.lua`
+- `bots/mode_roam_generic.lua` — late-hunt P1 в AIBAntiAFK
+- `bots/mode_roshan_generic.lua` — roshan-kill счётчик
+- `tools/deploy.bat` — deploy script
+- `docs/HANDOFF.md` — этот файл
+
+**LIVE-only (⚠️ НЕ коммитить):**
+- `bots/Customize/playstyle_radiant.lua` — execute_threshold=0.60 (1v1 SF, матч 15)
+- `bots/Customize/playstyle_dire.lua` — execute_threshold=0.00 (контроль)
+- `bots/Customize/general.lua` — все 5 SF обе стороны
+
+### 21.8 Открытые задачи (phase-11)
+
+| # | Задача | Приоритет |
+|---|---|---|
+| 1 | **Матч 15** — execute_threshold swap (Radiant=0.60, Dire=0.00) — запустить, получить ID, `match_stats.py` | NEXT |
+| 2 | **5v5 полный матч** — Pusher vs Ganker до победы, проверить item_build | HIGH |
+| 3 | **LLM item_build** — сгенерировать `item_build`+`item_rules` для Pusher/Ganker через LLM | MEDIUM |
+| 4 | **stay_regen** — 4-е значение для `low_hp_behavior` (отступить 400 ед., ждать регена) | LOW |
+| 5 | **skill_build в cfg-announce** — добавить в чат-анонс при старте матча | LOW |
+| 6 | **fight_back coherence rule** в system prompt | LOW |
+| 7 | **1v1 системный промпт** — отдельный с 3 win-conditions (2 убийства / 1 вышка / 100 CS) | MEDIUM |

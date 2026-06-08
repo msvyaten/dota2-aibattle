@@ -113,6 +113,28 @@ local function buildStyle(raw)
         end
     end
 
+    -- Prompt-driven skill build: per-hero ability level-up order.
+    -- Format: { npc_dota_hero_nevermore = {1,5,1,5,1,6,...} }
+    -- Each number = ability slot index (1-based). Lets LLM or test configs override
+    -- OHA's default skill priority (e.g. rush ult at level 6 instead of level 9).
+    -- Only keeps positive integers; bogus values dropped silently.
+    -- Consumed by jmz_func.lua SetUserHeroInit (overrides nAbilityBuildList).
+    local skills = {}
+    local rawSkills = (type(raw) == "table" and type(raw.skill_build) == "table") and raw.skill_build or {}
+    for heroName, heroList in pairs(rawSkills) do
+        if type(heroName) == "string" and type(heroList) == "table" then
+            local filtered = {}
+            for _, idx in ipairs(heroList) do
+                if type(idx) == "number" and idx >= 1 and math.floor(idx) == idx then
+                    filtered[#filtered + 1] = math.floor(idx)
+                end
+            end
+            if #filtered > 0 then
+                skills[heroName] = filtered
+            end
+        end
+    end
+
     -- Situational purchase rules (optional): { when=<cond>, item=<name>, first=<bool> }.
     -- Lets a prompt say "if behind, buy survivability". Evaluated in-game by the purchaser.
     local item_rules = {}
@@ -134,7 +156,7 @@ local function buildStyle(raw)
         improvements[k] = (rawImp[k] == true)
     end
 
-    return { dials = dials, rules = { respawn_behavior = respawn, dive_policy = dive, smoke_usage = smoke, buyback_policy = buyback, aegis_policy = aegis, low_hp_behavior = low_hp }, item_build = items, item_rules = item_rules, improvements = improvements }
+    return { dials = dials, rules = { respawn_behavior = respawn, dive_policy = dive, smoke_usage = smoke, buyback_policy = buyback, aegis_policy = aegis, low_hp_behavior = low_hp }, item_build = items, skill_build = skills, item_rules = item_rules, improvements = improvements }
 end
 
 -- Returns the {dials, rules} config for the calling bot's team (cached, with safe defaults).
@@ -388,6 +410,218 @@ function M.AntiIdleGlobal(bot)
             end
         end
     end
+end
+
+-- ─── Hero ability config ──────────────────────────────────────────────────────
+-- Declares which abilities each hero uses for harass (ability_aggro dial) and
+-- execute (execute_threshold dial). Four targeting types:
+--   "unit"        → Action_UseAbilityOnEntity(ab, enemy)
+--   "point"       → Action_UseAbilityOnLocation(ab, enemy:GetLocation())
+--   "no_target"   → Action_UseAbility(ab)          (AoE around self / instant global)
+--   "directional" → Action_UseAbility(ab) after positioning at range±aoe from enemy.
+--                   Bot must be facing the enemy — use for fixed-direction abilities like
+--                   SF Shadowraze (fires in front at a fixed distance, not at a unit/point).
+-- harass entries are ordered highest→lowest range (try safest first).
+-- execute.max_range: don't cast if enemy is farther than this.
+M.HeroAbilityConfig = {
+    ["npc_dota_hero_nevermore"] = {
+        -- Shadowrazes fire in front of SF at fixed distances.
+        -- Hit zones (range ± aoe): raze3=550-850, raze2=300-600, raze1=50-350 — no dead zones.
+        harass = {
+            { name = "nevermore_shadowraze3", type = "directional", range = 700, aoe = 150 },
+            { name = "nevermore_shadowraze2", type = "directional", range = 450, aoe = 150 },
+            { name = "nevermore_shadowraze1", type = "directional", range = 200, aoe = 150 },
+        },
+        -- Requiem of Souls: no-target AoE; souls travel 1300 but damage drops off.
+        -- Only execute when close so the burst reliably kills.
+        execute = { name = "nevermore_requiem",           type = "no_target", max_range = 700 },
+    },
+    ["npc_dota_hero_sniper"] = {
+        harass  = { { name = "sniper_shrapnel",    type = "point",  range = 900 } },
+        execute = { name = "sniper_assassinate",   type = "unit",   max_range = 2500 },
+    },
+    ["npc_dota_hero_juggernaut"] = {
+        -- Blade Fury: no-target AoE spin at 280 radius; cast when enemy is adjacent.
+        harass  = { { name = "juggernaut_blade_fury", type = "no_target", max_range = 280 } },
+    },
+    ["npc_dota_hero_zeus"] = {
+        harass = {
+            { name = "zeus_arc_lightning",  type = "unit", range = 700 },
+            { name = "zeus_lightning_bolt", type = "unit", range = 600 },
+        },
+        -- Thundergod's Wrath: global no-target — cast whenever enemy HP below threshold.
+        execute = { name = "zeus_thundergods_wrath", type = "no_target", max_range = nil },
+    },
+    ["npc_dota_hero_lina"] = {
+        harass = {
+            { name = "lina_dragon_slave",      type = "point", range = 925 },
+            { name = "lina_light_strike_array", type = "point", range = 625 },
+        },
+        execute = { name = "lina_laguna_blade", type = "unit", max_range = 600 },
+    },
+    ["npc_dota_hero_lion"] = {
+        harass = {
+            { name = "lion_impale",  type = "point", range = 500 },
+            { name = "lion_voodoo", type = "unit",  range = 500 },
+        },
+        execute = { name = "lion_finger_of_death", type = "unit", max_range = 750 },
+    },
+    ["npc_dota_hero_skywrath_mage"] = {
+        harass = {
+            { name = "skywrath_mage_arcane_bolt",     type = "unit",      range = 700 },
+            { name = "skywrath_mage_concussive_shot", type = "no_target", max_range = 1000 },
+        },
+        execute = { name = "skywrath_mage_mystic_flare", type = "point", max_range = 1000 },
+    },
+    -- Phantom Assassin: Stifling Dagger (unit, 825). No execute — Coup de Grace is passive.
+    ["npc_dota_hero_phantom_assassin"] = {
+        harass = {
+            { name = "phantom_assassin_stifling_dagger", type = "unit", range = 825 },
+        },
+    },
+    -- Sven: Storm Bolt (unit stun, 600). No execute — God's Strength is a self-buff.
+    ["npc_dota_hero_sven"] = {
+        harass = {
+            { name = "sven_storm_bolt", type = "unit", range = 600 },
+        },
+    },
+    -- Drow Ranger: Wave of Silence (point, 900). No execute — Marksmanship is passive.
+    ["npc_dota_hero_drow_ranger"] = {
+        harass = {
+            { name = "drow_ranger_wave_of_silence", type = "point", range = 900 },
+        },
+    },
+    -- Lich: Frost Nova (unit, 600) + Sinister Gaze (unit, 525). Chain Frost (unit execute, 750).
+    ["npc_dota_hero_lich"] = {
+        harass = {
+            { name = "lich_frost_nova",    type = "unit", range = 600 },
+            { name = "lich_sinister_gaze", type = "unit", range = 525 },
+        },
+        execute = { name = "lich_chain_frost", type = "unit", max_range = 750 },
+    },
+    -- Axe: Battle Hunger (unit DoT, 750). Culling Blade (unit execute, 250 — must be melee range).
+    ["npc_dota_hero_axe"] = {
+        harass = {
+            { name = "axe_battle_hunger", type = "unit", range = 750 },
+        },
+        execute = { name = "axe_culling_blade", type = "unit", max_range = 250 },
+    },
+    -- Tidehunter: Gush (unit slow+armor, 750). Ravage (no_target AoE, 1025 radius — panic execute).
+    ["npc_dota_hero_tidehunter"] = {
+        harass = {
+            { name = "tidehunter_gush", type = "unit", range = 750 },
+        },
+        execute = { name = "tidehunter_ravage", type = "no_target", max_range = 1025 },
+    },
+    -- Warlock: Shadow Word (unit harass/DoT, 700). No targeted execute — Chaotic Offering summons a golem.
+    ["npc_dota_hero_warlock"] = {
+        harass = {
+            { name = "warlock_shadow_word", type = "unit", range = 700 },
+        },
+    },
+    -- Templar Assassin: Psi Blades is passive; Refraction and Meld are self/positional.
+    -- Auto-attack harass (harass_desire) handles TA naturally. No entry needed.
+
+    -- Clockwerk: Rocket Flare (point, 1800) + Battery Assault (no_target AoE, 250 radius).
+    -- Hookshot (unit, 2500) as execute — closes gap and stuns low-HP targets.
+    ["npc_dota_hero_rattletrap"] = {
+        harass = {
+            { name = "rattletrap_rocket_flare",    type = "point",     range = 1800 },
+            { name = "rattletrap_battery_assault", type = "no_target", max_range = 250 },
+        },
+        execute = { name = "rattletrap_hookshot", type = "unit", max_range = 2500 },
+    },
+}
+
+-- AbilityHarass: use a hero-specific ability on the enemy, gated by ability_aggro dial.
+-- Walks through HeroAbilityConfig[hero].harass (highest→lowest range) and casts the
+-- first ability that can reach the enemy:
+--   unit/point   → cast immediately if in range
+--   directional  → cast if enemy is in the hit zone (range±aoe); move to sweet spot if too far
+--   no_target    → cast if enemy is within max_range (or always if max_range is nil)
+-- Returns true if an action was issued (cast or positioning move), false otherwise.
+function M.AbilityHarass(bot, enemy)
+    local dial = M.Get().dials.ability_aggro
+    if dial == nil or math.random() >= dial then return false end
+    local cfg = M.HeroAbilityConfig[bot:GetUnitName()]
+    if not cfg or not cfg.harass then return false end
+    local dist = GetUnitToUnitDistance(bot, enemy)
+    for i, abCfg in ipairs(cfg.harass) do
+        local ab = bot:GetAbilityByName(abCfg.name)
+        if ab and ab:IsFullyCastable() then
+            if abCfg.type == "unit" then
+                if dist <= abCfg.range then
+                    bot:Action_UseAbilityOnEntity(ab, enemy)
+                    M.Diag(bot, "ability-harass"); return true
+                end
+            elseif abCfg.type == "point" then
+                if dist <= abCfg.range then
+                    bot:Action_UseAbilityOnLocation(ab, enemy:GetLocation())
+                    M.Diag(bot, "ability-harass"); return true
+                end
+            elseif abCfg.type == "directional" then
+                local hitMin = abCfg.range - abCfg.aoe
+                local hitMax = abCfg.range + abCfg.aoe
+                if dist >= hitMin and dist <= hitMax then
+                    -- In hit zone: bot should already be facing enemy (last move/attack aimed at them)
+                    bot:Action_UseAbility(ab)
+                    M.Diag(bot, "ability-harass"); return true
+                elseif dist > hitMax and i == 1 then
+                    -- Too far even for the longest-range raze: move to sweet spot
+                    local dir = (enemy:GetLocation() - bot:GetLocation()):Normalized()
+                    bot:Action_MoveToLocation(enemy:GetLocation() - dir * abCfg.range)
+                    M.Diag(bot, "ability-harass-move"); return true
+                end
+                -- dist < hitMin → too close for this raze, fall through to shorter-range one
+            elseif abCfg.type == "no_target" then
+                if not abCfg.max_range or dist <= abCfg.max_range then
+                    bot:Action_UseAbility(ab)
+                    M.Diag(bot, "ability-harass"); return true
+                end
+            end
+        end
+    end
+    return false
+end
+
+-- AbilityExecute: cast the hero's execute ability when enemy HP < execute_threshold dial.
+-- Handles unit/point/no_target types. For no_target executes (SF Requiem, Zeus ult):
+-- if enemy is beyond max_range, moves closer WITHOUT returning true, so other laning
+-- logic can still fire on the same tick.
+-- Returns true only when an ability was actually cast.
+function M.AbilityExecute(bot, enemy)
+    local threshold = M.Get().dials.execute_threshold
+    if threshold == nil or threshold <= 0 then return false end
+    local cfg = M.HeroAbilityConfig[bot:GetUnitName()]
+    if not cfg or not cfg.execute then return false end
+    local exCfg = cfg.execute
+    local ab = bot:GetAbilityByName(exCfg.name)
+    if not ab or not ab:IsFullyCastable() then return false end
+    local maxHp = enemy:GetMaxHealth()
+    if maxHp <= 0 then return false end
+    if (enemy:GetHealth() / maxHp) > threshold then return false end
+    local dist = GetUnitToUnitDistance(bot, enemy)
+    if exCfg.type == "unit" then
+        if not exCfg.max_range or dist <= exCfg.max_range then
+            bot:Action_UseAbilityOnEntity(ab, enemy)
+            M.Diag(bot, "execute"); return true
+        end
+    elseif exCfg.type == "point" then
+        if not exCfg.max_range or dist <= exCfg.max_range then
+            bot:Action_UseAbilityOnLocation(ab, enemy:GetLocation())
+            M.Diag(bot, "execute"); return true
+        end
+    elseif exCfg.type == "no_target" then
+        if not exCfg.max_range or dist <= exCfg.max_range then
+            bot:Action_UseAbility(ab)
+            M.Diag(bot, "execute"); return true
+        else
+            -- Not close enough: approach but don't block other actions this tick
+            bot:Action_MoveToLocation(enemy:GetLocation())
+            M.Diag(bot, "execute-approach")
+        end
+    end
+    return false
 end
 
 -- Returns the lane with the most push progress (fewest enemy towers remaining).

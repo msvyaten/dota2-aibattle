@@ -128,6 +128,12 @@ function GetDesireHelper()
     else
         if not shouldKillRoshan
         then
+            -- AIBattle: Roshan kill counter — fires on roshTimeFlag true→false transition.
+            -- Rate-limited 600s (> max respawn ~660s) so each kill counted once per bot.
+            -- Actual kill count = roshan-kill value (each bot counts independently).
+            if roshTimeFlag then
+                AIBStyle.DiagRL(bot, "roshan-kill", 600)
+            end
             sinceRoshAliveTime = 0
             roshTimeFlag = false
         end

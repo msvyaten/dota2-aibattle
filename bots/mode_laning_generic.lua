@@ -291,6 +291,9 @@ function Think()
 	-- AIBattle: announce the loaded config once in chat (visible in console.log).
 	if not bot.aib_announced then
 		bot.aib_announced = true
+		-- Name announce: visible to all spectators (false = public chat), fixes client render quirk
+		-- where bot nickname sometimes doesn't display in the observer UI.
+		bot:ActionImmediate_Chat("▶ " .. bot:GetName() .. " [" .. AIB_SIDE .. "]", false)
 		bot:ActionImmediate_Chat(string.format("AIB[%s] harass=%.2f farm=%.2f fwd=%.2f abil=%.2f rune=%.2f retreat=%.2f exec=%.2f gank=%.2f push=%.2f defend=%.2f ward=%.2f roshan=%.2f dive=%s heal=%d afk=%d tower=%d abildial=%d",
 			AIB_SIDE,
 			dials.harass_desire, dials.farm_focus, dials.forwardness, dials.ability_aggro,
@@ -405,34 +408,15 @@ function Think()
 		target_loc = GetLaneFrontLocation(GetOpposingTeam(), botAssignedLane, -nLongestAttackRange)
 	end
 
-	-- AIBattle Schema v2: dial-driven behaviour (0..1 dimmers)
-	-- ability_aggro as probability (0..1)
-	if math.random() < (dials.ability_aggro or 0.5) then
-		local shrapnel = bot:GetAbilityByName("sniper_shrapnel")
-		if shrapnel and shrapnel:IsFullyCastable() then
-			local atk = bot:GetNearbyHeroes(900, true, BOT_MODE_NONE)
-			if atk and #atk > 0 and atk[1]:IsAlive() then
-				bot:Action_UseAbilityOnLocation(shrapnel, atk[1]:GetLocation())
-				return
-			end
-		end
-	end
-
-	-- AIBattle improvement (opt-in ability_on_dials): generalize ability use beyond Sniper.
-	-- Juggernaut Blade Fury (no-target AOE) — cast to harass a nearby enemy hero (harass_desire)
-	-- or to push/farm a creep pack (farm_focus), so non-Sniper abilities are dial-driven instead
-	-- of relying only on OHA's native (conservative) gating.
-	if GetImp('ability_on_dials') then
-		local bf = bot:GetAbilityByName("juggernaut_blade_fury")
-		if bf and bf:IsFullyCastable() then
-			local foe = bot:GetNearbyHeroes(280, true, BOT_MODE_NONE)
-			if foe and #foe > 0 and foe[1]:IsAlive() and math.random() < (dials.harass_desire or 0.5) then
-				bot:Action_UseAbility(bf); return
-			end
-			local creeps = bot:GetNearbyCreeps(280, true)
-			if creeps and #creeps >= 3 and math.random() < (dials.farm_focus or 0.5) then
-				bot:Action_UseAbility(bf); return
-			end
+	-- AIBattle: hero-specific ability harass + execute, driven by ability_aggro / execute_threshold dials.
+	-- Covers all targeting types (unit, point, directional, no_target) via HeroAbilityConfig in
+	-- aibattle_style.lua. Heroes not in the config return false and fall through silently.
+	-- Execute is checked first (higher priority: kill a fleeing enemy over general harassment).
+	do
+		local nearEnemies = bot:GetNearbyHeroes(1000, true, BOT_MODE_NONE)
+		if nearEnemies and #nearEnemies > 0 and nearEnemies[1]:IsAlive() then
+			if Style.AbilityExecute(bot, nearEnemies[1]) then return end
+			if Style.AbilityHarass(bot, nearEnemies[1]) then return end
 		end
 	end
 

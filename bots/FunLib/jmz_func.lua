@@ -52,12 +52,17 @@ function J.SetUserHeroInit( nAbilityBuildList, nTalentBuildList, sBuyList, sSell
 		sBuyList = tBotSet.PurchaseList
 		sSellList = tBotSet.SellList
 	else
-		-- AIBattle: if no per-hero Customize file, apply item_build from playstyle config
+		-- AIBattle: if no per-hero Customize file, apply item_build / skill_build from playstyle config
 		local ok_style, AIBStyle = pcall(require, GetScriptDirectory()..'/FunLib/aibattle_style')
 		if ok_style and AIBStyle then
-			local itemBuild = AIBStyle.Get().item_build
+			local cfg = AIBStyle.Get()
+			local itemBuild = cfg.item_build
 			if itemBuild and itemBuild[botName] then
 				sBuyList = itemBuild[botName]
+			end
+			local skillBuild = cfg.skill_build
+			if skillBuild and skillBuild[botName] then
+				nAbilityBuildList = skillBuild[botName]
 			end
 		end
 	end
