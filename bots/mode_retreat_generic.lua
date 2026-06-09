@@ -120,7 +120,9 @@ end
 
 function GetDesire()
     -- AIBattle: fight_back = never retreat (for max-aggression builds with dive=always).
-    if AIBStyle.Get().rules.low_hp_behavior == "fight_back" then
+    -- regen_lane = don't TP/run to fountain; handled in mode_laning (step back + regen in lane).
+    local lhb = AIBStyle.Get().rules.low_hp_behavior
+    if lhb == "fight_back" or lhb == "regen_lane" then
         return BOT_MODE_DESIRE_NONE
     end
     -- local cacheKey = 'GetRetreatDesire'..tostring(bot:GetPlayerID())
@@ -132,6 +134,11 @@ function GetDesire()
     -- Counter: low-hp-run fires when retreat is active under run_to_tower rule (bot runs, no TP).
     if res > 0 and AIBStyle.Get().rules.low_hp_behavior == "run_to_tower" then
         AIBStyle.DiagRL(bot, "low-hp-run", 5)
+    end
+    -- AIBattle: tp-fountain diag — fires when retreat desire is high under tp_fountain rule.
+    -- Proxy for "bot wanted to TP to base". Rate-limited 5s to avoid spam.
+    if res >= 0.5 and lhb == "tp_fountain" then
+        AIBStyle.DiagRL(bot, "tp-fountain", 5)
     end
     return AIBStyle.ScaleDesire(res, AIBStyle.Get().dials.retreat_caution)
 end

@@ -18,6 +18,11 @@ local DEFAULT_DIALS = {
     -- Finish/ultimate aggression: cast Assassinate on a fleeing enemy below this HP
     -- fraction. 0 = never (conservative OHA default), 0.45 = finish enemies under 45%.
     execute_threshold = 0.0,
+    -- Lane activity: probability to hit any nearby creep between last-hit windows.
+    -- 1.0 = always hitting something (aggressive push); 0.0 = only last-hit (passive freeze).
+    -- Independent of harass_desire (hero) and farm_focus (farm vs harass split).
+    -- Default 0.7: bot stays active on lane, walks to creep if none in range.
+    lane_activity     = 0.7,
     -- Phase 2 (team dials): each scales the matching OHA team-mode desire via ScaleDesire,
     -- same proven pattern as rune_control/retreat_caution. 0.5 = baseline (x1), so a config
     -- that leaves them at 0.5 behaves exactly like pre-Phase-2.
@@ -61,8 +66,22 @@ local DEFAULT_AEGIS = "core"
 --               there are nearby units that would cancel the channel anyway.
 -- fight_back   = don't activate retreat mode at all — keep fighting to the end.
 --               Pair with dive_policy=always for max-aggression builds.
-local LOW_HP_VALUES = { tp_fountain = true, run_to_tower = true, fight_back = true }
+-- regen_lane   = don't TP or run — step back ~400 units from danger and wait for natural regen.
+--               Only fires when safe (no hero damage in last 2.5s + enemy not chasing).
+--               Stays near lane. Diag: 'regen-lane' (fired) / 'retreat-blocked' (wanted but unsafe).
+local LOW_HP_VALUES = { tp_fountain = true, run_to_tower = true, fight_back = true, regen_lane = true }
 local DEFAULT_LOW_HP = "tp_fountain"
+
+-- pregame_behavior: what the bot does before creeps spawn (DotaTime < 0).
+-- nil / unset  = OHA default (routes to bounty runes — useless in 1v1 where no runes spawn at 0:00).
+-- safe_tower   = stand ~350 units in front of own mid T1 tower (safe zone, good default for 1v1).
+-- aggressive_mid = hold the river crossing (~45% of the way from own T1 to enemy T1).
+--                 Puts pressure and denies vision of mid approach.
+-- jungle_pressure = walk deep into enemy half (~70% toward enemy T1), near their jungle entrance.
+--                 Safe in 1v1 (neutrals almost never attack). Can zone or observe.
+-- Diag: 'pregame-<value>' rate-limited 5s.
+local PREGAME_VALUES = { safe_tower = true, aggressive_mid = true, jungle_pressure = true }
+local DEFAULT_PREGAME = nil  -- nil = OHA default (no override)
 
 local function clamp01(x)
     if type(x) ~= "number" then return nil end
@@ -92,6 +111,8 @@ local function buildStyle(raw)
     local aegis = (type(aeg) == "string" and AEGIS_VALUES[aeg]) and aeg or DEFAULT_AEGIS
     local lhb = rawRules.low_hp_behavior
     local low_hp = (type(lhb) == "string" and LOW_HP_VALUES[lhb]) and lhb or DEFAULT_LOW_HP
+    local pgb = rawRules.pregame_behavior
+    local pregame = (type(pgb) == "string" and PREGAME_VALUES[pgb]) and pgb or DEFAULT_PREGAME
 
     -- Prompt-driven item build: per-hero ordered buy list.
     -- Format: { npc_dota_hero_axe = {"item_blink", ...}, npc_dota_hero_cm = {...} }
@@ -156,7 +177,7 @@ local function buildStyle(raw)
         improvements[k] = (rawImp[k] == true)
     end
 
-    return { dials = dials, rules = { respawn_behavior = respawn, dive_policy = dive, smoke_usage = smoke, buyback_policy = buyback, aegis_policy = aegis, low_hp_behavior = low_hp }, item_build = items, skill_build = skills, item_rules = item_rules, improvements = improvements }
+    return { dials = dials, rules = { respawn_behavior = respawn, dive_policy = dive, smoke_usage = smoke, buyback_policy = buyback, aegis_policy = aegis, low_hp_behavior = low_hp, pregame_behavior = pregame }, item_build = items, skill_build = skills, item_rules = item_rules, improvements = improvements }
 end
 
 -- Returns the {dials, rules} config for the calling bot's team (cached, with safe defaults).
