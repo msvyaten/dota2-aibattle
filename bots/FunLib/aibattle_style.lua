@@ -447,11 +447,11 @@ end
 M.HeroAbilityConfig = {
     ["npc_dota_hero_nevermore"] = {
         -- Shadowrazes fire in front of SF at fixed distances.
-        -- Hit zones (range ± aoe): raze3=550-850, raze2=300-600, raze1=50-350 — no dead zones.
+        -- Hit zones (range ± aoe): raze3=550-850, raze2=300-600. raze1 excluded — 200-range is
+        -- melee distance; bot auto-attacks there instead of rushing in for a raze.
         harass = {
             { name = "nevermore_shadowraze3", type = "directional", range = 700, aoe = 150 },
             { name = "nevermore_shadowraze2", type = "directional", range = 450, aoe = 150 },
-            { name = "nevermore_shadowraze1", type = "directional", range = 200, aoe = 150 },
         },
         -- Requiem of Souls: no-target AoE; souls travel 1300 but damage drops off.
         -- Only execute when close so the burst reliably kills.

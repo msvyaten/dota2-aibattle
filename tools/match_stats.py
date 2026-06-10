@@ -97,12 +97,12 @@ def print_dials(dials):
 def parse(path):
     lines = open(path, encoding="utf-8", errors="ignore").read().splitlines()
     text = "\n".join(lines)
-    cfg = [l.split("localize: ", 1)[1] for l in lines if "harass=" in l]
+    cfg = [l.split("localize: ", 1)[1] for l in lines if " harass=" in l]
     # Diag: 'AIB[R] heal-item #5'. Aggregate per key -> {side: count}; new lines carry a
     # cumulative '#N' (keep the max), legacy lines (no '#') are counted by occurrence.
     diag = {}
     for side, body in re.findall(r"'AIB(\[[RD]\])?\s+([^']*)'", text):
-        if "harass=" in body:  # that's the cfg announce, not a diag
+        if body.startswith("harass="):  # cfg announce always starts with harass=
             continue
         s = side.strip("[]") or "?"
         pairs = re.findall(r"([\w-]+)=(\d+)", body)  # combined format 'anti-afk=15 heal-item=7'

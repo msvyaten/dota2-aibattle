@@ -140,8 +140,9 @@ end
 -- Only moves if >150 units away (avoids jitter). Rate-limits move commands to every 2s.
 -- Diag: 'pregame-<value>' (rate-limited 5s).
 local function AIB_ThinkPreGame()
+	AIB_Diag("pg-called")
 	local pgb = GetRules().pregame_behavior
-	if pgb == nil then Style.DiagRL(bot, "pg-no-pgb", 5.0); return false end
+	if pgb == nil then AIB_Diag("pg-no-pgb"); return false end
 
 	-- Reference points for the lerp: try exact tower positions first (may be nil before game start),
 	-- fall back to GetLaneFrontLocation which is geometry-based and always available.
@@ -151,12 +152,12 @@ local function AIB_ThinkPreGame()
 	if ownT1 ~= nil and enmT1 ~= nil then
 		a = ownT1:GetLocation()
 		b = enmT1:GetLocation()
-		Style.DiagRL(bot, "pg-ref-tower", 5.0)
+		if not bot.aib_pgRefLogged then bot.aib_pgRefLogged = true; AIB_Diag("pg-ref-tower") end
 	else
 		a = GetLaneFrontLocation(GetTeam(), LANE_MID, 0)
 		b = GetLaneFrontLocation(GetEnemyTeam(), LANE_MID, 0)
-		if a == nil or b == nil then Style.DiagRL(bot, "pg-ref-nil", 5.0); return false end
-		Style.DiagRL(bot, "pg-ref-lane", 5.0)
+		if a == nil or b == nil then AIB_Diag("pg-ref-nil"); return false end
+		if not bot.aib_pgRefLogged then bot.aib_pgRefLogged = true; AIB_Diag("pg-ref-lane") end
 	end
 
 	-- lerp factor: fraction of the way from own reference toward enemy reference
@@ -170,7 +171,8 @@ local function AIB_ThinkPreGame()
 			bot:Action_MoveToLocation(target)
 		end
 	end
-	Style.DiagRL(bot, "pregame-" .. pgb, 5.0)
+	-- one-shot confirm per match: which pregame_behavior is active
+	if not bot.aib_pgDiag then bot.aib_pgDiag = true; AIB_Diag("pregame-" .. pgb) end
 	return true
 end
 
@@ -529,7 +531,6 @@ function Think()
 		end
 
 		-- 9. FLASK/SALVE: HP < 40%, только когда безопасно (любой урон отменяет).
-		--    Если небезопасно → heal-pullback к башне (кроме regen_lane — у него своя логика).
 		if hp < 0.40 and healReady then
 			local hpSafe = not (bot:WasRecentlyDamagedByAnyHero(0.5) or bot:WasRecentlyDamagedByCreep(0.5))
 			if hpSafe then
@@ -538,14 +539,21 @@ function Think()
 					bot.aib_healLast = DotaTime(); AIB_Diag("heal-item")
 					bot:Action_UseAbilityOnEntity(flask, bot); return
 				end
-			else
-				if Style.Get().rules.low_hp_behavior ~= "regen_lane" then
-					local back = AIB_ForwardSurvivingTowerLoc()
-					if back then
-						bot.aib_healLast = DotaTime(); AIB_Diag("heal-pullback")
-						bot:Action_MoveToLocation(back); return
-					end
-				end
+			end
+		end
+
+		-- heal-pullback: отдельный CD (не зависит от healReady).
+		-- Wand и pullback не блокируют друг друга — после wand бот всё равно может отойти.
+		-- Не применяется к regen_lane — у него своя логика отхода ниже.
+		local PULLBACK_CD = 3.0
+		if hp < 0.40
+			and Style.Get().rules.low_hp_behavior ~= "regen_lane"
+			and (bot.aib_pullbackLast == nil or DotaTime() - bot.aib_pullbackLast >= PULLBACK_CD)
+			and (bot:WasRecentlyDamagedByAnyHero(0.5) or bot:WasRecentlyDamagedByCreep(0.5)) then
+			local back = AIB_ForwardSurvivingTowerLoc()
+			if back then
+				bot.aib_pullbackLast = DotaTime(); AIB_Diag("heal-pullback")
+				bot:Action_MoveToLocation(back); return
 			end
 		end
 	end

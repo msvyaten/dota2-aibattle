@@ -1,7 +1,7 @@
 # HANDOFF — AIBattle × Dota 2
 
 > Единственная точка входа. Обновлять ЕГО, новых доков не плодить.
-> Последнее обновление: 2026-06-09 (phase-12: regen_lane).
+> Последнее обновление: 2026-06-10 (phase-13: pregame ✅, heal-pullback ✅, raze1-фикс).
 > Полная история сессий — `docs/history/HANDOFF-full-2026-06-09.md`.
 > По-русски. Доказательство = цифра из лога или stат-дампа. «На глаз» не считается.
 
@@ -51,9 +51,13 @@
 **LLM-пайплайн:** промпт → ChatGPT → конфиг → измеримое поведение ✅ (8838539380: Pusher towerDmg 7926 vs Ganker 159).
 
 **Improvements (все LIVE, флаги OFF по умолчанию):**
-- `defensive_heal` — anti-thrash фикс сделан; heal-item/prev-heal работают; regen_lane в работе (phase-12)
-- `ability_on_dials` ✅ (Blade Fury ON ~2500 vs OFF ~450)
+- `defensive_heal` ✅ — heal-item/tango/bottle/regen работают; `heal-pullback` ✅ отдельный CD (aib_pullbackLast, 3.0s), не блокируется wand-кулдауном (8846034123: heal-pullback R#1)
+- `ability_on_dials` ✅ частично — SF raze D#62 (vs OHA D#0 при aggro=0.00). ⚠️ AbilityHarass не проверяет флаг — срабатывает для любого бота с ability_aggro>0. Нужен фикс изоляции.
 - `anti_afk`, `tower_avoid` — не валидированы
+
+**pregame_behavior** ✅ (10.06.2026) — pg-called D#267 R#273 стабильно; pregame-aggressive_mid/safe_tower в диагах. Бот идёт к правильной позиции до крипов.
+
+**raze1 убран из SF harass** (10.06.2026) — `ability-harass-move` снизился R#12→R#1 (8846034123→8846050605). Только raze2 (300–600) и raze3 (550–850).
 
 **Подробности + пруфы:** `docs/history/HANDOFF-full-2026-06-09.md` §3–§21
 
@@ -74,25 +78,27 @@
 
 ---
 
-## 5. Текущий тест (LIVE, phase-12 — НЕ КОММИТИТЬ)
+## 5. Текущий тест (LIVE, phase-13 — НЕ КОММИТИТЬ)
 
-| Сторона | `low_hp_behavior` | item_build | `defensive_heal` |
-|---|---|---|---|
-| **Radiant** | `regen_lane` | Valve build (Eul+Blink) | true |
-| **Dire** | `tp_fountain` (контроль) | OHA hero_nevermore.lua pos_2 | true |
+Оба бота одинаковы, единственное отличие — `ability_on_dials`:
 
-Оба: skill_build `{1,5,1,5,1,6,1,5,5,4,6,4,4,4,6}`, все диалы нейтральны (0.50–0.80).
+| Сторона | `ability_on_dials` | `ability_aggro` | `low_hp_behavior` | `pregame_behavior` | item_build |
+|---|---|---|---|---|---|
+| **Radiant** | `true` | 0.70 | `regen_lane` | `aggressive_mid` | Valve |
+| **Dire** | — | 0.70 | `regen_lane` | `aggressive_mid` | Valve |
 
-**Что подтверждено (09.06.2026, phase-12):**
-- `regen-lane` ✅ D#18 в матче 8845558969 — Dire делал безопасные отходы
-- `retreat-blocked` ✅ D#15 — враг блокировал отход, система корректно реагирует
-- `kill-priority` ✅ R#15–19 стабильно по матчам
-- `heal-item` / `tango-heal` / `tp-fountain` ✅ работают
-- `pregame_behavior` 🔄 задеплоено 09.06, ещё не подтверждено в матче
+⚠️ **Тест нечистый**: AbilityHarass вызывается у обоих (ability_aggro=0.70 для обоих). Нужен фикс в AbilityHarass — проверять `improvements.ability_on_dials` перед запуском нашей системы.
 
-**На тест в следующем матче:**
-- `pregame-aggressive_mid D#N` и `pregame-safe_tower R#N` в первом батче диагов
-- Отсутствие VScript errors при старте (pcall фикс)
+**Что подтверждено (10.06.2026, phase-13):**
+- `pregame_behavior` ✅ — pg-called D#267 R#273, позиционирование до крипов работает
+- `heal-pullback` ✅ — R#1 в матче 8846034123 (отдельный CD, не зависит от wand)
+- `regen-lane` ✅ — R#3/D#1 стабильно в матчах
+- `raze1` убран из harass ✅ — ability-harass-move D#12 → R#1
+
+**Обнаружено (10.06.2026):**
+- Side advantage: Radiant выигрывает чаще, но не детерминированно (Dire победил 8846062648)
+- ability-harass-move R#22 в паритетном матче — бот гонится за врагом для raze3, переэкстендится
+- ability_on_dials не изолирован (см. §3 и §6)
 
 ---
 
@@ -100,17 +106,13 @@
 
 | # | Задача | Приоритет |
 |---|---|---|
-| **0** | Матч → подтвердить `pregame-aggressive_mid` / `pregame-safe_tower` | **NEXT** |
-| 1 | **Respawn TP** — подтвердить `respawn-no-tp`/`respawn-tp-cd` (бот шёл пешком имея свиток) | NEXT |
-| 2 | **Tower damage breakdown** — hero vs creep vs auto в match_stats.py | LOW |
-| 3 | **5v5 полный матч** Pusher vs Ganker | MEDIUM |
-| 4 | **LLM item_build 5v5** | MEDIUM |
-| 2 | **Respawn TP** — подтвердить `respawn-no-tp`/`respawn-tp-cd` (бот шёл пешком имея свиток) | NEXT |
-| 3 | **Pre-game модуль** (DotaTime()<0): `safe_tower` / `aggressive_mid` / `jungle_pressure`. В 1v1 нет рун в 0:00, нейтралы не атакуют | MEDIUM |
-| 4 | **5v5 полный матч** Pusher vs Ganker до конца | MEDIUM |
-| 5 | **LLM item_build 5v5** | MEDIUM |
-| 6 | `item_tango_single` — другое имя у разделённого танго, проверить | LOW |
-| 7 | **fight_back coherence** в system prompt: fight_back → forwardness ≤ 0.65 | LOW |
+| **1** | **ability_on_dials изоляция** — AbilityHarass не проверяет флаг, срабатывает у всех с ability_aggro>0. Добавить проверку `GetImp('ability_on_dials')` в начало AbilityHarass | **NEXT** |
+| **2** | **ability-harass-move избыточен** — R#22 при паритетном матче, бот гонится за raze3. Варианты: уменьшить радиус поиска 1000→900, или не двигаться если ability_aggro < 0.80 | **NEXT** |
+| 3 | **Respawn TP** — подтвердить `respawn-no-tp`/`respawn-tp-cd` (бот шёл пешком имея свиток) | MEDIUM |
+| 4 | **Tower damage breakdown** — hero vs creep vs auto в match_stats.py | LOW |
+| 5 | **5v5 полный матч** Pusher vs Ganker | MEDIUM |
+| 6 | **LLM item_build 5v5** | MEDIUM |
+| 7 | `item_tango_single` — другое имя у разделённого танго, проверить | LOW |
 
 ---
 
