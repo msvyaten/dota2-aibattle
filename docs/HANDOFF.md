@@ -71,7 +71,7 @@
 | `dive_policy` | never / **finish_only** / always | `no-dive` |
 | `smoke_usage` | **for_ganks** / never | `smoke` |
 | `buyback_policy` | never / **default** | — |
-| `low_hp_behavior` | **tp_fountain** / run_to_tower / fight_back / regen_lane | `tp-fountain` / `regen-lane` / `retreat-blocked` |
+| `low_hp_behavior` | **tp_fountain** / run_to_tower / fight_back / regen_lane / walk_fountain | `tp-fountain` / `regen-lane` / `retreat-blocked` / `recovery-*` |
 | `aegis_policy` | **core** / any | — |
 
 **Improvements** — opt-in булевы флаги в `improvements = { key = true }`. Off по умолчанию.
@@ -111,7 +111,7 @@
 | 3 | **Respawn TP** — подтвердить `respawn-no-tp`/`respawn-tp-cd` (бот шёл пешком имея свиток) | MEDIUM |
 | 4 | **Tower damage breakdown** — hero vs creep vs auto в match_stats.py | LOW |
 | 5 | **5v5 полный матч** Pusher vs Ganker | MEDIUM |
-| 6 | **LLM item_build 5v5** | MEDIUM |
+| 6 | **LLM item_build — стилевые сборки** — см. §11 | MEDIUM |
 | 7 | `item_tango_single` — другое имя у разделённого танго, проверить | LOW |
 
 ---
@@ -130,6 +130,14 @@
 | `mana-clarity` | laning | кларитку выпил (мана < 40%, безопасно) |
 | `prev-heal` | laning | превентивный хил (75% HP, полностью безопасно, кулдаун 30s) |
 | `tp-fountain` | retreat | tp_fountain режим активирован (rate-limit 5s) |
+| `recovery-tango` | laning | recovery: тангу без TANGO_CD (2000 radius, нет врага) |
+| `recovery-bottle` | laning | recovery: bottle без safety gate |
+| `recovery-flask` | laning | recovery: flask без safety gate |
+| `recovery-buy` | laning | recovery: купил flask + вызвал курьера |
+| `recovery-tp` | laning | recovery: TP на фонтан (нет золота на flask) |
+| `recovery-walk` | laning | recovery: пешком на фонтан (walk_fountain или нет TP) |
+| `recovery-rune` | laning | recovery: пошёл за водяной руной (regen_lane) |
+| `recovery-wait` | laning | recovery: стоит у башни (нет предметов/золота/руны) |
 | `respawn-no-tp` | laning | умер без TP scroll |
 | `respawn-tp-cd` | laning | TP scroll на КД при реснере |
 | `ability-harass` | laning | способность по врагу (ability_aggro) |
@@ -184,3 +192,47 @@ git push origin phase-2-team-dials   # только по команде
 ```
 
 Merge в `main` — осознанно, когда фаза с пруфами закрыта.
+
+---
+
+## 11. План: стилевые item build'ы (LLM-driven)
+
+**Концепция:** для каждого героя — 3 готовых файла сборок. LLM выбирает файл по стилю, затем второй слой — порядок предметов внутри файла.
+
+### Слой 1 — выбор сборки
+
+Три файла на героя в `Customize/builds/<hero>/`:
+- `aggressive.lua` — первый приоритет: мобильность + бурст (blink, echo sabre, BKB)
+- `defensive.lua` — первый приоритет: выживаемость (vanguard, hood, crimson guard)
+- `neutral.lua` — сбалансированный (phase boots + общий mid-game)
+
+LLM выбирает файл целиком по диалам:
+- `forwardness > 0.65` или `execute_threshold < 0.35` → aggressive
+- `retreat_caution > 0.65` или `harass_desire < 0.35` → defensive
+- иначе → neutral
+
+Поле в конфиге: `item_build = "aggressive"` (строка вместо массива) — загрузчик резолвит в файл.
+
+### Слой 2 — порядок внутри сборки
+
+Каждый файл содержит предметы с тегами приоритета:
+```lua
+-- builds/axe/aggressive.lua
+return {
+    core    = { "item_blink", "item_echo_sabre", "item_black_king_bar" },
+    luxury  = { "item_heart", "item_assault", "item_satanic" },
+    situational = { "item_pipe", "item_lotus_orb" },
+}
+```
+
+LLM (или правила по диалам) выставляет `item_priority = "core_first"` / `"luxury_early"` — загрузчик собирает итоговый flat-список в нужном порядке.
+
+### Источники сборок
+
+- **Steam Workshop** `filetype=12` — Dota 2 hero builds в JSON, парсим через `tools/parse_steam_build.py`
+- **Dotabuff/Stratz API** — статистически сильные сборки по winrate/rank
+- Pipeline: внешний JSON → `tools/convert_build.py` → наш `builds/<hero>/<style>.lua`
+
+### Статус
+
+Не начато. Предпосылки: закрыть §6 задачи 1-2 (ability_on_dials, harass-move), протестировать recovery. Первый кандидат для пилота — Axe (defensive/aggressive очевидны по роли).

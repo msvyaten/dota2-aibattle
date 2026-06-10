@@ -12,6 +12,7 @@ echo.
 
 :: --- Core bot files (FunLib) ---
 copy /Y "%DEV%\FunLib\aibattle_style.lua"  "%DOTA%\FunLib\aibattle_style.lua"  && echo [OK] FunLib/aibattle_style.lua
+copy /Y "%DEV%\FunLib\aibattle_heal.lua"  "%DOTA%\FunLib\aibattle_heal.lua"  && echo [OK] FunLib/aibattle_heal.lua
 copy /Y "%DEV%\FunLib\jmz_func.lua"        "%DOTA%\FunLib\jmz_func.lua"        && echo [OK] FunLib/jmz_func.lua
 
 :: --- Mode files ---

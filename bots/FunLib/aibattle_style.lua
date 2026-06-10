@@ -69,7 +69,10 @@ local DEFAULT_AEGIS = "core"
 -- regen_lane   = don't TP or run — step back ~400 units from danger and wait for natural regen.
 --               Only fires when safe (no hero damage in last 2.5s + enemy not chasing).
 --               Stays near lane. Diag: 'regen-lane' (fired) / 'retreat-blocked' (wanted but unsafe).
-local LOW_HP_VALUES = { tp_fountain = true, run_to_tower = true, fight_back = true, regen_lane = true }
+-- walk_fountain = no TP escape — walk to own fountain on foot when critically low and no items.
+--               Slower than tp_fountain but immune to damage-cancel. Costs XP/gold (long walk).
+--               Falls back to TP if a scroll is available. Diag: 'recovery-walk'.
+local LOW_HP_VALUES = { tp_fountain = true, run_to_tower = true, fight_back = true, regen_lane = true, walk_fountain = true }
 local DEFAULT_LOW_HP = "tp_fountain"
 
 -- pregame_behavior: what the bot does before creeps spawn (DotaTime < 0).
@@ -446,12 +449,13 @@ end
 -- execute.max_range: don't cast if enemy is farther than this.
 M.HeroAbilityConfig = {
     ["npc_dota_hero_nevermore"] = {
-        -- Shadowrazes fire in front of SF at fixed distances.
-        -- Hit zones (range ± aoe): raze3=550-850, raze2=300-600. raze1 excluded — 200-range is
-        -- melee distance; bot auto-attacks there instead of rushing in for a raze.
+        -- Shadowraze is point-targeted (aim anywhere within range), not directional.
+        -- Using "point" casts Action_UseAbilityOnLocation(enemy:GetLocation()) — accurate aim.
+        -- Old "directional" used Action_UseAbility() which fired wherever the bot was facing.
+        -- raze1 excluded — range 200 is melee distance, not worth rushing in for.
         harass = {
-            { name = "nevermore_shadowraze3", type = "directional", range = 700, aoe = 150 },
-            { name = "nevermore_shadowraze2", type = "directional", range = 450, aoe = 150 },
+            { name = "nevermore_shadowraze3", type = "point", range = 700 },
+            { name = "nevermore_shadowraze2", type = "point", range = 450 },
         },
         -- Requiem of Souls: no-target AoE; souls travel 1300 but damage drops off.
         -- Only execute when close so the burst reliably kills.

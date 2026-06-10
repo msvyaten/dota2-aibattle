@@ -36,7 +36,13 @@ if Utils.BuggyHeroesDueToValveTooLazy[botName] then
 end
 
 -- AIBattle Schema v2: shared loader (dials + rules), with safe defaults/clamping.
-local Style = require(GetScriptDirectory()..'/FunLib/aibattle_style')
+local Style   = require(GetScriptDirectory()..'/FunLib/aibattle_style')
+local _healOk, _healResult = pcall(require, GetScriptDirectory()..'/FunLib/aibattle_heal')
+local AIBHeal = _healOk and _healResult or { Think = function() return false end }
+if not _healOk then
+    -- Emit once to all-chat so it shows in console.log during test matches
+    local _b = GetBot(); if _b then _b:ActionImmediate_Chat("AIB HEAL LOAD ERR: " .. tostring(_healResult), true) end
+end
 local function GetDials() return Style.Get().dials end
 local function GetRules() return Style.Get().rules end
 local function GetImp(name) return Style.Imp(name) end
@@ -220,15 +226,18 @@ function GetDesire()
 	PickOneAnnouncer()
 	AnnounceMessages()
 
-	-- AIBattle: pregame positioning — first 45s of game (before creep wave reaches mid ~0:35).
-	-- GetNearbyLaneCreeps is unreliable during invulnerable/PRE_GAME and can throw VScript errors,
-	-- so we use only DotaTime as the guard. At t=45 laning takes over unconditionally.
+	-- AIBattle: pregame positioning — covers PRE_GAME countdown (t0 < 0) AND early game (0–45s).
+	-- GetNearbyLaneCreeps throws VScript errors during PRE_GAME state, so we must return early
+	-- before reaching it. Old guard had t0 >= 0 which missed the negative pregame phase entirely,
+	-- causing GetDesire() to crash on GetNearbyLaneCreeps → return nil → Think() never called → AFK.
 	do
 		local t0 = DotaTime()
 		if GetGameMode() == 23 then t0 = t0 * 1.65 end
-		if t0 >= 0 and t0 < 45 then
+		if t0 < 45 then
 			local rules = GetRules()
-			if rules ~= nil and rules.pregame_behavior ~= nil then
+			-- t0 < 0: always return non-zero to avoid GetNearbyLaneCreeps crash below.
+			-- 0 ≤ t0 < 45: return only when pregame_behavior configured (same as before).
+			if t0 < 0 or (rules ~= nil and rules.pregame_behavior ~= nil) then
 				return 0.95
 			end
 		end
@@ -236,7 +245,10 @@ function GetDesire()
 
 	-- AIBattle: mark death here so respawn handling fires (Think() doesn't run while dead).
 	if bot:IsHero() and not bot:IsIllusion() and not bot:IsAlive() then bot.aib_wasDead = true end
-	if bot:IsInvulnerable() or not bot:IsHero() or not bot:IsAlive() or not string.find(botName, "hero") or bot:IsIllusion() then return BOT_MODE_DESIRE_NONE end
+	-- IsInvulnerable убрано: бот у фонтана invulnerable → DESIRE_NONE → Think() не вызывается →
+	-- AIB_ThinkPreGame() не срабатывает → бот никогда не уходит с фонтана (catch-22).
+	-- Invulnerability во время боя (BKB и т.п.) не мешает лейнинг-логике.
+	if not bot:IsHero() or not bot:IsAlive() or not string.find(botName, "hero") or bot:IsIllusion() then return BOT_MODE_DESIRE_NONE end
 	if bot:IsAlive() and bot.aib_wasDead then return BOT_MODE_DESIRE_ABSOLUTE end
 	local botLV = bot:GetLevel()
 	local currentTime = DotaTime()
@@ -324,7 +336,8 @@ function GetFurthestEnemyAttackRange(enemyList)
 end
 
 function GetBestLastHitCreep(hCreepList)
-	local dmgDelta = attackDamage * 0.7
+	-- dmgDelta=1.5: wider window so bot pursues creeps at ~150 HP (was 0.7 → missed 100-130 HP range).
+	local dmgDelta = attackDamage * 1.5
 
 	local moveToCreep = nil
 	for _, creep in pairs(hCreepList) do
@@ -388,11 +401,13 @@ function Think()
 			GetImp('tower_avoid') and 1 or 0, GetImp('ability_on_dials') and 1 or 0), true)
 	end
 
-	-- AIBattle: pre-game positioning — first 45s of game only.
+	-- AIBattle: pre-game positioning — fires while DotaTime < 45 (includes negative pre-game phase).
+	-- Removed t0 >= 0 lower bound: in practice lobby 1v1 DotaTime starts at ~-90s and scripts
+	-- run immediately, so the old guard prevented pregame movement for the entire pre-game countdown.
 	do
 		local t0 = DotaTime()
 		if GetGameMode() == 23 then t0 = t0 * 1.65 end
-		if t0 >= 0 and t0 < 45 then
+		if t0 < 45 then
 			AIB_ThinkPreGame(); return
 		end
 	end
@@ -412,186 +427,14 @@ function Think()
 		if twr ~= nil and AIB_TowerAggroDrop(twr) then return end
 	end
 
-	-- AIBattle improvement (opt-in defensive_heal, HERO-AGNOSTIC): at low HP recover IN LANE via
-	-- inventory items + pull back to safety, instead of plodding to fountain (which bleeds farm).
-	-- Threshold scales with retreat_caution (cautious heals earlier). No hero spells — items only.
-	-- Anti-thrash (fix for heal-item firing ~2x/s and starving farm): at most one heal attempt per
-	-- HEAL_CD seconds, and NEVER skip a securable in-range last-hit to heal (free CS > a wand tick).
-	-- Diag: 'heal-item' / 'heal-pullback'. NOTE: hitCreep/moveToCreep are computed once here and
-	-- reused by the last-hit/harass interleave below.
-	local HEAL_CD = 2.5
 	local hitCreep, moveToCreep = GetBestLastHitCreep(nEnemyCreeps)
 
-	-- ============================================================
-	-- AIBattle: хил-система (defensive_heal, opt-in).
-	-- Каждый предмет — своя логика и свой порог. Враги НЕ условие для хила.
-	-- Два CD-трека: HEAL_CD (HP-предметы) и MANA_CD (мана-предметы) — не мешают друг другу.
-	-- Порядок: tango (проактив 65%) → bottle (HP+mana) → mango (mana крит) →
-	--   wand/stick (instant mid) → ff/satanic (emergency) → clarity (mana safe) → flask (HP safe).
-	-- ============================================================
-	if GetImp('defensive_heal') then
-		local hp      = J.GetHP(bot)
-		local maxMana = bot:GetMaxMana()
-		local mana    = (maxMana > 0) and (bot:GetMana() / maxMana) or 1.0
-
-		local HEAL_CD   = 2.5
-		local MANA_CD   = 4.0
-		local healReady = (bot.aib_healLast == nil or DotaTime() - bot.aib_healLast >= HEAL_CD)
-		local manaReady = (bot.aib_manaLast == nil or DotaTime() - bot.aib_manaLast >= MANA_CD)
-
-		local function getItem(name)
-			local slot = bot:FindItemSlot(name)
-			if slot < 0 then return nil end
-			local it = bot:GetItemInSlot(slot)
-			return (it ~= nil and it:IsFullyCastable()) and it or nil
-		end
-
-		-- 1. TANGO: проактивный хил при HP < 65%. Отменяется только уроном ГЕРОЕВ — не крипов.
-		--    Можно есть в любой момент, даже в крипах (бафф не отменяется атаками крипов).
-		--    TANGO_CD = 10s на случай если Action_UseAbilityOnTree был выдан но отменён
-		--    следующим Think-тиком нашего же кода (move/attack). Без этого CD возможны
-		--    быстрые повторные попытки если дерево далеко и бот не дошёл до него.
-		local TANGO_CD = 10.0
-		local tangoReady = (bot.aib_tangoLast == nil or DotaTime() - bot.aib_tangoLast >= TANGO_CD)
-		if hp < 0.65 and tangoReady and not bot:HasModifier("modifier_tango_heal") then
-			-- item_tango_single = разделённая тангу (1 заряд), та же механика
-			local tango = getItem("item_tango") or getItem("item_tango_single")
-			if tango then
-				local trees = bot:GetNearbyTrees(700)
-				if trees and #trees > 0 then
-					bot.aib_tangoLast = DotaTime(); bot.aib_healLast = DotaTime(); AIB_Diag("tango-heal")
-					bot:Action_UseAbilityOnTree(tango, trees[1]); return
-				end
-			end
-		end
-
-		-- 2. BOTTLE: HP < 70% ИЛИ мана < 40%. Отменяется только уроном героев.
-		--    Восстанавливает и HP и ману — пить раньше, не ждать критического HP.
-		if (hp < 0.70 or mana < 0.40) and healReady then
-			if not bot:WasRecentlyDamagedByAnyHero(1.5) then
-				local bottle = getItem("item_bottle")
-				if bottle then
-					bot.aib_healLast = DotaTime(); AIB_Diag("bottle-heal")
-					bot:Action_UseAbility(bottle); return
-				end
-			end
-		end
-
-		-- 3. MANGO: крит мана < 20%, instant, без условий. Отдельный MANA_CD.
-		if mana < 0.20 and manaReady then
-			local mango = getItem("item_enchanted_mango")
-			if mango then
-				bot.aib_manaLast = DotaTime(); AIB_Diag("mana-mango")
-				bot:Action_UseAbilityOnEntity(mango, bot); return
-			end
-		end
-
-		-- 4. WAND: HP < 50%, минимум 10 зарядов (5 HP/заряд × 10 = 50 HP реального хила).
-		-- 5. STICK: HP < 50%, минимум 8 зарядов. Нет экстренного "any charges" режима —
-		--    при hp < 30% + 1-2 заряда = 5-10 HP хила каждые 2.5s → спам диагов без смысла.
-		if hp < 0.50 and healReady then
-			local wand = getItem("item_magic_wand")
-			if wand and wand:GetCurrentCharges() >= 10 then
-				bot.aib_healLast = DotaTime(); AIB_Diag("heal-item")
-				bot:Action_UseAbility(wand); return
-			end
-			local stick = getItem("item_magic_stick")
-			if stick and stick:GetCurrentCharges() >= 8 then
-				bot.aib_healLast = DotaTime(); AIB_Diag("heal-item")
-				bot:Action_UseAbility(stick); return
-			end
-		end
-
-		-- 6. FAERIE FIRE: экстренный instant HP < 45%, без условий.
-		-- 7. SATANIC: экстренный instant HP < 45%, без условий.
-		if hp < 0.45 and healReady then
-			local ff = getItem("item_faerie_fire")
-			if ff then
-				bot.aib_healLast = DotaTime(); AIB_Diag("heal-item")
-				bot:Action_UseAbility(ff); return
-			end
-			local satanic = getItem("item_satanic")
-			if satanic then
-				bot.aib_healLast = DotaTime(); AIB_Diag("heal-item")
-				bot:Action_UseAbility(satanic); return
-			end
-		end
-
-		-- 8. CLARITY: мана < 40%, только когда безопасно (канальный предмет, любой урон отменяет).
-		--    Отдельный MANA_CD — не конкурирует с HP-предметами.
-		if mana < 0.40 and manaReady then
-			local manaSafe = not (bot:WasRecentlyDamagedByAnyHero(0.5) or bot:WasRecentlyDamagedByCreep(0.5))
-			if manaSafe then
-				local clarity = getItem("item_clarity")
-				if clarity then
-					bot.aib_manaLast = DotaTime(); AIB_Diag("mana-clarity")
-					bot:Action_UseAbilityOnEntity(clarity, bot); return
-				end
-			end
-		end
-
-		-- 9. FLASK/SALVE: HP < 40%, только когда безопасно (любой урон отменяет).
-		if hp < 0.40 and healReady then
-			local hpSafe = not (bot:WasRecentlyDamagedByAnyHero(0.5) or bot:WasRecentlyDamagedByCreep(0.5))
-			if hpSafe then
-				local flask = getItem("item_flask")
-				if flask then
-					bot.aib_healLast = DotaTime(); AIB_Diag("heal-item")
-					bot:Action_UseAbilityOnEntity(flask, bot); return
-				end
-			end
-		end
-
-		-- heal-pullback: отдельный CD (не зависит от healReady).
-		-- Wand и pullback не блокируют друг друга — после wand бот всё равно может отойти.
-		-- Не применяется к regen_lane — у него своя логика отхода ниже.
-		local PULLBACK_CD = 3.0
-		if hp < 0.40
-			and Style.Get().rules.low_hp_behavior ~= "regen_lane"
-			and (bot.aib_pullbackLast == nil or DotaTime() - bot.aib_pullbackLast >= PULLBACK_CD)
-			and (bot:WasRecentlyDamagedByAnyHero(0.5) or bot:WasRecentlyDamagedByCreep(0.5)) then
-			local back = AIB_ForwardSurvivingTowerLoc()
-			if back then
-				bot.aib_pullbackLast = DotaTime(); AIB_Diag("heal-pullback")
-				bot:Action_MoveToLocation(back); return
-			end
-		end
-	end
-
-	-- AIBattle: regen_lane — when HP is critically low, step back and wait for regen in lane.
-	-- Safety gate: only fires when not being hit by hero (2.5s window) and enemy not chasing.
-	-- Prevents the bot from turning mid-fight. Move rate-limited 3s to avoid jitter.
-	-- Diag: 'regen-lane' (fired safely) / 'retreat-blocked' (wanted to but fight still active).
-	if Style.Get().rules.low_hp_behavior == "regen_lane"
-		and J.GetHP(bot) < (0.30 + 0.15 * (dials.retreat_caution or 0.5)) then
-		-- safe = no hero damage in last 2.5s AND no nearby live enemy within 900 units
-		local recentHeroDmg = bot:WasRecentlyDamagedByAnyHero(2.5)
-		local nearEnemy = bot:GetNearbyHeroes(900, true, BOT_MODE_NONE)
-		local enemyChasing = nearEnemy and #nearEnemy > 0 and nearEnemy[1]:IsAlive()
-		if not recentHeroDmg and not enemyChasing then
-			-- safe: rate-limit the actual move to avoid jitter
-			if bot.aib_regenLast == nil or DotaTime() - bot.aib_regenLast >= 3.0 then
-				local cen = AIB_EnemyCreepCentroid(nEnemyCreeps)
-				local back = cen and J.VectorAway(bot:GetLocation(), cen, 400) or AIB_ForwardSurvivingTowerLoc()
-				if back then
-					bot.aib_regenLast = DotaTime()
-					Style.Diag(bot, "regen-lane")
-					bot:Action_MoveToLocation(back)
-					return
-				end
-			end
-		else
-			-- wanted to regen but fight is still active — count for monitoring
-			Style.DiagRL(bot, "retreat-blocked", 3.0)
-		end
-	end
-
-	-- Last-hit / harass interleave (AIBattle): secure an IN-RANGE last-hit first (free CS,
-	-- no repositioning), THEN harass with probability harass_desire, and only WALK to a
-	-- creep when not harassing. Lets the bot farm AND harass instead of one killing the other.
+	-- Last-hit / harass interleave (AIBattle): secure an IN-RANGE last-hit BEFORE heal check —
+	-- attack is instant and safe even at low HP; heal can fire next tick if still needed.
+	-- needMove simplified: only move when TRULY out of attack range (was: 0.8× caused bot to
+	-- walk toward a creep already in range, wasting the last-hit window).
 	local csAllowed = J.IsValid(hitCreep) and (J.GetPosition(bot) <= 2 or not J.IsThereNonSelfCoreNearby(700))
-	local needMove = csAllowed and (GetUnitToUnitDistance(bot, hitCreep) > botAttackRange
-		or (moveToCreep and GetUnitToUnitDistance(bot, hitCreep) > botAttackRange * 0.8))
+	local needMove = csAllowed and (GetUnitToUnitDistance(bot, hitCreep) > botAttackRange)
 
 	-- 1) grab a securable last-hit that's already in range
 	if csAllowed and not needMove then
@@ -599,6 +442,8 @@ function Think()
 		bot:Action_AttackUnit(hitCreep, true)
 		return
 	end
+
+	if AIBHeal.Think(bot, dials, nEnemyCreeps) then return end
 
 	-- AIBattle: kill-priority — враг HP < execute_threshold → всегда атаковать, без броска кубика.
 	-- Перехватывает до harass (не тратить тик на крипа когда враг убиваем).
@@ -614,12 +459,34 @@ function Think()
 		end
 	end
 
+	-- Kite melee creeps: ranged hero (attack range > 300) must not stand in melee attack range.
+	-- Preventive — fires BEFORE walk-to-creep/deny so the bot doesn't wander into the wave.
+	-- After kill-priority so an about-to-die enemy still gets finished first.
+	-- CD 1.5s prevents jitter; "kite-creep" diag counts triggers.
+	if botAttackRange > 300 then
+		for _, c in pairs(nEnemyCreeps) do
+			if J.IsValid(c) and GetUnitToUnitDistance(bot, c) < 150 then
+				if bot.aib_kiteLast == nil or DotaTime() - bot.aib_kiteLast >= 1.5 then
+					bot.aib_kiteLast = DotaTime()
+					local cen = AIB_EnemyCreepCentroid(nEnemyCreeps)
+					local back = cen and J.VectorAway(bot:GetLocation(), cen, 400) or AIB_ForwardSurvivingTowerLoc()
+					if back then AIB_Diag("kite-creep"); bot:Action_MoveToLocation(back); return end
+				end
+				break
+			end
+		end
+	end
+
 	-- 2) harass the hero instead of walking off to a creep
+	-- HP-disadvantage gate: skip harass when enemy has 25%+ HP lead (unfavorable trade).
 	if math.random() > (dials.farm_focus or 0.5) then
 		local atkHero = bot:GetNearbyHeroes(botAttackRange + 50, true, BOT_MODE_NONE)
-		if atkHero and #atkHero > 0 and atkHero[1]:IsAlive() and math.random() < (dials.harass_desire or 0.5) then
-			bot:Action_AttackUnit(atkHero[1], true)
-			return
+		if atkHero and #atkHero > 0 and atkHero[1]:IsAlive() then
+			local hpDisadv = J.GetHP(atkHero[1]) - J.GetHP(bot) > 0.25
+			if not hpDisadv and math.random() < (dials.harass_desire or 0.5) then
+				bot:Action_AttackUnit(atkHero[1], true)
+				return
+			end
 		end
 	end
 
@@ -648,11 +515,14 @@ function Think()
 	-- Covers all targeting types (unit, point, directional, no_target) via HeroAbilityConfig in
 	-- aibattle_style.lua. Heroes not in the config return false and fall through silently.
 	-- Execute is checked first (higher priority: kill a fleeing enemy over general harassment).
+	-- AbilityHarass shares the same HP-disadvantage gate as auto-attack harass above.
 	do
 		local nearEnemies = bot:GetNearbyHeroes(1000, true, BOT_MODE_NONE)
 		if nearEnemies and #nearEnemies > 0 and nearEnemies[1]:IsAlive() then
-			if Style.AbilityExecute(bot, nearEnemies[1]) then return end
-			if Style.AbilityHarass(bot, nearEnemies[1]) then return end
+			local abilEnemy = nearEnemies[1]
+			if Style.AbilityExecute(bot, abilEnemy) then return end
+			local hpDisadvAbil = J.GetHP(abilEnemy) - J.GetHP(bot) > 0.25
+			if not hpDisadvAbil and Style.AbilityHarass(bot, abilEnemy) then return end
 		end
 	end
 
