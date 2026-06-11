@@ -797,4 +797,50 @@ function X.ConsiderCompleteItem()
     return 0
 end
 
+--------------------------------------------------------------------
+-- Think: handle tp_fountain / walk_fountain retreat actions.
+-- regen_lane / fight_back never reach here (GetDesire returns NONE).
+--------------------------------------------------------------------
+local fRetreatMoveLast = -math.huge
+function Think()
+    if J.CanNotUseAction(bot) then return end
+
+    local lhb = AIBStyle.Get().rules.low_hp_behavior
+
+    if lhb == "tp_fountain" then
+        local tpSlot = bot:FindItemSlot("item_tpscroll")
+        if tpSlot >= 0 then
+            local tp = bot:GetItemInSlot(tpSlot)
+            if tp and tp:IsFullyCastable() then
+                AIBStyle.Diag(bot, "retreat-tp")
+                bot:Action_UseAbility(tp)
+                return
+            end
+        end
+        -- No scroll: walk to fountain
+        if DotaTime() - fRetreatMoveLast >= 4.0 then
+            fRetreatMoveLast = DotaTime()
+            AIBStyle.Diag(bot, "retreat-walk")
+            bot:Action_MoveToLocation(J.GetTeamFountain())
+        end
+        return
+    end
+
+    if lhb == "walk_fountain" then
+        if DotaTime() - fRetreatMoveLast >= 4.0 then
+            fRetreatMoveLast = DotaTime()
+            bot:Action_MoveToLocation(J.GetTeamFountain())
+        end
+        return
+    end
+
+    -- run_to_tower / default: move toward own forward tower
+    if DotaTime() - fRetreatMoveLast >= 3.0 then
+        fRetreatMoveLast = DotaTime()
+        local lane = bot:GetAssignedLane()
+        local back = GetLaneFrontLocation(bot:GetTeam(), (lane ~= LANE_NONE and lane or LANE_MID), -1500)
+        if back then bot:Action_MoveToLocation(back) end
+    end
+end
+
 return X

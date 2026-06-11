@@ -44,12 +44,12 @@ Customize.Ban = {
 5. There are sample team picks in Appendix section below. 
 6. Check Appendix to ensure you DO NOT pick more than 1 "weak" heroes in a team for your game experience.
 --]]
--- 5v5 smoke test (Phase 1): mirrored balanced comp (same on both teams = clean team-level A/B),
--- ordered pos1->5. All outside the weak/buggy lists; Zeus/Warlock/Lion give clear fight signal.
-Customize.Radiant_Heros = { "npc_dota_hero_phantom_assassin", "npc_dota_hero_zuus", "npc_dota_hero_axe", "npc_dota_hero_lion", "npc_dota_hero_warlock" }
+-- SF 1v1: execute_threshold test v3 SWAP (2026-06-09)
+-- Radiant exec=0.60 | Dire exec=0.00 (контроль)
+Customize.Radiant_Heros = { "npc_dota_hero_nevermore", "npc_dota_hero_nevermore", "npc_dota_hero_nevermore", "npc_dota_hero_nevermore", "npc_dota_hero_nevermore" }
 
 -- Same notes as above for picking heroes but for the Dire side.
-Customize.Dire_Heros = { "npc_dota_hero_phantom_assassin", "npc_dota_hero_zuus", "npc_dota_hero_axe", "npc_dota_hero_lion", "npc_dota_hero_warlock" }
+Customize.Dire_Heros = { "npc_dota_hero_nevermore", "npc_dota_hero_nevermore", "npc_dota_hero_nevermore", "npc_dota_hero_nevermore", "npc_dota_hero_nevermore" }
 
 --[[
 1. To allow bots to randomly pick heroes that can be the same/repeated. 
@@ -83,8 +83,8 @@ Customize.Trash_Talk_Level = 1
 
 -- To set the names for the Radiant bots. Don't need to provide a value for all 5 bots, missing names will have a Random value.
 Customize.Radiant_Names = {
-    'ChatGPT',
     '1',
+    'ChatGPT',
     '2',
     '3',
     '4',
@@ -92,8 +92,8 @@ Customize.Radiant_Names = {
 
 -- Same notes as above for setting the bots' names but for the Dire side.
 Customize.Dire_Names = {
-    'Gemini',
     '6',
+    'Gemini',
     '7',
     '8',
     '9',

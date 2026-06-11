@@ -1,7 +1,7 @@
 # HANDOFF — AIBattle × Dota 2
 
 > Единственная точка входа. Обновлять ЕГО, новых доков не плодить.
-> Последнее обновление: 2026-06-10 (phase-13: pregame ✅, heal-pullback ✅, raze1-фикс).
+> Последнее обновление: 2026-06-11 (phase-15: 1v1 mid fixes — roam-late, rune pre-game, harass-before-kite, item_build).
 > Полная история сессий — `docs/history/HANDOFF-full-2026-06-09.md`.
 > По-русски. Доказательство = цифра из лога или stат-дампа. «На глаз» не считается.
 
@@ -78,27 +78,30 @@
 
 ---
 
-## 5. Текущий тест (LIVE, phase-13 — НЕ КОММИТИТЬ)
+## 5. Текущий тест (LIVE, phase-15 — НЕ КОММИТИТЬ)
 
-Оба бота одинаковы, единственное отличие — `ability_on_dials`:
+LLM-сгенерированные aggressive конфиги (ChatGPT vs Gemini), одинаковые диалы:
 
-| Сторона | `ability_on_dials` | `ability_aggro` | `low_hp_behavior` | `pregame_behavior` | item_build |
-|---|---|---|---|---|---|
-| **Radiant** | `true` | 0.70 | `regen_lane` | `aggressive_mid` | Valve |
-| **Dire** | — | 0.70 | `regen_lane` | `aggressive_mid` | Valve |
+| Сторона | LLM | harass | abil | rune | execute | low_hp |
+|---|---|---|---|---|---|---|
+| **Radiant** | Gemini | 0.85 | 0.90 | 0.70 | 0.50 | regen_lane |
+| **Dire** | ChatGPT | 0.85 | 0.90 | 0.70 | 0.45 | regen_lane |
 
-⚠️ **Тест нечистый**: AbilityHarass вызывается у обоих (ability_aggro=0.70 для обоих). Нужен фикс в AbilityHarass — проверять `improvements.ability_on_dials` перед запуском нашей системы.
+Оба с `item_build = pos_2 SF` (bottle) и `improvements = {defensive_heal=true}`.
 
-**Что подтверждено (10.06.2026, phase-13):**
-- `pregame_behavior` ✅ — pg-called D#267 R#273, позиционирование до крипов работает
-- `heal-pullback` ✅ — R#1 в матче 8846034123 (отдельный CD, не зависит от wand)
-- `regen-lane` ✅ — R#3/D#1 стабильно в матчах
-- `raze1` убран из harass ✅ — ability-harass-move D#12 → R#1
+**Что подтверждено (11.06.2026, phase-15, матч 8847801209):**
+- Оба бота с bottle ✅ — item_build fix работает
+- rune-grab D#5 R#7 ✅ — рунный контроль активен
+- Нет roam-late ✅ — боты остаются на мид-лейне
+- Реальный бой 5 мин, Dire 2/0 ✅
 
-**Обнаружено (10.06.2026):**
-- Side advantage: Radiant выигрывает чаще, но не детерминированно (Dire победил 8846062648)
-- ability-harass-move R#22 в паритетном матче — бот гонится за врагом для raze3, переэкстендится
-- ability_on_dials не изолирован (см. §3 и §6)
+**Исправлено в phase-15 (11.06.2026):**
+- `aibattle_heal.lua` regenLane: stop-at-tower (был walk-to-fountain через J.VectorAway×400)
+- `mode_laning_generic.lua`: harass перенесён до kite, immediate action
+- `mode_retreat_generic.lua`: добавлен Think() для tp/walk_fountain
+- `mode_roam_generic.lua`: roam-late отключён для GAMEMODE_1V1MID
+- `mode_rune_generic.lua`: pre-game движение + ABSOLUTE-у-фонтана + bounty рун — всё отключено для 1v1
+- `tools/match_stats.py`: winner mapping исправлен (0=Radiant, 1=Dire)
 
 ---
 
@@ -106,13 +109,13 @@
 
 | # | Задача | Приоритет |
 |---|---|---|
-| **1** | **ability_on_dials изоляция** — AbilityHarass не проверяет флаг, срабатывает у всех с ability_aggro>0. Добавить проверку `GetImp('ability_on_dials')` в начало AbilityHarass | **NEXT** |
-| **2** | **ability-harass-move избыточен** — R#22 при паритетном матче, бот гонится за raze3. Варианты: уменьшить радиус поиска 1000→900, или не двигаться если ability_aggro < 0.80 | **NEXT** |
-| 3 | **Respawn TP** — подтвердить `respawn-no-tp`/`respawn-tp-cd` (бот шёл пешком имея свиток) | MEDIUM |
-| 4 | **Tower damage breakdown** — hero vs creep vs auto в match_stats.py | LOW |
-| 5 | **5v5 полный матч** Pusher vs Ganker | MEDIUM |
-| 6 | **LLM item_build — стилевые сборки** — см. §11 | MEDIUM |
-| 7 | `item_tango_single` — другое имя у разделённого танго, проверить | LOW |
+| **1** | **Pre-game позиционирование** — вернуть pre-game блок для 1v1 с destination = forwardness-точка между T1 (сейчас tower-lerp в лейнинге работает, но медленно) | **NEXT** |
+| **2** | **[AIB-role] диаг** — проверить pos assignment ботов в следующем матче (LIVE only, в DEV нет) | **NEXT** |
+| 3 | **Deny** — боты перестали денаить крипов, причина неизвестна | MEDIUM |
+| 4 | **Wisdom рун в 1v1** — после 7 мин могут уводить ботов с мида (аналогично roam-late) | MEDIUM |
+| 5 | **ability_on_dials изоляция** — AbilityHarass не проверяет флаг | MEDIUM |
+| 6 | **5v5 полный матч** Pusher vs Ganker | MEDIUM |
+| 7 | **LLM item_build — стилевые сборки** — см. §11 | LOW |
 
 ---
 
@@ -154,13 +157,15 @@
 ## 8. Интерпретация match_stats.py
 
 **Win condition — порядок проверки:**
-1. У кого-то `deaths=2` → матч закончился по убийствам. `kills` в кредите может быть < 2 если последний хит взяла башня/крип — это нормально.
-2. Никто не имеет `deaths=2` → смотреть `towerDmg`: у кого ~4500 — тот снёс T1 врага → победа по башне.
-3. Никто не умер 2 раза, towerDmg низкий → победа по **100 last hits**.
+1. Счёт 2-0 / 2-1 / 1-2 / 0-2 (`deaths=2` у кого-то) → **победа по убийствам**. Убийства могут быть от башни/крипа, не обязательно от вражеского бота.
+2. Счёт 0-0 / 0-1 / 1-0 / 1-1 И высокий `towerDmg` → **победа по башне** (T1 снесена).
+3. Счёт 0-0 / 0-1 / 1-0 / 1-1 И низкий `towerDmg` → **победа по 100 last hits**.
+
+**towerDmg при победе по убийствам:** если счёт 2-x / x-2 И towerDmg ≈ 4500 — игра автоматически убила башню чтобы завершить матч. Этот урон не реальный — **игнорировать** при определении причины победы.
 
 - `towerDmg` = урон нанесённый ботом по вражеским башням (не полученный)
 - `winner_team` в парсере = `Radiant` или `Dire` (было сырое 0/2, исправлено)
-- В 1v1 SF `DotaTime()` в bot-скриптах **никогда не бывает < 0** — скрипты стартуют уже при DotaTime ≥ 0
+- В 1v1 SF `DotaTime()` **бывает < 0** во время обратного отсчёта (~-90s). Боты активны у фонтана, invulnerable → rune mode возвращал ABSOLUTE (пофикшено в phase-15)
 
 ---
 

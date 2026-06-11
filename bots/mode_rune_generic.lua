@@ -79,7 +79,8 @@ function GetRuneDesireRaw()
 	nAllyHeroes = bot:GetNearbyHeroes(1600, false, BOT_MODE_NONE)
 	nEnemyHeroes = bot:GetNearbyHeroes(1600, true, BOT_MODE_NONE)
 
-	if bot:IsInvulnerable() and botHP > 0.9 and bot:DistanceFromFountain() < 500 then
+	if bot:IsInvulnerable() and botHP > 0.9 and bot:DistanceFromFountain() < 500
+	and GetGameMode() ~= GAMEMODE_1V1MID and GetGameMode() ~= GAMEMODE_MO then
 		return BOT_MODE_DESIRE_ABSOLUTE
 	end
 
@@ -158,8 +159,10 @@ function GetRuneDesireRaw()
 
 		rune.location, rune.distance = X.GetBestRune()
 
-		-- Pre-game: move toward rune with moderate desire
-		if DotaTime() < 0 and not bot:WasRecentlyDamagedByAnyHero(10.0) then
+		-- Pre-game: move toward rune with moderate desire.
+		-- Skip in 1v1 mid: bots should walk straight to lane, not detour to bounty runes.
+		if DotaTime() < 0 and not bot:WasRecentlyDamagedByAnyHero(10.0)
+		and GetGameMode() ~= GAMEMODE_1V1MID and GetGameMode() ~= GAMEMODE_MO then
 			return BOT_MODE_DESIRE_MODERATE
 		end
 
@@ -313,8 +316,8 @@ function Think()
 		end
 	end
 
-	-- Pre-game movement
-	if DotaTime() < 0 then
+	-- Pre-game movement (skip in 1v1 mid — no bounty/powerup runes before 2:00, bots should go straight to lane)
+	if DotaTime() < 0 and GetGameMode() ~= GAMEMODE_1V1MID and GetGameMode() ~= GAMEMODE_MO then
 		if J.IsModeTurbo() and DotaTime() < -50 then
 			return
 		end
@@ -503,7 +506,10 @@ function X.GetBestRune()
 		and not IsHumanClaimingRune(rune)
 		and not X.IsMissing(rune)
 		then
-			if (rune == RUNE_BOUNTY_1 or rune == RUNE_BOUNTY_2)
+			local is1v1 = GetGameMode() == GAMEMODE_1V1MID or GetGameMode() == GAMEMODE_MO
+			if (rune == RUNE_BOUNTY_1 or rune == RUNE_BOUNTY_2) and is1v1 then
+				-- skip: bounty runes pull bots off mid in 1v1
+			elseif (rune == RUNE_BOUNTY_1 or rune == RUNE_BOUNTY_2)
 			or (J.IsCore(bot) or not J.IsThereCoreNearby(1200))
 			then
 				local dist = GetUnitToLocationDistance(bot, vRuneLocation)

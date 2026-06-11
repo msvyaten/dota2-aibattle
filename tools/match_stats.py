@@ -118,7 +118,7 @@ def parse(path):
                 d[s] = max(d.get(s, 0), int(m.group(1))) if m else d.get(s, 0) + 1
     dur = next((m.group(1) for l in lines for m in [re.search(r"duration = ([\d.]+)", l)] if m), "?")
     _win_raw = next((l.split("Winning team =", 1)[1].strip() for l in lines if "Winning team =" in l), "?")
-    win = {"0": "Radiant", "2": "Dire"}.get(_win_raw, _win_raw)
+    win = {"0": "Radiant", "1": "Dire", "2": "Radiant", "3": "Dire"}.get(_win_raw, _win_raw)
     items = [l.split("Items:", 1)[1].strip() for l in lines if "Items:" in l and "Player 0" in l]
 
     players, cur, dealt = [], {}, []

@@ -18,11 +18,6 @@ local DEFAULT_DIALS = {
     -- Finish/ultimate aggression: cast Assassinate on a fleeing enemy below this HP
     -- fraction. 0 = never (conservative OHA default), 0.45 = finish enemies under 45%.
     execute_threshold = 0.0,
-    -- Lane activity: probability to hit any nearby creep between last-hit windows.
-    -- 1.0 = always hitting something (aggressive push); 0.0 = only last-hit (passive freeze).
-    -- Independent of harass_desire (hero) and farm_focus (farm vs harass split).
-    -- Default 0.7: bot stays active on lane, walks to creep if none in range.
-    lane_activity     = 0.7,
     -- Phase 2 (team dials): each scales the matching OHA team-mode desire via ScaleDesire,
     -- same proven pattern as rune_control/retreat_caution. 0.5 = baseline (x1), so a config
     -- that leaves them at 0.5 behaves exactly like pre-Phase-2.

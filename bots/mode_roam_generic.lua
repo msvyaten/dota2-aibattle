@@ -1756,7 +1756,9 @@ function ConsiderGeneralRoamingInConditions()
 	-- roam-combat fallback + AntiIdleGlobal.
 	-- ScaleDesire(0.4, gank_desire=0.95) ≈ 0.78 → wins over idle laning, yields to push/defend.
 	-- Carry (pos1) gets lower desire 0.2 — still roams but push/farm modes beat it easily.
-	if not J.IsInLaningPhase() and J.GetHP(bot) > 0.5 then
+	-- Disabled in 1v1 mid: no roaming after laning phase, bots stay on mid.
+	if not J.IsInLaningPhase() and J.GetHP(bot) > 0.5
+	and GetGameMode() ~= GAMEMODE_1V1MID and GetGameMode() ~= GAMEMODE_MO then
 		local pos = J.GetPosition(bot)
 		if pos >= 2 then
 			AIBStyle.Diag(bot, "roam-late")

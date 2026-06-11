@@ -160,14 +160,15 @@ local function regenLane(bot, dials, nEnemyCreeps)
 	-- recovers more conservatively after a fight before re-engaging.
 	if J.GetHP(bot) >= 0.40 + 0.15 * (dials.retreat_caution or 0.5) then return false end
 
-	local noHeroDmg    = not bot:WasRecentlyDamagedByAnyHero(2.5)
 	local nearEnemy    = bot:GetNearbyHeroes(900, true, BOT_MODE_NONE)
 	local enemyChasing = nearEnemy and #nearEnemy > 0 and nearEnemy[1]:IsAlive()
 
-	if noHeroDmg and not enemyChasing then
+	if not enemyChasing then
+		local back = forwardTowerLoc(bot)
+		if back and GetUnitToLocationDistance(bot, back) < 350 then
+			return false  -- already at tower, stand still and regen naturally
+		end
 		if bot.aib_regenLast == nil or DotaTime() - bot.aib_regenLast >= 3.0 then
-			local cen  = enemyCreepCentroid(nEnemyCreeps)
-			local back = cen and J.VectorAway(bot:GetLocation(), cen, 400) or forwardTowerLoc(bot)
 			if back then
 				bot.aib_regenLast = DotaTime()
 				Style.Diag(bot, "regen-lane")
