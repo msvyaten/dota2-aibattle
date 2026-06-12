@@ -1,7 +1,7 @@
 # HANDOFF — AIBattle × Dota 2
 
 > Единственная точка входа. Обновлять ЕГО, новых доков не плодить.
-> Последнее обновление: 2026-06-12 (phase-16: role pos_2 fix, rune laning guard, pre-game movement, LH/мин; A/B execute_threshold 0.45>0.50 4:0).
+> Последнее обновление: 2026-06-12 (phase-17: improvements→rules refactor (healing_style/ability_usage), build_style 3-стиля, вода-руна distance cap).
 > Полная история сессий — `docs/history/HANDOFF-full-2026-06-09.md`.
 > По-русски. Доказательство = цифра из лога или stат-дампа. «На глаз» не считается.
 
@@ -50,9 +50,10 @@
 
 **LLM-пайплайн:** промпт → ChatGPT → конфиг → измеримое поведение ✅ (8838539380: Pusher towerDmg 7926 vs Ganker 159).
 
-**Improvements (все LIVE, флаги OFF по умолчанию):**
-- `defensive_heal` ✅ — heal-item/tango/bottle/regen работают; `heal-pullback` ✅ отдельный CD (aib_pullbackLast, 3.0s), не блокируется wand-кулдауном (8846034123: heal-pullback R#1)
-- `ability_on_dials` ✅ частично — SF raze D#62 (vs OHA D#0 при aggro=0.00). ⚠️ AbilityHarass не проверяет флаг — срабатывает для любого бота с ability_aggro>0. Нужен фикс изоляции.
+**Rules (перенесены из improvements):**
+- `healing_style=active` ✅ — heal-item/tango/bottle/regen работают; `heal-pullback` ✅ (8846034123). Изолировано: Radiant bottle-heal R#14 / tango-heal R#2, Dire — ничего (8848634192)
+- `ability_usage=aggressive` ✅ — SF raze изолирован на Dire: ability-harass D#10, у Radiant — 0 (8848634192). AbilityHarass теперь проверяет `ability_usage == "aggressive"` как первый gate.
+- `build_style` ✅ — brawler/spellcaster сборки выбираются из 3-стильного item_build (8848634192: R→brawler, D→spellcaster)
 - `anti_afk`, `tower_avoid` — не валидированы
 
 **pregame_behavior** ✅ (10.06.2026) — pg-called D#267 R#273 стабильно; pregame-aggressive_mid/safe_tower в диагах. Бот идёт к правильной позиции до крипов.
@@ -73,50 +74,47 @@
 | `buyback_policy` | never / **default** | — | ✅ |
 | `low_hp_behavior` | **tp_fountain** / run_to_tower / fight_back / regen_lane / walk_fountain | `tp-fountain` / `regen-lane` / `retreat-blocked` / `recovery-*` | ✅ |
 | `aegis_policy` | **core** / any | — | ✅ |
+| `healing_style` | **passive** / active | `bottle-heal` / `tango-heal` / `heal-item` | ✅ (был `improvements.defensive_heal`) |
+| `ability_usage` | **basic** / aggressive | `ability-harass` | ✅ (был `improvements.ability_on_dials`; теперь правильно изолирует AbilityHarass) |
 | `creep_wave_priority` | **last_hit_only** / push / freeze | — | 📋 PLANNED |
 | `ability_timing` | **on_cooldown** / save_for_execute / harass_only | — | 📋 PLANNED |
 | `trading_policy` | **trade_back** / survive / all_in | — | 📋 PLANNED |
 | `fountain_trip` | **never** / once_per_death / free | — | 📋 PLANNED |
 
-**Improvements** — opt-in булевы флаги в `improvements = { key = true }`. Off по умолчанию.
+**Improvements** — только технические флаги (не LLM-стиль): `anti_afk`, `tower_avoid`. Off по умолчанию.
+`defensive_heal` и `ability_on_dials` → перенесены в rules. Старые конфиги с `improvements = {}` работают через backward compat в buildStyle().
 
 ---
 
-## 5. Текущий тест (LIVE, phase-16 — НЕ КОММИТИТЬ)
+## 5. Текущий тест (LIVE, phase-17 — НЕ КОММИТИТЬ)
 
-LLM-сгенерированные aggressive конфиги (ChatGPT vs Gemini):
+Тест build_style: brawler (Radiant) vs spellcaster (Dire). Оба SF, execute=0.45, pregame=safe_tower.
 
-| Сторона | LLM | harass | abil | rune | execute | low_hp |
-|---|---|---|---|---|---|---|
-| **Radiant** | ChatGPT | 0.85 | 0.90 | 0.70 | 0.45 | regen_lane |
-| **Dire** | Gemini | 0.85 | 0.90 | 0.70 | 0.50 | regen_lane |
-
-Оба с `item_build = pos_2 SF` (bottle) и `improvements = {defensive_heal=true}`.
-
-**A/B результат execute_threshold (12.06.2026, 4 матча):**
-
-| Match | Radiant | Dire | Победитель |
+| Сторона | build_style | healing_style | ability_usage |
 |---|---|---|---|
-| 8848473484 | Gemini 0.50 | ChatGPT 0.45 | **Dire** |
-| 8848499114 | Gemini 0.50 | ChatGPT 0.45 | **Dire** |
-| 8848509609 | ChatGPT 0.45 | Gemini 0.50 | **Radiant** |
-| 8848526118 | ChatGPT 0.45 | Gemini 0.50 | **Radiant** |
+| **Radiant** | brawler | active | basic |
+| **Dire** | spellcaster | passive | aggressive |
 
-**Вывод: execute_threshold=0.45 побеждает 4/4.** Бот коммитит убийство при HP<45% vs 50% → первый фраг → сноубол. CS-преимущество роли не имело значения (матчи 3-4 Radiant имел role pos_1 но всё равно выиграл).
+**Валидация phase-17 (8848634192, 12.06.2026):**
 
-**Исправлено в phase-15 (11.06.2026):**
-- `aibattle_heal.lua` regenLane: stop-at-tower (был walk-to-fountain через J.VectorAway×400)
-- `mode_laning_generic.lua`: harass перенесён до kite, immediate action
-- `mode_retreat_generic.lua`: добавлен Think() для tp/walk_fountain
-- `mode_roam_generic.lua`: roam-late отключён для GAMEMODE_1V1MID
-- `mode_rune_generic.lua`: pre-game движение + ABSOLUTE-у-фонтана + bounty рун — всё отключено для 1v1
-- `tools/match_stats.py`: winner mapping исправлен (0=Radiant, 1=Dire)
+| Проверка | Результат |
+|---|---|
+| Radiant покупает brawler (tango/branches/bottle/bracer) | ✅ |
+| Dire покупает spellcaster (slippers/null×2/faerie_fire/bottle/phase_boots) | ✅ |
+| healing_style=active изолирован на Radiant | ✅ bottle-heal R#14, tango-heal R#2; Dire — 0 |
+| ability_usage=aggressive изолирован на Dire | ✅ ability-harass D#10; Radiant — 0 |
+| Баг: recovery-rune-bottle уходил к вражескому святилищу (7min) | 🐛 → FIXED: 2000 unit cap |
 
-**Исправлено в phase-16 (12.06.2026, не закоммичено):**
+**Исправлено в phase-16 (12.06.2026):**
 - `FunLib/aba_role.lua`: GAMEMODE_1V1MID → оба бота pos_2; диагностика через ActionImmediate_Chat
 - `mode_rune_generic.lua`: guard — во время лейнинга руна только если bottle + (HP<65% или MP<40%)
 - `mode_laning_generic.lua`: pre-game блок для 1v1 — движение к мид-точке через tower-lerp
 - `tools/match_stats.py`: добавлены LH/мин и DN/мин в вывод
+
+**Исправлено в phase-17 (12.06.2026):**
+- `FunLib/aibattle_style.lua`: `improvements.defensive_heal` → `rules.healing_style`; `improvements.ability_on_dials` → `rules.ability_usage`; backward compat; `M.Imp()` shim; `build_style` 3-стиля; AbilityHarass gate на `ability_usage == "aggressive"`
+- `FunLib/aibattle_heal.lua`: прямая проверка `rules.healing_style`; water rune distance cap 2000 (fix святилища)
+- `mode_laning_generic.lua`: MSG2 анонс `heal=` + `abil=`
 
 ---
 
@@ -125,10 +123,9 @@ LLM-сгенерированные aggressive конфиги (ChatGPT vs Gemini)
 | # | Задача | Приоритет |
 |---|---|---|
 | **1** | **Новые правила (пара)** — реализовать `creep_wave_priority` + `ability_timing` первыми (простые, измеримые) | **TOP-1** |
-| **2** | **Item build вариативность** — стилевые сборки + ситуативный порядок (§11 + §12) | **TOP-2** |
-| 3 | **ability_on_dials изоляция** — AbilityHarass не проверяет флаг, все боты с ability_aggro>0 харасят способностями | MEDIUM |
-| 4 | **5v5 полный матч** Pusher vs Ganker | MEDIUM |
-| 5 | **Больше героев** — пилот на Axe (defensive/aggressive очевидны по роли) | LOW |
+| **2** | **Item build вариативность** — Layer 1 (build_style) ✅ DONE; Layer 2 — ситуативный порядок (§12) | **TOP-2** |
+| 3 | **5v5 полный матч** Pusher vs Ganker | MEDIUM |
+| 4 | **Больше героев** — пилот на Axe (defensive/aggressive очевидны по роли) | LOW |
 
 ---
 

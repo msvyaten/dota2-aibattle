@@ -11,6 +11,20 @@
 
 ---
 
+## 2026-06-12 — phase-17, build_style валидация
+
+**Конфиг Radiant:** build_style=brawler, healing_style=active, ability_usage=basic, execute=0.45, pregame=safe_tower
+**Конфиг Dire:** build_style=spellcaster, healing_style=passive, ability_usage=aggressive, execute=0.45, pregame=safe_tower
+**cfg в логах:** нет MSG1/MSG2 (матч до deploy phase-17 анонса; конфиг вручную)
+
+| MatchID | Dur | Победитель | R K/D LH/м | D K/D LH/м | Заметки |
+|---|---|---|---|---|---|
+| 8848634192 | 9.2м | **Dire** | 0/2 1.3 | 2/0 2.8 | brawler/spellcaster ✅; heal R-only ✅; ability-harass D#10 ✅; баг: recovery-rune-bottle→святилище (FIXED) |
+
+**Итог:** item build система работает. Радиант покупал brawler (tango, branches, bottle, bracer), Dire — spellcaster (slippers, null×2, faerie_fire, bottle, phase_boots). Healing и ability isolation подтверждены.
+
+---
+
 ## 2026-06-12 — phase-16, A/B execute_threshold
 
 **Общий конфиг (оба бота):** harass=0.85 farm=0.20 fwd=0.80 abil=0.90 rune=0.70 retreat=0.35
@@ -79,3 +93,7 @@ rules: dive=finish_only low_hp=regen_lane · improvements={defensive_heal}
 | role pos_2 для 1v1 | 8848473484 | ✅ role-pos R#1 D#2 (pos_2 у обоих) |
 | rune laning guard | 8848473484+ | ✅ боты не ходят за руной без нужды |
 | execute_threshold=0.45 > 0.50 | 8848473484–8848526118 | ✅ 4:0 |
+| healing_style изолирован (active vs passive) | 8848634192 | ✅ bottle-heal/tango-heal только R; D — ничего |
+| ability_usage изолирован (aggressive vs basic) | 8848634192 | ✅ ability-harass D#10; R — 0 |
+| build_style (brawler vs spellcaster item_build) | 8848634192 | ✅ оба купили правильные сборки |
+| water rune distance cap (fix: бот к святилищу) | 8848634192 | 🐛 FIXED: ≤2000 units в aibattle_heal.lua |

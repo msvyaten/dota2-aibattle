@@ -219,14 +219,19 @@ local function recovery(bot, dials)
 				if bItem:GetCurrentCharges() > 0 and bItem:IsFullyCastable() then
 					Style.Diag(bot, "recovery-bottle"); bot:Action_UseAbility(bItem); return true
 				elseif bItem:GetCurrentCharges() == 0 then
-					-- Empty: grab a water rune if available (refills 2 charges)
+					-- Empty: grab a nearby water rune to refill (2 charges).
+					-- 2000-unit cap: newer patches spawn water runes near shrines (far side of map),
+					-- without the cap the bot would walk into enemy territory.
 					for _, runeId in ipairs({ RUNE_POWERUP_1, RUNE_POWERUP_2 }) do
 						if GetRuneStatus(runeId) == RUNE_STATUS_AVAILABLE and GetRuneType(runeId) == RUNE_WATER then
-							if bot.aib_recMoveLast == nil or DotaTime() - bot.aib_recMoveLast >= 5.0 then
-								bot.aib_recMoveLast = DotaTime(); Style.Diag(bot, "recovery-rune-bottle")
-								bot:Action_MoveToLocation(GetRuneSpawnLocation(runeId))
+							local runeLoc = GetRuneSpawnLocation(runeId)
+							if runeLoc and GetUnitToLocationDistance(bot, runeLoc) <= 2000 then
+								if bot.aib_recMoveLast == nil or DotaTime() - bot.aib_recMoveLast >= 5.0 then
+									bot.aib_recMoveLast = DotaTime(); Style.Diag(bot, "recovery-rune-bottle")
+									bot:Action_MoveToLocation(runeLoc)
+								end
+								return true
 							end
-							return true
 						end
 					end
 					-- No rune: fall through to threshold check (fountain only if HP critically low)
