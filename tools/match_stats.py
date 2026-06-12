@@ -154,7 +154,8 @@ def main():
         if dials:
             print_dials(dials)
         dur_min = float(dur) / 60 if dur != "?" else None
-        print(f"  duration={dur}s ({dur_min:.1f}min)  winner_team={win}")
+        dur_str = f"{dur_min:.1f}min" if dur_min else "?min"
+        print(f"  duration={dur}s ({dur_str})  winner_team={win}")
         for key in sorted(diag):
             sides = " ".join(f"{s}#{n}" for s, n in sorted(diag[key].items()))
             print("  diag:", key, sides)

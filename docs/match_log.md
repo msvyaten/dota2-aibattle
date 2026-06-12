@@ -1,0 +1,70 @@
+# Match Log — AIBattle × Dota 2
+
+Формат матчей: Solo Mid 1v1, SF vs SF, читы ON, хост-зритель.
+Данные из `python tools/match_stats.py <id>`. Слот1 = Radiant, слот129 = Dire.
+История до 09.06.2026 — `docs/history/HANDOFF-full-2026-06-09.md`.
+
+---
+
+## 2026-06-12 — phase-16, A/B execute_threshold
+
+**Конфиги:** harass=0.85 abil=0.90 fwd=0.80 rune=0.70 farm=0.20 retreat=0.35 · improvements={defensive_heal}
+**Переменная:** execute_threshold — ChatGPT=**0.45** vs Gemini=**0.50**
+
+| MatchID | Dur | Победитель | R (LLM, exec) | D (LLM, exec) | R K/D LH/м | D K/D LH/м | Заметки |
+|---|---|---|---|---|---|---|---|
+| 8848473484 | 6.5м | **Dire** | Gemini 0.50 | ChatGPT 0.45 | 0/2 0.8 | 2/0 3.2 | rune-grab D#1; role-pos R#1(!) D#2 ✓ |
+| 8848499114 | 8.9м | **Dire** | Gemini 0.50 | ChatGPT 0.45 | 0/2 2.7 | 2/0 2.0 | execute-approach R#2; rune-grab D#1 |
+| 8848509609 | 8.1м | **Radiant** | ChatGPT 0.45 | Gemini 0.50 | 2/0 3.0 | 0/2 3.1 | recovery-flask D#21 |
+| 8848526118 | 4.5м | **Radiant** | ChatGPT 0.45 | Gemini 0.50 | 2/0 2.4 | 0/2 3.1 | быстрый фраг |
+
+**Итог: ChatGPT (execute=0.45) побеждает 4:0.** Коммитит убийство при HP<45% → первый фраг → сноубол.
+
+---
+
+## 2026-06-11, вечер — phase-15 валидация
+
+| MatchID | Время | Dur | Победитель | R K/D LH/м | D K/D LH/м | Заметки |
+|---|---|---|---|---|---|---|
+| 8847716072 | 17:42 | 6.9м | **Radiant** | 2/1 2.5 | 1/2 2.9 | первый матч с defensive_heal + rune-grab; bottle-heal D#3 |
+| 8847756115 | 18:12 | **21.7м** | **Radiant** | 1/1 2.7 | 1/1 3.0 | roam-late D#1337 R#1251 — баг роуминга ещё не пофикшен; rune-grab D#5 R#7 |
+| 8847801209 | 18:39 | 4.9м | **Dire** | 0/2 1.8 | 2/0 2.7 | ✅ **phase-15 валидация** — roam-late убран, bottle у обоих, rune-grab D#5 R#7 |
+
+Конфиг: harass=0.85 abil=0.90 rune=0.70 execute=0.50/0.45 · improvements={defensive_heal}.
+
+---
+
+## 2026-06-11, утро–день — отладка (role, pre-game, rune guard)
+
+Конфиги менялись в течение сессии. `cfg:` в логах не сохранился (announce-формат иной).
+Матчи без duration (8847216639, 8847241097, 8847292950, 8847303687, 8847467079) — аборты/краши, пропущены.
+
+| MatchID | Время | Dur | Победитель | R K/D LH/м | D K/D LH/м | Что отлаживали |
+|---|---|---|---|---|---|---|
+| 8847222624 | 09:33 | 11.2м | **Dire** | 1/2 3.7† | 2/1 4.2† | pg-called D#798 R#798; формат 5v5(!) — см. ниже |
+| 8847285564 | 10:58 | 5.8м | **Dire** | 0/2 3.5 | 2/0 3.3 | pre-game движение, до role fix |
+| 8847326984 | 12:20 | 6.7м | **Radiant** | 2/0 3.3 | 0/2 2.4 | kill-priority R#54 (execute тест) |
+| 8847358477 | 12:39 | 4.3м | **Radiant** | 2/1 1.6 | 1/2 2.1 | быстрый матч |
+| 8847375816 | 12:50 | 5.0м | **Dire** | 1/2 1.8 | 2/1 0.8 | kill-priority D#19 R#96 |
+| 8847385506 | 13:08 | 10.6м | **Radiant** | 2/1 3.1 | 0/2 2.5 | tp-fountain D#15; execute D#1 |
+| 8847402555 | 13:23 | 9.4м | **Radiant** | 1/1 2.9 | 1/2 3.7 | execute D#10 execute-approach D#18 (execute тест) |
+| 8847434228 | 13:56 | 10.5м | **Radiant** | 2/1 2.7 | 0/2 3.2 | execute-approach R#11; regen-lane R#40 |
+| 8847451410 | 14:09 | 9.0м | **Dire** | 1/2 3.1 | 2/1 2.9 | execute D#6; tp-fountain R#30 |
+| 8847467510 | 14:26 | 10.1м | **Dire** | 1/2 1.9 | 2/1 2.4 | execute D#11; regen-lane D#34 |
+| 8847486118 | 14:38 | 9.2м | **Dire** | 1/2 2.8 | 0/1 2.6 | execute R#5; regen-lane R#24 |
+
+† 8847222624 — 10 слотов в логе (5v5 загрузка), реально сыграли только slot0 и slot128. LH из слотов 0/128.
+
+---
+
+## Сводка по фиксам (что валидировалось)
+
+| Фикс | Матч | Результат |
+|---|---|---|
+| roam-late отключён для 1v1 | 8847801209 | ✅ нет roam-late в диагах |
+| item_build SF pos_2 (bottle) | 8847801209 | ✅ bottle-heal D#3, recovery-bottle у обоих |
+| pre-game движение (pg-called) | 8847222624 | ✅ pg-called D#798 R#798 |
+| defensive_heal | 8847716072 | ✅ bottle-heal, heal-item активны |
+| role pos_2 для 1v1 | 8848473484 | ✅ role-pos R#1 D#2 (pos_2 у обоих) |
+| rune laning guard | 8848473484+ | ✅ боты не ходят за руной без нужды |
+| execute_threshold=0.45 > 0.50 | 8848473484–8848526118 | ✅ 4:0 |
