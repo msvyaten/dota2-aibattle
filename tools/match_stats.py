@@ -66,10 +66,12 @@ def decode_items(id_str):
     return " ".join(parts)
 
 
-DIAL_KEYS = ["harass", "farm", "lane", "exec", "retreat", "fwd", "abil", "rune", "gank", "push", "defend", "ward", "roshan"]
+DIAL_KEYS = ["harass", "farm", "exec", "retreat", "fwd", "abil", "rune", "gank", "push", "defend", "ward", "roshan", "dive", "heal"]
 
 def extract_dials(cfg_lines):
-    """Extract dial values from cfg announce lines, keyed by side R/D."""
+    """Extract dial values from cfg announce lines, keyed by side R/D.
+    Merges MSG1 (harass=) and MSG2 (defend=) for the same side.
+    Value regex captures both floats (0.85) and strings (finish_only)."""
     dials = {}
     for line in cfg_lines:
         m = re.search(r"AIB\[([RD])\]", line)
@@ -77,8 +79,8 @@ def extract_dials(cfg_lines):
             side = m.group(1)
             if side not in dials:
                 dials[side] = {}
-                for k, v in re.findall(r"(\w[\w-]*)=([\d.]+)", line):
-                    dials[side][k] = v
+            for k, v in re.findall(r"(\w[\w-]*)=([\w.]+)", line):
+                dials[side][k] = v
     return dials
 
 def print_dials(dials):
@@ -97,12 +99,15 @@ def print_dials(dials):
 def parse(path):
     lines = open(path, encoding="utf-8", errors="ignore").read().splitlines()
     text = "\n".join(lines)
-    cfg = [l.split("localize: ", 1)[1] for l in lines if " harass=" in l]
+    # Pick up both MSG1 (harass=) and MSG2 (defend=) config announce lines.
+    cfg = [l.split("localize: ", 1)[1] for l in lines
+           if ("AIB[" in l) and (" harass=" in l or " defend=" in l)]
     # Diag: 'AIB[R] heal-item #5'. Aggregate per key -> {side: count}; new lines carry a
     # cumulative '#N' (keep the max), legacy lines (no '#') are counted by occurrence.
     diag = {}
+    _cfg_prefixes = ("harass=", "defend=")  # cfg announce start markers
     for side, body in re.findall(r"'AIB(\[[RD]\])?\s+([^']*)'", text):
-        if body.startswith("harass="):  # cfg announce always starts with harass=
+        if any(body.startswith(p) for p in _cfg_prefixes):  # cfg line, not a diag
             continue
         s = side.strip("[]") or "?"
         pairs = re.findall(r"([\w-]+)=(\d+)", body)  # combined format 'anti-afk=15 heal-item=7'

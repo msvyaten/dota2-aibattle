@@ -312,19 +312,25 @@ function Think()
 	local dials = GetDials()
 
 	-- AIBattle: announce the loaded config once in chat (visible in console.log).
+	-- Split into two messages: Dota silently drops chat messages > ~160 chars.
 	if not bot.aib_announced then
 		bot.aib_announced = true
-		-- Name announce: visible to all spectators (false = public chat), fixes client render quirk
-		-- where bot nickname sometimes doesn't display in the observer UI.
+		-- Name announce: public chat (false), fixes spectator UI nickname quirk.
 		bot:ActionImmediate_Chat("▶ " .. bot:GetName() .. " [" .. AIB_SIDE .. "]", false)
-		bot:ActionImmediate_Chat(string.format("AIB[%s] harass=%.2f farm=%.2f lane=%.2f fwd=%.2f abil=%.2f rune=%.2f retreat=%.2f exec=%.2f gank=%.2f push=%.2f defend=%.2f ward=%.2f roshan=%.2f dive=%s heal=%d afk=%d tower=%d abildial=%d",
+		-- MSG1: combat dials (~105 chars)
+		bot:ActionImmediate_Chat(string.format(
+			"AIB[%s] harass=%.2f farm=%.2f fwd=%.2f abil=%.2f rune=%.2f retreat=%.2f exec=%.2f gank=%.2f push=%.2f",
 			AIB_SIDE,
-			dials.harass_desire, dials.farm_focus, dials.lane_activity, dials.forwardness, dials.ability_aggro,
+			dials.harass_desire, dials.farm_focus, dials.forwardness, dials.ability_aggro,
 			dials.rune_control, dials.retreat_caution, dials.execute_threshold,
-			dials.gank_desire, dials.push_desire, dials.defend_desire, dials.ward_desire,
-			dials.roshan_desire, tostring(Style.Get().rules.dive_policy) .. " smoke=" .. tostring(Style.Get().rules.smoke_usage) .. " bb=" .. tostring(Style.Get().rules.buyback_policy),
-			GetImp('defensive_heal') and 1 or 0, GetImp('anti_afk') and 1 or 0,
-			GetImp('tower_avoid') and 1 or 0, GetImp('ability_on_dials') and 1 or 0), true)
+			dials.gank_desire, dials.push_desire), true)
+		-- MSG2: secondary dials + rules (~80 chars)
+		bot:ActionImmediate_Chat(string.format(
+			"AIB[%s] defend=%.2f ward=%.2f roshan=%.2f dive=%s heal=%d",
+			AIB_SIDE,
+			dials.defend_desire, dials.ward_desire, dials.roshan_desire,
+			tostring(Style.Get().rules.dive_policy or "default"),
+			GetImp('defensive_heal') and 1 or 0), true)
 	end
 
 	-- Pre-game 1v1: walk toward mid before the horn. Explicit block so the bot does not

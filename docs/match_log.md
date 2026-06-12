@@ -4,12 +4,19 @@
 Данные из `python tools/match_stats.py <id>`. Слот1 = Radiant, слот129 = Dire.
 История до 09.06.2026 — `docs/history/HANDOFF-full-2026-06-09.md`.
 
+**Примечание по конфигу:** cfg-анонс (`AIB[R] harass=...`) был слишком длинным (~220 символов)
+и молча дропался Dota-чатом (лимит ~160 символов). Исправлено в phase-16 (12.06.2026):
+разбито на 2 сообщения. Матчи до fix имеют конфиг вручную из playstyle-файлов.
+Начиная со следующего матча `match_stats.py` покажет `cfg:` и `dial:` таблицу автоматически.
+
 ---
 
 ## 2026-06-12 — phase-16, A/B execute_threshold
 
-**Конфиги:** harass=0.85 abil=0.90 fwd=0.80 rune=0.70 farm=0.20 retreat=0.35 · improvements={defensive_heal}
+**Общий конфиг (оба бота):** harass=0.85 farm=0.20 fwd=0.80 abil=0.90 rune=0.70 retreat=0.35
+gank=0.50 push=0.50 defend=0.50 ward=0.50 roshan=0.50 · rules: dive=finish_only bb=default · improvements={defensive_heal}
 **Переменная:** execute_threshold — ChatGPT=**0.45** vs Gemini=**0.50**
+**cfg в логах:** нет (cfg-announce сломан до 12.06 — слишком длинное сообщение)
 
 | MatchID | Dur | Победитель | R (LLM, exec) | D (LLM, exec) | R K/D LH/м | D K/D LH/м | Заметки |
 |---|---|---|---|---|---|---|---|
@@ -24,19 +31,23 @@
 
 ## 2026-06-11, вечер — phase-15 валидация
 
+**Конфиг:** harass=0.85 farm=0.20 fwd=0.80 abil=0.90 rune=0.70 retreat=0.35 · R=exec0.50(Gemini) D=exec0.45(ChatGPT)
+rules: dive=finish_only low_hp=regen_lane · improvements={defensive_heal}
+**cfg в логах:** нет (cfg-announce сломан)
+
 | MatchID | Время | Dur | Победитель | R K/D LH/м | D K/D LH/м | Заметки |
 |---|---|---|---|---|---|---|
 | 8847716072 | 17:42 | 6.9м | **Radiant** | 2/1 2.5 | 1/2 2.9 | первый матч с defensive_heal + rune-grab; bottle-heal D#3 |
 | 8847756115 | 18:12 | **21.7м** | **Radiant** | 1/1 2.7 | 1/1 3.0 | roam-late D#1337 R#1251 — баг роуминга ещё не пофикшен; rune-grab D#5 R#7 |
 | 8847801209 | 18:39 | 4.9м | **Dire** | 0/2 1.8 | 2/0 2.7 | ✅ **phase-15 валидация** — roam-late убран, bottle у обоих, rune-grab D#5 R#7 |
 
-Конфиг: harass=0.85 abil=0.90 rune=0.70 execute=0.50/0.45 · improvements={defensive_heal}.
-
 ---
 
 ## 2026-06-11, утро–день — отладка (role, pre-game, rune guard)
 
-Конфиги менялись в течение сессии. `cfg:` в логах не сохранился (announce-формат иной).
+**Конфиги:** менялись в течение сессии. Из HANDOFF — base: harass=0.85 abil=0.90 fwd=0.80 rune=0.70 farm=0.20
+Точные exec и retreat варьировались; bottle у обоих (phase-15 item_build) присутствует в items.
+**cfg в логах:** нет (cfg-announce сломан)
 Матчи без duration (8847216639, 8847241097, 8847292950, 8847303687, 8847467079) — аборты/краши, пропущены.
 
 | MatchID | Время | Dur | Победитель | R K/D LH/м | D K/D LH/м | Что отлаживали |
