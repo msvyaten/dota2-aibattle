@@ -327,6 +327,18 @@ function Think()
 			GetImp('tower_avoid') and 1 or 0, GetImp('ability_on_dials') and 1 or 0), true)
 	end
 
+	-- Pre-game 1v1: walk toward mid before the horn. Explicit block so the bot does not
+	-- stand idle at the fountain when laning Think() has nothing to do (no creeps yet).
+	if DotaTime() < 0 and GetGameMode() == GAMEMODE_1V1MID then
+		local ownT1 = GetTower(GetTeam(), TOWER_MID_1)
+		local enmT1 = GetTower(GetOpposingTeam(), TOWER_MID_1)
+		if ownT1 ~= nil and enmT1 ~= nil then
+			local fwd = dials.forwardness or 0.5
+			local a, b = ownT1:GetLocation(), enmT1:GetLocation()
+			bot:Action_MoveToLocation(Vector(a.x + (b.x-a.x)*fwd, a.y + (b.y-a.y)*fwd, a.z))
+		end
+		return
+	end
 
 	-- AIBattle rule (dive_policy): don't sit in enemy tower range unless the rule + situation allow
 	-- it. Fixes bots farming/standing under the tower and burning for no reason. Laning-only —

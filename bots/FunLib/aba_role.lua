@@ -362,6 +362,19 @@ ____exports.GetRoleFromId = function(bot)
 end
 ____exports.HeroPositions = {}
 ____exports.GetPosition = function(bot)
+    -- Solo Mid mode guarantees 1v1: both bots are mid (pos_2).
+    -- GetTeamPlayers() returns 1 slot for Radiant vs 5 for Dire causing wrong role.
+    if GetGameMode() == GAMEMODE_1V1MID or GetGameMode() == GAMEMODE_MO then
+        if bot.assignedRole == nil then
+            bot.assignedRole = 2
+            local side = (GetTeam() == Team.Radiant) and "R" or "D"
+            local players = GetTeamPlayers(GetTeam())
+            bot:ActionImmediate_Chat("AIB[" .. side .. "] role-pid=" .. tostring(bot:GetPlayerID())
+                .. " role-n=" .. tostring(#players)
+                .. " role-pos=2", true)
+        end
+        return 2
+    end
     local role = bot.assignedRole
     if role == nil and (GetGameMode() == GameMode.Cm or GetGameMode() == GameMode.ReverseCm) then
         local nH, _ = NumHumanBotPlayersInTeam(bot:GetTeam())

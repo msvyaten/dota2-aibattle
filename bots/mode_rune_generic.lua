@@ -172,6 +172,15 @@ function GetRuneDesireRaw()
 
 			local vRuneLocation = GetRuneSpawnLocation(rune.location)
 
+			-- Don't abandon creep wave for a rune unless bottle needs emergency refill.
+			-- Exception: bBottle + (low HP or low MP) => worth leaving lane to refill/heal.
+			if J.IsInLaningPhase() then
+				local needsBottleRegen = bBottle and (botHP < 0.65 or botMP < 0.4)
+				if not needsBottleRegen then
+					return BOT_MODE_DESIRE_NONE
+				end
+			end
+
 			-- Defer to human players nearby (local addition)
 			if rune.distance < 1200 then
 				for _, ally in pairs(nAllyHeroes) do

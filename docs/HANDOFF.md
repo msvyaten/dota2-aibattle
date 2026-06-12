@@ -1,7 +1,7 @@
 # HANDOFF — AIBattle × Dota 2
 
 > Единственная точка входа. Обновлять ЕГО, новых доков не плодить.
-> Последнее обновление: 2026-06-11 (phase-15: 1v1 mid fixes — roam-late, rune pre-game, harass-before-kite, item_build).
+> Последнее обновление: 2026-06-12 (phase-16: role pos_2 fix, rune laning guard, pre-game movement, LH/мин; A/B execute_threshold 0.45>0.50 4:0).
 > Полная история сессий — `docs/history/HANDOFF-full-2026-06-09.md`.
 > По-русски. Доказательство = цифра из лога или stат-дампа. «На глаз» не считается.
 
@@ -65,35 +65,44 @@
 
 ## 4. Rules-система (краткая)
 
-| Rule | Значения (дефолт жирным) | Счётчик |
-|---|---|---|
-| `respawn_behavior` | walk_back / tp_to_lane / **tp_to_tower** | teleports_used |
-| `dive_policy` | never / **finish_only** / always | `no-dive` |
-| `smoke_usage` | **for_ganks** / never | `smoke` |
-| `buyback_policy` | never / **default** | — |
-| `low_hp_behavior` | **tp_fountain** / run_to_tower / fight_back / regen_lane / walk_fountain | `tp-fountain` / `regen-lane` / `retreat-blocked` / `recovery-*` |
-| `aegis_policy` | **core** / any | — |
+| Rule | Значения (дефолт жирным) | Счётчик | Статус |
+|---|---|---|---|
+| `respawn_behavior` | walk_back / tp_to_lane / **tp_to_tower** | teleports_used | ✅ |
+| `dive_policy` | never / **finish_only** / always | `no-dive` | ✅ |
+| `smoke_usage` | **for_ganks** / never | `smoke` | ✅ |
+| `buyback_policy` | never / **default** | — | ✅ |
+| `low_hp_behavior` | **tp_fountain** / run_to_tower / fight_back / regen_lane / walk_fountain | `tp-fountain` / `regen-lane` / `retreat-blocked` / `recovery-*` | ✅ |
+| `aegis_policy` | **core** / any | — | ✅ |
+| `creep_wave_priority` | **last_hit_only** / push / freeze | — | 📋 PLANNED |
+| `ability_timing` | **on_cooldown** / save_for_execute / harass_only | — | 📋 PLANNED |
+| `trading_policy` | **trade_back** / survive / all_in | — | 📋 PLANNED |
+| `fountain_trip` | **never** / once_per_death / free | — | 📋 PLANNED |
 
 **Improvements** — opt-in булевы флаги в `improvements = { key = true }`. Off по умолчанию.
 
 ---
 
-## 5. Текущий тест (LIVE, phase-15 — НЕ КОММИТИТЬ)
+## 5. Текущий тест (LIVE, phase-16 — НЕ КОММИТИТЬ)
 
-LLM-сгенерированные aggressive конфиги (ChatGPT vs Gemini), одинаковые диалы:
+LLM-сгенерированные aggressive конфиги (ChatGPT vs Gemini):
 
 | Сторона | LLM | harass | abil | rune | execute | low_hp |
 |---|---|---|---|---|---|---|
-| **Radiant** | Gemini | 0.85 | 0.90 | 0.70 | 0.50 | regen_lane |
-| **Dire** | ChatGPT | 0.85 | 0.90 | 0.70 | 0.45 | regen_lane |
+| **Radiant** | ChatGPT | 0.85 | 0.90 | 0.70 | 0.45 | regen_lane |
+| **Dire** | Gemini | 0.85 | 0.90 | 0.70 | 0.50 | regen_lane |
 
 Оба с `item_build = pos_2 SF` (bottle) и `improvements = {defensive_heal=true}`.
 
-**Что подтверждено (11.06.2026, phase-15, матч 8847801209):**
-- Оба бота с bottle ✅ — item_build fix работает
-- rune-grab D#5 R#7 ✅ — рунный контроль активен
-- Нет roam-late ✅ — боты остаются на мид-лейне
-- Реальный бой 5 мин, Dire 2/0 ✅
+**A/B результат execute_threshold (12.06.2026, 4 матча):**
+
+| Match | Radiant | Dire | Победитель |
+|---|---|---|---|
+| 8848473484 | Gemini 0.50 | ChatGPT 0.45 | **Dire** |
+| 8848499114 | Gemini 0.50 | ChatGPT 0.45 | **Dire** |
+| 8848509609 | ChatGPT 0.45 | Gemini 0.50 | **Radiant** |
+| 8848526118 | ChatGPT 0.45 | Gemini 0.50 | **Radiant** |
+
+**Вывод: execute_threshold=0.45 побеждает 4/4.** Бот коммитит убийство при HP<45% vs 50% → первый фраг → сноубол. CS-преимущество роли не имело значения (матчи 3-4 Radiant имел role pos_1 но всё равно выиграл).
 
 **Исправлено в phase-15 (11.06.2026):**
 - `aibattle_heal.lua` regenLane: stop-at-tower (был walk-to-fountain через J.VectorAway×400)
@@ -103,19 +112,23 @@ LLM-сгенерированные aggressive конфиги (ChatGPT vs Gemini)
 - `mode_rune_generic.lua`: pre-game движение + ABSOLUTE-у-фонтана + bounty рун — всё отключено для 1v1
 - `tools/match_stats.py`: winner mapping исправлен (0=Radiant, 1=Dire)
 
+**Исправлено в phase-16 (12.06.2026, не закоммичено):**
+- `FunLib/aba_role.lua`: GAMEMODE_1V1MID → оба бота pos_2; диагностика через ActionImmediate_Chat
+- `mode_rune_generic.lua`: guard — во время лейнинга руна только если bottle + (HP<65% или MP<40%)
+- `mode_laning_generic.lua`: pre-game блок для 1v1 — движение к мид-точке через tower-lerp
+- `tools/match_stats.py`: добавлены LH/мин и DN/мин в вывод
+
 ---
 
 ## 6. Открытые задачи
 
 | # | Задача | Приоритет |
 |---|---|---|
-| **1** | **Pre-game позиционирование** — вернуть pre-game блок для 1v1 с destination = forwardness-точка между T1 (сейчас tower-lerp в лейнинге работает, но медленно) | **NEXT** |
-| **2** | **[AIB-role] диаг** — проверить pos assignment ботов в следующем матче (LIVE only, в DEV нет) | **NEXT** |
-| 3 | **Deny** — боты перестали денаить крипов, причина неизвестна | MEDIUM |
-| 4 | **Wisdom рун в 1v1** — после 7 мин могут уводить ботов с мида (аналогично roam-late) | MEDIUM |
-| 5 | **ability_on_dials изоляция** — AbilityHarass не проверяет флаг | MEDIUM |
-| 6 | **5v5 полный матч** Pusher vs Ganker | MEDIUM |
-| 7 | **LLM item_build — стилевые сборки** — см. §11 | LOW |
+| **1** | **Новые правила (пара)** — реализовать `creep_wave_priority` + `ability_timing` первыми (простые, измеримые) | **TOP-1** |
+| **2** | **Item build вариативность** — стилевые сборки + ситуативный порядок (§11 + §12) | **TOP-2** |
+| 3 | **ability_on_dials изоляция** — AbilityHarass не проверяет флаг, все боты с ability_aggro>0 харасят способностями | MEDIUM |
+| 4 | **5v5 полный матч** Pusher vs Ganker | MEDIUM |
+| 5 | **Больше героев** — пилот на Axe (defensive/aggressive очевидны по роли) | LOW |
 
 ---
 
@@ -200,44 +213,77 @@ Merge в `main` — осознанно, когда фаза с пруфами з
 
 ---
 
-## 11. План: стилевые item build'ы (LLM-driven)
+## 11. План: новые rules (TOP-1)
 
-**Концепция:** для каждого героя — 3 готовых файла сборок. LLM выбирает файл по стилю, затем второй слой — порядок предметов внутри файла.
+### Что реализовывать первым
+
+**Пара:** `creep_wave_priority` + `ability_timing` — оба без зависимостей, легко верифицируются диагами.
+
+### `creep_wave_priority`
+
+Управляет тем, как бот работает с волной крипов.
+
+| Значение | Поведение |
+|---|---|
+| `last_hit_only` (дефолт) | Атаковать крипа только когда HP ≤ dmgDelta. Минимальный пуш. |
+| `push` | Атаковать крипов свободно, форсировать пуш волны. |
+| `freeze` | Не атаковать крипов вообще если волна под своей башней — держать морозку. |
+
+Реализация: в `mode_laning_generic.lua` в разделе last-hit/harass — перед атакой крипа проверяем rule. Диага: `cw-push` / `cw-freeze-skip`.
+
+### `ability_timing`
+
+Управляет когда использовать способности в бою.
+
+| Значение | Поведение |
+|---|---|
+| `on_cooldown` (дефолт) | Кастовать при первой возможности (текущее поведение) |
+| `save_for_execute` | Не харасить способностями — копить для добива (HP < execute_threshold) |
+| `harass_only` | Кастовать только для харасса, никогда в execute-фазе |
+
+Реализация: в `AbilityHarass` (aibattle_style.lua:563) добавить проверку rule перед кастом; аналогично в execute-блоке laning.
+
+### Остальные planned rules (после тестирования первых двух)
+
+- `trading_policy`: `trade_back` / `survive` / `all_in` — ответ на получаемый урон
+- `fountain_trip`: `never` / `once_per_death` / `free` — разрешить ли ходить на фонтан
+
+---
+
+## 12. План: стилевые item build'ы (TOP-2)
+
+**Концепция:** для каждого героя — 3 готовых файла сборок. LLM выбирает файл по стилю, затем второй слой — ситуативный порядок внутри файла.
 
 ### Слой 1 — выбор сборки
 
 Три файла на героя в `Customize/builds/<hero>/`:
-- `aggressive.lua` — первый приоритет: мобильность + бурст (blink, echo sabre, BKB)
-- `defensive.lua` — первый приоритет: выживаемость (vanguard, hood, crimson guard)
+- `aggressive.lua` — мобильность + бурст (blink, echo sabre, BKB)
+- `defensive.lua` — выживаемость (vanguard, hood, crimson guard)
 - `neutral.lua` — сбалансированный (phase boots + общий mid-game)
 
-LLM выбирает файл целиком по диалам:
-- `forwardness > 0.65` или `execute_threshold < 0.35` → aggressive
-- `retreat_caution > 0.65` или `harass_desire < 0.35` → defensive
-- иначе → neutral
-
-Поле в конфиге: `item_build = "aggressive"` (строка вместо массива) — загрузчик резолвит в файл.
+LLM выбирает строкой: `item_build = "aggressive"` — загрузчик резолвит в файл.
+Или авто-выбор по диалам: `forwardness > 0.65` → aggressive; `retreat_caution > 0.65` → defensive.
 
 ### Слой 2 — порядок внутри сборки
 
-Каждый файл содержит предметы с тегами приоритета:
 ```lua
--- builds/axe/aggressive.lua
+-- builds/nevermore/aggressive.lua
 return {
-    core    = { "item_blink", "item_echo_sabre", "item_black_king_bar" },
-    luxury  = { "item_heart", "item_assault", "item_satanic" },
-    situational = { "item_pipe", "item_lotus_orb" },
+    core       = { "item_bottle", "item_power_treads", "item_black_king_bar" },
+    luxury     = { "item_bloodthorn", "item_greater_crit" },
+    situational = { "item_orchid", "item_hurricane_pike" },
 }
 ```
 
-LLM (или правила по диалам) выставляет `item_priority = "core_first"` / `"luxury_early"` — загрузчик собирает итоговый flat-список в нужном порядке.
+Порядок покупки: core → luxury. Situational — подключается по runtime-условиям:
+- если проигрываем (deaths > kills + 1) → defensive situational вперёд
+- если enemy имеет magic burst → BKB ускоряется
 
 ### Источники сборок
 
-- **Steam Workshop** `filetype=12` — Dota 2 hero builds в JSON, парсим через `tools/parse_steam_build.py`
-- **Dotabuff/Stratz API** — статистически сильные сборки по winrate/rank
-- Pipeline: внешний JSON → `tools/convert_build.py` → наш `builds/<hero>/<style>.lua`
+- **Steam Workshop** `filetype=12` — Dota 2 hero builds в JSON, `tools/parse_steam_build.py`
+- Pipeline: внешний JSON → `tools/convert_build.py` → `builds/<hero>/<style>.lua`
 
 ### Статус
 
-Не начато. Предпосылки: закрыть §6 задачи 1-2 (ability_on_dials, harass-move), протестировать recovery. Первый кандидат для пилота — Axe (defensive/aggressive очевидны по роли).
+Не начато. Первый кандидат для пилота — SF (3 стиля уже имеет смысл: aggressive/neutral/defensive).

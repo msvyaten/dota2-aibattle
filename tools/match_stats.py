@@ -153,16 +153,21 @@ def main():
         dials = extract_dials(cfg)
         if dials:
             print_dials(dials)
-        print(f"  duration={dur}  winner_team={win}")
+        dur_min = float(dur) / 60 if dur != "?" else None
+        print(f"  duration={dur}s ({dur_min:.1f}min)  winner_team={win}")
         for key in sorted(diag):
             sides = " ".join(f"{s}#{n}" for s, n in sorted(diag[key].items()))
             print("  diag:", key, sides)
         for idx, p in enumerate(players):
             dd = dealt[idx * 3:idx * 3 + 3]
             it = items[idx] if idx < len(items) else "?"
+            lh = p.get('last_hits')
+            dn = p.get('denies')
+            lh_min = f"{int(lh)/dur_min:.1f}/m" if lh and dur_min else "?"
+            dn_min = f"{int(dn)/dur_min:.1f}/m" if dn and dur_min else "?"
             print(f"  slot{p.get('slot')}: "
                   f"K/D {p.get('kills')}/{p.get('deaths')} "
-                  f"LH {p.get('last_hits')} DN {p.get('denies')} lvl {p.get('level')} | "
+                  f"LH {lh}({lh_min}) DN {dn}({dn_min}) lvl {p.get('level')} | "
                   f"heroDmg {p.get('hero_damage')} towerDmg {p.get('tower_damage')} "
                   f"tp {p.get('teleports_used')} | dealt ph/mg/pu {dd} | "
                   f"items {decode_items(it)}")
