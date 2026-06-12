@@ -324,13 +324,15 @@ function Think()
 			dials.harass_desire, dials.farm_focus, dials.forwardness, dials.ability_aggro,
 			dials.rune_control, dials.retreat_caution, dials.execute_threshold,
 			dials.gank_desire, dials.push_desire), true)
-		-- MSG2: secondary dials + rules (~80 chars)
+		-- MSG2: secondary dials + rules (~90 chars)
+		local r = Style.Get().rules
 		bot:ActionImmediate_Chat(string.format(
-			"AIB[%s] defend=%.2f ward=%.2f roshan=%.2f dive=%s heal=%d",
+			"AIB[%s] defend=%.2f ward=%.2f roshan=%.2f dive=%s heal=%s abil=%s",
 			AIB_SIDE,
 			dials.defend_desire, dials.ward_desire, dials.roshan_desire,
-			tostring(Style.Get().rules.dive_policy or "default"),
-			GetImp('defensive_heal') and 1 or 0), true)
+			tostring(r.dive_policy or "finish_only"),
+			tostring(r.healing_style or "passive"),
+			tostring(r.ability_usage or "basic")), true)
 	end
 
 	-- Pre-game 1v1: walk toward mid before the horn. Explicit block so the bot does not

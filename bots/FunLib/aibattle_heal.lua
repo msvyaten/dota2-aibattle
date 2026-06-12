@@ -37,7 +37,7 @@ end
 -- defensive_heal: items WITH safety gates (normal laning).
 -- ────────────────────────────────────────────────────────────
 local function defensiveHeal(bot, dials)
-	if not Style.Imp('defensive_heal') then return false end
+	if Style.Get().rules.healing_style ~= "active" then return false end
 	local hp      = J.GetHP(bot)
 	local maxMana = bot:GetMaxMana()
 	local mana    = maxMana > 0 and (bot:GetMana() / maxMana) or 1.0
@@ -186,7 +186,7 @@ end
 -- Enemy is dead/gone — no need to wait for "safe" windows.
 -- ────────────────────────────────────────────────────────────
 local function recovery(bot, dials)
-	if not Style.Imp('defensive_heal') or not bot:IsAlive() then return false end
+	if Style.Get().rules.healing_style ~= "active" or not bot:IsAlive() then return false end
 
 	local hp      = J.GetHP(bot)
 	local maxMana = bot:GetMaxMana()

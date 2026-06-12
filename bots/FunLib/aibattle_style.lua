@@ -81,6 +81,18 @@ local DEFAULT_LOW_HP = "tp_fountain"
 local PREGAME_VALUES = { safe_tower = true, aggressive_mid = true, jungle_pressure = true }
 local DEFAULT_PREGAME = nil  -- nil = OHA default (no override)
 
+-- healing_style: controls whether our defensive heal system is active.
+-- active  = use heal items / pullback / regen when low HP (was: improvements.defensive_heal=true).
+-- passive = rely on OHA default healing only.
+local HEALING_STYLE_VALUES = { active = true, passive = true }
+local DEFAULT_HEALING_STYLE = "passive"
+
+-- ability_usage: controls whether our AbilityHarass system fires.
+-- aggressive = use abilities for harass, gated by ability_aggro dial (was: improvements.ability_on_dials=true).
+-- basic      = OHA default ability casting only.
+local ABILITY_USAGE_VALUES = { aggressive = true, basic = true }
+local DEFAULT_ABILITY_USAGE = "basic"
+
 local function clamp01(x)
     if type(x) ~= "number" then return nil end
     if x < 0 then return 0 end
@@ -177,17 +189,34 @@ local function buildStyle(raw)
         end
     end
 
-    -- Optional behaviour improvements (booleans, default OFF). Composable self-preservation /
-    -- ability layers, dormant unless a playstyle explicitly enables them, so they never disturb
-    -- the validated dials.
-    local IMPROVEMENT_KEYS = { tower_avoid = true, ability_on_dials = true, defensive_heal = true, anti_afk = true }
-    local improvements = {}
+    -- Legacy improvements table: source of truth for backward compat parsing below.
     local rawImp = (type(raw) == "table" and type(raw.improvements) == "table") and raw.improvements or {}
-    for k in pairs(IMPROVEMENT_KEYS) do
-        improvements[k] = (rawImp[k] == true)
-    end
 
-    return { dials = dials, rules = { respawn_behavior = respawn, dive_policy = dive, smoke_usage = smoke, buyback_policy = buyback, aegis_policy = aegis, low_hp_behavior = low_hp, pregame_behavior = pregame }, item_build = items, skill_build = skills, item_rules = item_rules, improvements = improvements }
+    -- healing_style: rule value takes priority; falls back to improvements.defensive_heal for old configs.
+    local hs = rawRules.healing_style
+    local healing_style = (type(hs) == "string" and HEALING_STYLE_VALUES[hs]) and hs
+        or (rawImp.defensive_heal == true and "active")
+        or DEFAULT_HEALING_STYLE
+
+    -- ability_usage: rule value takes priority; falls back to improvements.ability_on_dials for old configs.
+    local au = rawRules.ability_usage
+    local ability_usage = (type(au) == "string" and ABILITY_USAGE_VALUES[au]) and au
+        or (rawImp.ability_on_dials == true and "aggressive")
+        or DEFAULT_ABILITY_USAGE
+
+    -- Technical-only flags: not LLM-visible rules, always-off unless explicitly set.
+    -- anti_afk / tower_avoid are bug-fixes, not style choices — kept here for opt-in testing.
+    local improvements = {
+        anti_afk    = (rawImp.anti_afk == true),
+        tower_avoid = (rawImp.tower_avoid == true),
+    }
+
+    return { dials = dials, rules = {
+        respawn_behavior = respawn, dive_policy = dive, smoke_usage = smoke,
+        buyback_policy = buyback, aegis_policy = aegis, low_hp_behavior = low_hp,
+        pregame_behavior = pregame,
+        healing_style = healing_style, ability_usage = ability_usage,
+    }, item_build = items, skill_build = skills, item_rules = item_rules, improvements = improvements }
 end
 
 -- Returns the {dials, rules} config for the calling bot's team (cached, with safe defaults).
@@ -214,9 +243,13 @@ function M.GetItemRules()
     return M.Get().item_rules
 end
 
--- Behaviour improvement flags (booleans). M.Imp(name) -> true only if explicitly enabled.
+-- Behaviour flags. healing_style / ability_usage now live in rules; others in improvements.
+-- M.Imp(name) is a backward-compat shim so callers don't need to know where to look.
 function M.GetImprovements() return M.Get().improvements end
 function M.Imp(name)
+    local r = M.Get().rules
+    if name == "defensive_heal"   then return r.healing_style  == "active"     end
+    if name == "ability_on_dials" then return r.ability_usage  == "aggressive"  end
     local i = M.Get().improvements
     return i ~= nil and i[name] == true
 end
@@ -573,6 +606,7 @@ M.HeroAbilityConfig = {
 --   no_target    → cast if enemy is within max_range (or always if max_range is nil)
 -- Returns true if an action was issued (cast or positioning move), false otherwise.
 function M.AbilityHarass(bot, enemy)
+    if M.Get().rules.ability_usage ~= "aggressive" then return false end
     local dial = M.Get().dials.ability_aggro
     if dial == nil or math.random() >= dial then return false end
     local cfg = M.HeroAbilityConfig[bot:GetUnitName()]
