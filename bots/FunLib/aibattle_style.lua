@@ -112,14 +112,26 @@ local function buildStyle(raw)
     local pgb = rawRules.pregame_behavior
     local pregame = (type(pgb) == "string" and PREGAME_VALUES[pgb]) and pgb or DEFAULT_PREGAME
 
+    -- build_style: selects which sub-table to use when item_build provides 3 named builds.
+    -- Supported values: "brawler" / "spellcaster" / "farmer". Ignored for flat-array builds.
+    local BUILD_STYLES = { brawler = true, spellcaster = true, farmer = true }
+    local bs = (type(raw) == "table") and raw.build_style or nil
+    local build_style = (type(bs) == "string" and BUILD_STYLES[bs]) and bs or nil
+
     -- Prompt-driven item build: per-hero ordered buy list.
-    -- Format: { npc_dota_hero_axe = {"item_blink", ...}, npc_dota_hero_cm = {...} }
+    -- Format A (flat):  { npc_dota_hero_axe = {"item_blink", ...} }
+    -- Format B (styled): { npc_dota_hero_axe = { brawler={...}, spellcaster={...}, farmer={...} } }
+    -- For Format B, build_style selects the sub-table. Falls back to flat-array if key missing.
     -- Only keeps "item_*" strings; bogus names from LLM are dropped silently.
     -- Consumed by jmz_func.lua SetUserHeroInit (reads items[botName] per hero).
     local items = {}
     local rawItems = (type(raw) == "table" and type(raw.item_build) == "table") and raw.item_build or {}
     for heroName, heroList in pairs(rawItems) do
         if type(heroName) == "string" and type(heroList) == "table" then
+            -- Resolve styled build → flat array.
+            if build_style and type(heroList[build_style]) == "table" then
+                heroList = heroList[build_style]
+            end
             local filtered = {}
             for _, name in ipairs(heroList) do
                 if type(name) == "string" and string.match(name, "^item_") then
