@@ -383,12 +383,9 @@ function Think()
 	-- attack is instant and safe even at low HP; heal can fire next tick if still needed.
 	-- needMove simplified: only move when TRULY out of attack range (was: 0.8× caused bot to
 	-- walk toward a creep already in range, wasting the last-hit window).
-	-- freeze: never attack enemy creeps so the wave drifts toward own tower.
 	local csLaneCheck = J.GetPosition(bot) <= 2 or not J.IsThereNonSelfCoreNearby(700)
-	if cwp == "freeze" and J.IsValid(hitCreep) and csLaneCheck then
-		Style.DiagRL(bot, "cw-freeze", 3.0)
-	end
-	local csAllowed = J.IsValid(hitCreep) and csLaneCheck and cwp ~= "freeze"
+	-- freeze: never use the push block, but still last-hit (wave stays frozen without proactive attacks)
+	local csAllowed = J.IsValid(hitCreep) and csLaneCheck
 	local needMove = csAllowed and (GetUnitToUnitDistance(bot, hitCreep) > botAttackRange)
 
 	-- 1) grab a securable last-hit that's already in range
@@ -424,8 +421,11 @@ function Think()
 		if atkHero and #atkHero > 0 and atkHero[1]:IsAlive() then
 			local hpDisadv = J.GetHP(atkHero[1]) - J.GetHP(bot) > 0.25
 			if heroPrio == "always" then
-				bot:Action_AttackUnit(atkHero[1], false)
-				AIB_Diag("hero-prio-always"); return
+				-- yield to last-hit movement so hero attacks don't block securing creeps
+				if not (csAllowed and needMove) then
+					bot:Action_AttackUnit(atkHero[1], false)
+					AIB_Diag("hero-prio-always"); return
+				end
 			elseif math.random() > (dials.farm_focus or 0.5) then
 				if not hpDisadv and math.random() < (dials.harass_desire or 0.5) then
 					bot:Action_AttackUnit(atkHero[1], false)

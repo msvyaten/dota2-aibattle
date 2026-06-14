@@ -15,6 +15,7 @@ local DIRE_SECRET_SHOP = GetShopLocation(GetTeam(), SHOP_SECRET2 )
 local hasItemToSell = false;
 
 function GetDesire()
+	if GetGameMode() == GAMEMODE_1V1MID then return BOT_MODE_DESIRE_NONE end
 	-- local cacheKey = 'GetSecretShopDesire'..tostring(bot:GetPlayerID())
 	-- local cachedVar = J.Utils.GetCachedVars(cacheKey, 0.5 * (1 + Customize.ThinkLess))
 	-- if DotaTime() > 30 and cachedVar ~= nil then return cachedVar end

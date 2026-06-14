@@ -31,6 +31,21 @@
 
 ---
 
+## 2026-06-14 — phase-17, hero_priority=always изоляция (оба бота)
+
+**Конфиг оба:** spellcaster, execute=0.45, deny_policy=default, ability_timing=on_cooldown, hero_priority=**always**
+**Переменная:** cw=push (Radiant) vs cw=freeze (Dire), потом свап
+**Проблема в матчах:** боты уходили на шрайны — water rune DESIRE_HIGH 3200 радиус (FIXED после этих матчей)
+
+| MatchID | Dur | Победитель | R K/D LH/м | D K/D LH/м | Конфиг R / D | Заметки |
+|---|---|---|---|---|---|---|
+| 8852107561 | 10.9м | **Dire** | 1/2 2.4 DN 9 | 2/1 4.0 DN 3 | freeze+hero=always / push+hero=always | уходили на шрайны (water-rune, side_shop — не пофикшено); push побил freeze ✅ |
+| 8852131228 | 7.2м | **Radiant** | 2/1 3.6 DN 4 | 1/2 **0.0 LH** DN 4 | push+hero=always / freeze+hero=always | свап сторон; Dire freeze+always = 0 LH 🐛 (csAllowed=false блокировал ласт-хиты) |
+
+**Итог:** push > freeze при одинаковом hero=always (2:0). Обнаружен критический баг: `cw=freeze` блокировал **все** атаки по крипам → 0 LH. `hero-prio-always D#180` подтверждает: бот атаковал героя, но не крипов. **FIXED** в mode_laning_generic.lua: freeze теперь разрешает ласт-хиты, только блокирует push-блок.
+
+---
+
 ## 2026-06-12 — phase-17, build_style валидация
 
 **Конфиг Radiant:** build_style=brawler, healing_style=active, ability_usage=basic, execute=0.45, pregame=safe_tower

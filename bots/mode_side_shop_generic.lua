@@ -21,6 +21,7 @@ local nSuppCountInLoc = 0
 local bHumanInTeam = false
 
 function GetDesire()
+	if GetGameMode() == GAMEMODE_1V1MID then return BOT_MODE_DESIRE_NONE end
 	-- local cacheKey = 'GetSideShopDesire'..tostring(bot:GetPlayerID())
 	-- local cachedVar = J.Utils.GetCachedVars(cacheKey, 0.6 * (1 + Customize.ThinkLess))
 	-- if DotaTime() > 30 and cachedVar ~= nil then return cachedVar end

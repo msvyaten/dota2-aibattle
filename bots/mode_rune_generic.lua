@@ -221,7 +221,10 @@ function GetRuneDesireRaw()
 
 					local nRuneType = rune.type
 					-- Water rune support (local addition)
-					if nRuneType == RUNE_WATER and (bBottle or botHP < 0.6 or botMP < 0.5) then
+					-- In 1v1 mid, water runes spawn near shrines (far from lane) — skip entirely.
+					if nRuneType == RUNE_WATER and GetGameMode() == GAMEMODE_1V1MID then
+						-- intentional no-op
+					elseif nRuneType == RUNE_WATER and (bBottle or botHP < 0.6 or botMP < 0.5) then
 						return X.GetScaledDesire(BOT_MODE_DESIRE_HIGH, rune.distance, 3200)
 					elseif nRuneType == RUNE_WATER and not bBottle then
 						return X.GetScaledDesire(BOT_MODE_DESIRE_MODERATE, rune.distance, nProximityRadius)
