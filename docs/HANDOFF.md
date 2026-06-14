@@ -66,36 +66,38 @@
 
 ## 4. Rules-система (краткая)
 
+**Принцип именования:** `default` = OHA делает своё, мы не вмешиваемся. Если мы добавляем свою логику — даём описательное имя (например `finish_only`, `active`).
+
 | Rule | Значения (дефолт жирным) | Счётчик | Статус |
 |---|---|---|---|
 | `respawn_behavior` | walk_back / tp_to_lane / **tp_to_tower** | teleports_used | ✅ |
 | `dive_policy` | never / **finish_only** / always | `no-dive` | ✅ |
-| `smoke_usage` | **for_ganks** / never | `smoke` | ✅ |
+| `smoke_usage` | **default** / never | `smoke` | ✅ |
 | `buyback_policy` | never / **default** | — | ✅ |
 | `low_hp_behavior` | **tp_fountain** / run_to_tower / fight_back / regen_lane / walk_fountain | `tp-fountain` / `regen-lane` / `retreat-blocked` / `recovery-*` | ✅ |
 | `aegis_policy` | **core** / any | — | ✅ |
-| `healing_style` | **passive** / active | `bottle-heal` / `tango-heal` / `heal-item` | ✅ (был `improvements.defensive_heal`) |
-| `ability_usage` | **basic** / aggressive | `ability-harass` | ✅ (был `improvements.ability_on_dials`; теперь правильно изолирует AbilityHarass) |
-| `creep_wave_priority` | **last_hit_only** / push / freeze | — | 📋 PLANNED |
+| `healing_style` | never / **default** / active | `bottle-heal` / `tango-heal` / `heal-item` | ✅ |
+| `ability_usage` | **default** / aggressive | `ability-harass` | ✅ |
+| `creep_wave_priority` | **last_hit_only** / push / freeze | `cw-push` | 📋 PLANNED |
 | `ability_timing` | **on_cooldown** / save_for_execute / harass_only | — | 📋 PLANNED |
+| `hero_priority` | always / **default** / never | — | 📋 PLANNED |
+| `tower_aggression` | always / **default** / never | — | 📋 PLANNED |
+| `deny_policy` | always / **default** / never | — | 📋 PLANNED |
 | `trading_policy` | **trade_back** / survive / all_in | — | 📋 PLANNED |
 | `fountain_trip` | **never** / once_per_death / free | — | 📋 PLANNED |
+
+**Bettability (phase-16/17, 12.06.2026):** A Duelist (harass=0.85/abil=0.90) vs B Farmer (harass=0.10/farm=0.90) — A побеждает 3:1 (8 матчей, все по убийствам, 4–10 мин). Линия существует. ✅
 
 **Improvements** — только технические флаги (не LLM-стиль): `anti_afk`, `tower_avoid`. Off по умолчанию.
 `defensive_heal` и `ability_on_dials` → перенесены в rules. Старые конфиги с `improvements = {}` работают через backward compat в buildStyle().
 
 ---
 
-## 5. Текущий тест (LIVE, phase-17 — НЕ КОММИТИТЬ)
+## 5. Статус последних фаз
 
-Тест build_style: brawler (Radiant) vs spellcaster (Dire). Оба SF, execute=0.45, pregame=safe_tower.
+**phase-17 — ЗАКРЫТ ✅ (8848634192, 12.06.2026)**
 
-| Сторона | build_style | healing_style | ability_usage |
-|---|---|---|---|
-| **Radiant** | brawler | active | basic |
-| **Dire** | spellcaster | passive | aggressive |
-
-**Валидация phase-17 (8848634192, 12.06.2026):**
+Тест build_style brawler (R) vs spellcaster (D). Все проверки пройдены:
 
 | Проверка | Результат |
 |---|---|
@@ -103,7 +105,9 @@
 | Dire покупает spellcaster (slippers/null×2/faerie_fire/bottle/phase_boots) | ✅ |
 | healing_style=active изолирован на Radiant | ✅ bottle-heal R#14, tango-heal R#2; Dire — 0 |
 | ability_usage=aggressive изолирован на Dire | ✅ ability-harass D#10; Radiant — 0 |
-| Баг: recovery-rune-bottle уходил к вражескому святилищу (7min) | 🐛 → FIXED: 2000 unit cap |
+| Баг: recovery-rune-bottle уходил к вражескому святилищу (7min) | 🐛 → FIXED |
+
+**Текущий тест:** нет. Следующая задача — §6 TOP-1.
 
 **Исправлено в phase-16 (12.06.2026):**
 - `FunLib/aba_role.lua`: GAMEMODE_1V1MID → оба бота pos_2; диагностика через ActionImmediate_Chat
@@ -122,7 +126,7 @@
 
 | # | Задача | Приоритет |
 |---|---|---|
-| **1** | **Новые правила (пара)** — реализовать `creep_wave_priority` + `ability_timing` первыми (простые, измеримые) | **TOP-1** |
+| **1** | **Кластер лейн-контроля** — реализовать `hero_priority` + `tower_aggression` + `deny_policy` + `creep_wave_priority` + `ability_timing` (дизайн готов, §11) | **TOP-1** |
 | **2** | **Item build вариативность** — Layer 1 (build_style) ✅ DONE; Layer 2 — ситуативный порядок (§12) | **TOP-2** |
 | 3 | **5v5 полный матч** Pusher vs Ganker | MEDIUM |
 | 4 | **Больше героев** — пилот на Axe (defensive/aggressive очевидны по роли) | LOW |
@@ -212,35 +216,65 @@ Merge в `main` — осознанно, когда фаза с пруфами з
 
 ## 11. План: новые rules (TOP-1)
 
-### Что реализовывать первым
+### Приоритетная очередь действий в лейне
 
-**Пара:** `creep_wave_priority` + `ability_timing` — оба без зависимостей, легко верифицируются диагами.
+Бот на каждом тике проходит очередь сверху вниз и делает первое разрешённое действие. Rules — гейты на каждом уровне, не конкурируют между собой.
 
-### `creep_wave_priority`
+```
+1. Безопасность     low_hp_behavior
+2. Добив            execute_threshold dial
+3. Атака героя      hero_priority rule
+4. Атака башни      tower_aggression rule
+5. Денай            deny_policy rule
+6. Ласт-хит / волна creep_wave_priority rule
+7. Позиция          forwardness dial
+```
 
-Управляет тем, как бот работает с волной крипов.
+### Кластер лейн-контроля (новые rules)
 
-| Значение | Поведение |
-|---|---|
-| `last_hit_only` (дефолт) | Атаковать крипа только когда HP ≤ dmgDelta. Минимальный пуш. |
-| `push` | Атаковать крипов свободно, форсировать пуш волны. |
-| `freeze` | Не атаковать крипов вообще если волна под своей башней — держать морозку. |
-
-Реализация: в `mode_laning_generic.lua` в разделе last-hit/harass — перед атакой крипа проверяем rule. Диага: `cw-push` / `cw-freeze-skip`.
-
-### `ability_timing`
-
-Управляет когда использовать способности в бою.
+**`hero_priority`** — кого атаковать первым: героя или крипа
 
 | Значение | Поведение |
 |---|---|
-| `on_cooldown` (дефолт) | Кастовать при первой возможности (текущее поведение) |
-| `save_for_execute` | Не харасить способностями — копить для добива (HP < execute_threshold) |
-| `harass_only` | Кастовать только для харасса, никогда в execute-фазе |
+| `always` | Враг в радиусе → всегда атаковать героя, даже если есть крип для ласт-хита |
+| `default` | Атаковать героя только если прямо сейчас нет крипа в окне ласт-хита |
+| `never` | Игнорировать героя — только крипы |
 
-Реализация: в `AbilityHarass` (aibattle_style.lua:563) добавить проверку rule перед кастом; аналогично в execute-блоке laning.
+**`tower_aggression`** — когда атаковать вражескую башню
 
-### Остальные planned rules (после тестирования первых двух)
+| Значение | Поведение |
+|---|---|
+| `always` | Башня в радиусе → атаковать её, даже жертвуя ласт-хитами |
+| `default` | Бить башню когда волна зачищена и нечего делать (OHA поведение) |
+| `never` | Не атаковать башню во время лейнинга |
+
+**`deny_policy`** — как агрессивно денать своих крипов
+
+| Значение | Поведение |
+|---|---|
+| `always` | Приоритет дению: прерывает харасс ради дения |
+| `default` | Денать когда удобно, не жертвуя ласт-хитами и харассом |
+| `never` | Не денать вообще |
+
+**`creep_wave_priority`** — как бот работает с вражескими крипами
+
+| Значение | Поведение |
+|---|---|
+| `push` | Атаковать крипов свободно — волна едет к башне врага |
+| `last_hit_only` (дефолт) | Атаковать только в окне ласт-хита — волна стоит в равновесии |
+| `freeze` | Не атаковать крипов — волна тянется к своей башне; враг вынужден идти за фармом далеко от своей базы |
+
+### `ability_timing` (отдельная пара к `ability_usage`)
+
+| Значение | Поведение |
+|---|---|
+| `on_cooldown` (дефолт) | Кастовать при первой возможности (харасс + добив) |
+| `save_for_execute` | Не харасить способностями — копить ману для добива |
+| `harass_only` | Кастовать только для харасса, Requiem в добиве не использовать |
+
+Реализация: gate в `AbilityHarass` + `AbilityExecute` (aibattle_style.lua).
+
+### Остальные planned rules (после кластера)
 
 - `trading_policy`: `trade_back` / `survive` / `all_in` — ответ на получаемый урон
 - `fountain_trip`: `never` / `once_per_death` / `free` — разрешить ли ходить на фонтан
