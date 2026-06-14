@@ -34,15 +34,26 @@
 ## 2026-06-14 — phase-17, hero_priority=always изоляция (оба бота)
 
 **Конфиг оба:** spellcaster, execute=0.45, deny_policy=default, ability_timing=on_cooldown, hero_priority=**always**
-**Переменная:** cw=push (Radiant) vs cw=freeze (Dire), потом свап
-**Проблема в матчах:** боты уходили на шрайны — water rune DESIRE_HIGH 3200 радиус (FIXED после этих матчей)
+**Переменная:** cw=push vs cw=freeze, оба направления
+
+### До фиксов (shrine-issue + freeze-bug)
+**Проблемы:** боты уходили на шрайны (water rune DESIRE_HIGH 3200), freeze блокировал ВСЕ ласт-хиты
 
 | MatchID | Dur | Победитель | R K/D LH/м | D K/D LH/м | Конфиг R / D | Заметки |
 |---|---|---|---|---|---|---|
-| 8852107561 | 10.9м | **Dire** | 1/2 2.4 DN 9 | 2/1 4.0 DN 3 | freeze+hero=always / push+hero=always | уходили на шрайны (water-rune, side_shop — не пофикшено); push побил freeze ✅ |
-| 8852131228 | 7.2м | **Radiant** | 2/1 3.6 DN 4 | 1/2 **0.0 LH** DN 4 | push+hero=always / freeze+hero=always | свап сторон; Dire freeze+always = 0 LH 🐛 (csAllowed=false блокировал ласт-хиты) |
+| 8852107561 | 10.9м | **Dire** | 1/2 2.4 DN 9 | 2/1 4.0 DN 3 | freeze+always / push+always | уходили на шрайны; результат смазан — у freeze 26 LH только через sticky auto-attack |
+| 8852131228 | 7.2м | **Radiant** | 2/1 3.6 DN 4 | 1/2 **0.0 LH** DN 4 | push+always / freeze+always | Dire freeze = 0 LH 🐛; hero-prio-always D#180 — бот атаковал героя вместо крипов |
 
-**Итог:** push > freeze при одинаковом hero=always (2:0). Обнаружен критический баг: `cw=freeze` блокировал **все** атаки по крипам → 0 LH. `hero-prio-always D#180` подтверждает: бот атаковал героя, но не крипов. **FIXED** в mode_laning_generic.lua: freeze теперь разрешает ласт-хиты, только блокирует push-блок.
+**Фикс:** `csAllowed` больше не исключает freeze → ласт-хиты разрешены. `hero_priority=always` уступает движению к ласт-хиту.
+
+### После фиксов ✅
+| MatchID | Dur | Победитель | R K/D LH/м | D K/D LH/м | Конфиг R / D | Заметки |
+|---|---|---|---|---|---|---|
+| 8852179010 | 4.2м | **Radiant** | 2/1 1.2 DN 1 | 1/2 2.2 DN 2 | freeze+always / push+always | freeze LH=5 (не 0) ✅; нет shrine-диагов ✅; heroDmg 1264 vs 762 |
+| 8852194852 | 3.8м | **Dire** | 0/2 2.4 DN 1 | 2/0 3.4 DN 2 | push+always / freeze+always | freeze LH=13 > push LH=9; heroDmg freeze 1297 vs push 968; ability-harass D#42 vs R#2 |
+
+**Итог:** freeze+hero=always побеждает push+hero=always **2:0 после фиксов**, обе стороны. Freeze бот фармит лучше (свободен от атаки всех крипов) и больше харассит героя.
+**⚠️ farm/jungle блок** — не провалидирован: боты не доходят до lvl 8 в коротких матчах.
 
 ---
 
