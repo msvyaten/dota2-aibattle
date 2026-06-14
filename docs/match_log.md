@@ -11,6 +11,26 @@
 
 ---
 
+## 2026-06-14 — phase-17, новые правила + 1v1 блокировки
+
+**Новые правила:** `pregame_behavior`, `hero_priority`, `deny_policy`, `cw=freeze/push` + guard
+**1v1 блокировки:** `mode_ward`, `mode_outpost`, `mode_farm` (jungle path)
+**Переменная по сессии:** freeze (save_for_execute + hero=always + deny=always) vs push (on_cooldown + hero=default + deny=never)
+
+| MatchID | Dur | Победитель | R K/D LH/м | D K/D LH/м | Конфиг R / D | Заметки |
+|---|---|---|---|---|---|---|
+| 8851932909 | 3.0м | **Dire** | 0/2 2.3 | 2/0 1.0 | freeze+defaults / OHA defaults | 1v1 rule (2 deaths); cw-freeze D#19 ✅; ph=0 R (нет авто-атак) |
+| 8851955017 | 6.9м | **Radiant** | 2/0 1.6 | 0/2 2.7 | freeze / push | push огребал от крипов: recovery-flask D#146, kite-creep D#24; guard ещё не был применён |
+| 8851989182 | 8.9м | **Radiant** | 2/0 2.9 DN 25 | 0/2 2.0 DN 1 | freeze+always+deny=always / push+default+deny=never | deny-act R#626→25 денаев ✅; hero-prio-always R#58 ✅; lvl 9 vs 6 |
+| 8852008347 | 9.2м | **Dire** | 0/2 1.4 DN 1 | 2/0 3.6 DN 16 | push+default+deny=never / freeze+always+deny=always | своп сторон — результат не зависит от стороны ✅ |
+| 8852048126 | 5.0м | **Dire** | 0/2 0.8 | 2/0 3.4 DN 14 | push+default+deny=never / freeze+always+deny=always | ward/outpost блоки ✅ (нет ward-place); farm блок ❌ не провалидирован (lvl 4/6) |
+| 8852077804 | 5.0м | **Radiant** | 2/0 2.8 DN 4 | 0/2 2.8 DN 4 | freeze+default / push+default | LH равный (14/14); push ph=0 → бот никогда не бьёт героя без hero=always |
+
+**Итог:** freeze побеждает push 4:0 независимо от стороны. Корень: `cw=push`+`hero=default` → ph_dmg=0 (бот игнорирует героя). Следующий тест: push + hero_priority=always.
+**⚠️ farm/jungle блок** — не провалидирован: боты не доходят до lvl 8 в 5-мин матчах.
+
+---
+
 ## 2026-06-12 — phase-17, build_style валидация
 
 **Конфиг Radiant:** build_style=brawler, healing_style=active, ability_usage=basic, execute=0.45, pregame=safe_tower
