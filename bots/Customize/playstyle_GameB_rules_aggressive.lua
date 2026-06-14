@@ -2,7 +2,7 @@
 -- Dials neutral/identical to the passive side (push EQUAL 0.50) so only RULES differ.
 -- Three rules contrasted at once; each has its own independent counter:
 --   dive_policy=always   -> counter 'no-dive' should be ~0 here (bots DO dive)
---   smoke_usage=for_ganks-> counter 'smoke'   should be >0 here
+--   smoke_usage=default  -> counter 'smoke'   should be >0 here
 --   buyback_policy=default (always removed — never fired in testing)
 -- Copy to playstyle_radiant.lua (or dire) for the batch game; swap sides for run 2.
 return {
@@ -23,7 +23,7 @@ return {
     rules = {
         respawn_behavior = "tp_to_lane",
         dive_policy      = "always",
-        smoke_usage      = "for_ganks",
+        smoke_usage      = "default",
         buyback_policy   = "default",
     },
 }

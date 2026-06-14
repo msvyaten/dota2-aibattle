@@ -419,7 +419,8 @@ function GetDesireHelper()
 				end
 			end
 
-			-- Late game or dangerous lanes: farm jungle camps
+			-- Late game or dangerous lanes: farm jungle camps (disabled in 1v1 — stay in lane)
+			if GetGameMode() == GAMEMODE_1V1MID then return BOT_MODE_DESIRE_NONE end
 			if preferedCamp == nil then preferedCamp = J.Site.GetClosestNeutralSpwan(bot, availableCamp);end
 
 			if preferedCamp ~= nil then

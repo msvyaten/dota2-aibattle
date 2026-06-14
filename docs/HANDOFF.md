@@ -78,11 +78,11 @@
 | `aegis_policy` | **core** / any | — | ✅ |
 | `healing_style` | never / **default** / active | `bottle-heal` / `tango-heal` / `heal-item` | ✅ |
 | `ability_usage` | **default** / aggressive | `ability-harass` | ✅ |
-| `creep_wave_priority` | **last_hit_only** / push / freeze | `cw-push` | 📋 PLANNED |
-| `ability_timing` | **on_cooldown** / save_for_execute / harass_only | — | 📋 PLANNED |
-| `hero_priority` | always / **default** / never | — | 📋 PLANNED |
+| `creep_wave_priority` | **last_hit_only** / push / freeze | `cw-push` / `cw-freeze` | ✅ |
+| `ability_timing` | **on_cooldown** / save_for_execute / harass_only | — | ✅ |
+| `hero_priority` | always / **default** / never | `hero-prio-always` | ✅ |
 | `tower_aggression` | always / **default** / never | — | 📋 PLANNED |
-| `deny_policy` | always / **default** / never | — | 📋 PLANNED |
+| `deny_policy` | always / **default** / never | `deny-act` | ✅ |
 | `trading_policy` | **trade_back** / survive / all_in | — | 📋 PLANNED |
 | `fountain_trip` | **never** / once_per_death / free | — | 📋 PLANNED |
 

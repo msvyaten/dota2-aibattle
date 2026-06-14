@@ -82,7 +82,7 @@ These are required consistency checks. Fix any violations before outputting the 
 - "always" — dives aggressively for any kill
 
 **smoke_usage** — whether the team uses Smoke of Deceit for ganks:
-- "for_ganks" — uses smoke to set up ganks (default)
+- "default" — uses smoke to set up ganks (OHA default behavior)
 - "never" — never uses smoke
 
 **buyback_policy** — when a dead bot buys back to rejoin the fight:
@@ -149,7 +149,7 @@ Reasoning:
   → (aggressive positioning without survivability = constant feeding = enemy snowball)
 - Nothing about defense or vision       → defend_desire = 0.30, ward_desire = 0.35
 - Nothing about Roshan                  → roshan_desire = 0.45 (slightly below neutral)
-- Aggressive killer style               → dive_policy = "always" (will chase under towers), smoke_usage = "for_ganks"
+- Aggressive killer style               → dive_policy = "always" (will chase under towers), smoke_usage = "default"
 
 Output:
 {
@@ -170,7 +170,7 @@ Output:
   "rules": {
     "respawn_behavior": "tp_to_lane",
     "dive_policy": "always",
-    "smoke_usage": "for_ganks",
+    "smoke_usage": "default",
     "buyback_policy": "default",
     "aegis_policy": "core"
   }
@@ -200,7 +200,7 @@ Return ONLY valid JSON. No explanation, no markdown, no extra text.
   "rules": {
     "respawn_behavior": "tp_to_lane",
     "dive_policy": "finish_only",
-    "smoke_usage": "for_ganks",
+    "smoke_usage": "default",
     "buyback_policy": "default",
     "aegis_policy": "core"
   },

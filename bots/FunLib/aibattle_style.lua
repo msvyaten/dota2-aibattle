@@ -39,8 +39,9 @@ local DIVE_VALUES = { never = true, finish_only = true, when_grouped = true, whe
 local DEFAULT_DIVE = "finish_only"
 
 -- smoke_usage: whether the team uses Smoke of Deceit (OHA already has the behaviour; this gates it).
-local SMOKE_VALUES = { for_ganks = true, never = true }
-local DEFAULT_SMOKE = "for_ganks"
+-- default / for_ganks = OHA smoke logic unchanged (aliases; for_ganks kept for backward compat).
+local SMOKE_VALUES = { default = true, for_ganks = true, never = true }
+local DEFAULT_SMOKE = "default"
 
 -- buyback_policy: never = suppress entirely; default = stock OHA logic (unchanged).
 -- 'always' was removed — it never fired in testing (always-side tended to win and not need buyback).
@@ -83,15 +84,44 @@ local DEFAULT_PREGAME = nil  -- nil = OHA default (no override)
 
 -- healing_style: controls whether our defensive heal system is active.
 -- active  = use heal items / pullback / regen when low HP (was: improvements.defensive_heal=true).
--- passive = rely on OHA default healing only.
-local HEALING_STYLE_VALUES = { active = true, passive = true }
-local DEFAULT_HEALING_STYLE = "passive"
+-- default / passive = OHA default healing only (passive kept for backward compat).
+-- never   = suppress all healing: blocks our system AND OHA item usage (tango/flask/bottle/etc).
+local HEALING_STYLE_VALUES = { active = true, default = true, passive = true, never = true }
+local DEFAULT_HEALING_STYLE = "default"
 
 -- ability_usage: controls whether our AbilityHarass system fires.
 -- aggressive = use abilities for harass, gated by ability_aggro dial (was: improvements.ability_on_dials=true).
--- basic      = OHA default ability casting only.
-local ABILITY_USAGE_VALUES = { aggressive = true, basic = true }
-local DEFAULT_ABILITY_USAGE = "basic"
+-- default / basic = OHA default ability casting only (basic kept for backward compat).
+local ABILITY_USAGE_VALUES = { aggressive = true, default = true, basic = true }
+local DEFAULT_ABILITY_USAGE = "default"
+
+-- creep_wave_priority: how the bot handles the enemy creep wave.
+-- push         = attack all in-range creeps freely (wave advances toward enemy tower).
+-- last_hit_only = only attack within the kill window (default; wave holds equilibrium).
+-- freeze        = never attack enemy creeps (wave drifts back; enemy must walk far to farm).
+local CREEP_WAVE_PRIORITY_VALUES = { push = true, last_hit_only = true, freeze = true }
+local DEFAULT_CREEP_WAVE_PRIORITY = "last_hit_only"
+
+-- ability_timing: when to use abilities (only meaningful when ability_usage = "aggressive").
+-- on_cooldown     = use for both harass and execute as soon as available (default).
+-- save_for_execute = skip harass; hold mana for the execute cast when enemy is low.
+-- harass_only     = use for harass only; never cast as an execute finisher.
+local ABILITY_TIMING_VALUES = { on_cooldown = true, save_for_execute = true, harass_only = true }
+local DEFAULT_ABILITY_TIMING = "on_cooldown"
+
+-- hero_priority: whether the bot auto-attacks the enemy hero.
+-- always  = always attack hero when in range (ignores farm_focus / hp-disadvantage gates).
+-- default = OHA behaviour (farm_focus roll + hp-disadvantage check).
+-- never   = never auto-attack hero (pure creep focus).
+local HERO_PRIORITY_VALUES = { always = true, default = true, never = true }
+local DEFAULT_HERO_PRIORITY = "default"
+
+-- deny_policy: how aggressively the bot denies allied creeps.
+-- always  = deny any allied creep below 60% HP (wider window than kill-guarantee).
+-- default = OHA behaviour (deny only when health <= attackDamage).
+-- never   = never deny allied creeps.
+local DENY_POLICY_VALUES = { always = true, default = true, never = true }
+local DEFAULT_DENY_POLICY = "default"
 
 local function clamp01(x)
     if type(x) ~= "number" then return nil end
@@ -114,6 +144,7 @@ local function buildStyle(raw)
     local dp = rawRules.dive_policy
     local dive = (type(dp) == "string" and DIVE_VALUES[dp]) and dp or DEFAULT_DIVE
     local sm = rawRules.smoke_usage
+    if sm == "for_ganks" then sm = "default" end  -- backward compat
     local smoke = (type(sm) == "string" and SMOKE_VALUES[sm]) and sm or DEFAULT_SMOKE
     local bbk = rawRules.buyback_policy
     local buyback = (type(bbk) == "string" and BUYBACK_VALUES[bbk]) and bbk or DEFAULT_BUYBACK
@@ -194,15 +225,29 @@ local function buildStyle(raw)
 
     -- healing_style: rule value takes priority; falls back to improvements.defensive_heal for old configs.
     local hs = rawRules.healing_style
+    if hs == "passive" then hs = "default" end  -- backward compat
     local healing_style = (type(hs) == "string" and HEALING_STYLE_VALUES[hs]) and hs
         or (rawImp.defensive_heal == true and "active")
         or DEFAULT_HEALING_STYLE
 
     -- ability_usage: rule value takes priority; falls back to improvements.ability_on_dials for old configs.
     local au = rawRules.ability_usage
+    if au == "basic" then au = "default" end  -- backward compat
     local ability_usage = (type(au) == "string" and ABILITY_USAGE_VALUES[au]) and au
         or (rawImp.ability_on_dials == true and "aggressive")
         or DEFAULT_ABILITY_USAGE
+
+    local cwp = rawRules.creep_wave_priority
+    local creep_wave_priority = (type(cwp) == "string" and CREEP_WAVE_PRIORITY_VALUES[cwp]) and cwp or DEFAULT_CREEP_WAVE_PRIORITY
+
+    local at = rawRules.ability_timing
+    local ability_timing = (type(at) == "string" and ABILITY_TIMING_VALUES[at]) and at or DEFAULT_ABILITY_TIMING
+
+    local hp = rawRules.hero_priority
+    local hero_priority = (type(hp) == "string" and HERO_PRIORITY_VALUES[hp]) and hp or DEFAULT_HERO_PRIORITY
+
+    local denp = rawRules.deny_policy
+    local deny_policy = (type(denp) == "string" and DENY_POLICY_VALUES[denp]) and denp or DEFAULT_DENY_POLICY
 
     -- Technical-only flags: not LLM-visible rules, always-off unless explicitly set.
     -- anti_afk / tower_avoid are bug-fixes, not style choices — kept here for opt-in testing.
@@ -216,6 +261,8 @@ local function buildStyle(raw)
         buyback_policy = buyback, aegis_policy = aegis, low_hp_behavior = low_hp,
         pregame_behavior = pregame,
         healing_style = healing_style, ability_usage = ability_usage,
+        creep_wave_priority = creep_wave_priority, ability_timing = ability_timing,
+        hero_priority = hero_priority, deny_policy = deny_policy,
     }, item_build = items, skill_build = skills, item_rules = item_rules, improvements = improvements }
 end
 
@@ -607,6 +654,7 @@ M.HeroAbilityConfig = {
 -- Returns true if an action was issued (cast or positioning move), false otherwise.
 function M.AbilityHarass(bot, enemy)
     if M.Get().rules.ability_usage ~= "aggressive" then return false end
+    if M.Get().rules.ability_timing == "save_for_execute" then return false end
     local dial = M.Get().dials.ability_aggro
     if dial == nil or math.random() >= dial then return false end
     local cfg = M.HeroAbilityConfig[bot:GetUnitName()]
@@ -656,6 +704,7 @@ end
 -- logic can still fire on the same tick.
 -- Returns true only when an ability was actually cast.
 function M.AbilityExecute(bot, enemy)
+    if M.Get().rules.ability_timing == "harass_only" then return false end
     local threshold = M.Get().dials.execute_threshold
     if threshold == nil or threshold <= 0 then return false end
     local cfg = M.HeroAbilityConfig[bot:GetUnitName()]

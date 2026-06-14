@@ -8457,4 +8457,19 @@ if _aibSmokeDesire ~= nil then
 	end
 end
 
+-- AIBattle rule (healing_style = "never"): suppress OHA heal items entirely.
+-- "default" = OHA logic unchanged. "active" = our system in aibattle_heal.lua takes over.
+-- "never" = block all healing items so the bot never heals regardless of HP.
+local _aibHealItems = { 'item_tango', 'item_flask', 'item_clarity', 'item_bottle',
+                        'item_magic_wand', 'item_magic_stick', 'item_faerie_fire' }
+for _, _healName in ipairs(_aibHealItems) do
+	local _orig = X.ConsiderItemDesire and X.ConsiderItemDesire[_healName]
+	if _orig ~= nil then
+		X.ConsiderItemDesire[_healName] = function(item)
+			if AIBStyle.Get().rules.healing_style == "never" then return BOT_ACTION_DESIRE_NONE end
+			return _orig(item)
+		end
+	end
+end
+
 return X

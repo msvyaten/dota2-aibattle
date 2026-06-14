@@ -21,6 +21,7 @@ local hTargetSpot = nil
 local fLastWardPlantTime = -math.huge
 
 function GetDesire()
+	if GetGameMode() == GAMEMODE_1V1MID then return BOT_MODE_DESIRE_NONE end
 	if J.GetPosition(bot) <= 3 then return false end
 	-- local cacheKey = 'GetWardDesire'..tostring(bot:GetPlayerID())
 	-- local cachedVar = J.Utils.GetCachedVars(cacheKey, 0.6 * (1 + Customize.ThinkLess))

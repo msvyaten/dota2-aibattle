@@ -14,6 +14,7 @@ local IsEnemyTier2Down = false
 local hAbilityCapture = bot:GetAbilityByName('ability_capture')
 
 function GetDesire()
+	if GetGameMode() == GAMEMODE_1V1MID then return BOT_MODE_DESIRE_NONE end
 	-- local cacheKey = 'GetOutpostDesire'..tostring(bot:GetPlayerID())
 	-- local cachedVar = J.Utils.GetCachedVars(cacheKey, 0.5 * (1 + Customize.ThinkLess))
 	-- if DotaTime() > 30 and cachedVar ~= nil then return cachedVar end

@@ -324,26 +324,38 @@ function Think()
 			dials.harass_desire, dials.farm_focus, dials.forwardness, dials.ability_aggro,
 			dials.rune_control, dials.retreat_caution, dials.execute_threshold,
 			dials.gank_desire, dials.push_desire), true)
-		-- MSG2: secondary dials + rules (~90 chars)
+		-- MSG2: secondary dials + rules (~115 chars)
 		local r = Style.Get().rules
 		bot:ActionImmediate_Chat(string.format(
-			"AIB[%s] defend=%.2f ward=%.2f roshan=%.2f dive=%s heal=%s abil=%s",
+			"AIB[%s] defend=%.2f ward=%.2f roshan=%.2f dive=%s heal=%s abil=%s cw=%s at=%s",
 			AIB_SIDE,
 			dials.defend_desire, dials.ward_desire, dials.roshan_desire,
 			tostring(r.dive_policy or "finish_only"),
-			tostring(r.healing_style or "passive"),
-			tostring(r.ability_usage or "basic")), true)
+			tostring(r.healing_style or "default"),
+			tostring(r.ability_usage or "default"),
+			tostring(r.creep_wave_priority or "last_hit_only"),
+			tostring(r.ability_timing or "on_cooldown")), true)
 	end
 
-	-- Pre-game 1v1: walk toward mid before the horn. Explicit block so the bot does not
-	-- stand idle at the fountain when laning Think() has nothing to do (no creeps yet).
+	-- Pre-game 1v1: position before the horn based on pregame_behavior rule.
+	-- safe_tower=0.15 (own T1 front), aggressive_mid=0.45 (river), jungle_pressure=0.70 (deep).
+	-- Falls back to dials.forwardness if rule is unset.
 	if DotaTime() < 0 and GetGameMode() == GAMEMODE_1V1MID then
 		local ownT1 = GetTower(GetTeam(), TOWER_MID_1)
 		local enmT1 = GetTower(GetOpposingTeam(), TOWER_MID_1)
 		if ownT1 ~= nil and enmT1 ~= nil then
-			local fwd = dials.forwardness or 0.5
+			local pgb = GetRules().pregame_behavior
+			local t
+			if     pgb == "safe_tower"       then t = 0.15
+			elseif pgb == "aggressive_mid"   then t = 0.45
+			elseif pgb == "jungle_pressure"  then t = 0.70
+			else                                  t = dials.forwardness or 0.5
+			end
 			local a, b = ownT1:GetLocation(), enmT1:GetLocation()
-			bot:Action_MoveToLocation(Vector(a.x + (b.x-a.x)*fwd, a.y + (b.y-a.y)*fwd, a.z))
+			local target = Vector(a.x + (b.x-a.x)*t, a.y + (b.y-a.y)*t, a.z)
+			if GetUnitToLocationDistance(bot, target) > 100 then
+				bot:Action_MoveToLocation(target)
+			end
 		end
 		return
 	end
@@ -363,13 +375,20 @@ function Think()
 		if twr ~= nil and AIB_TowerAggroDrop(twr) then return end
 	end
 
+	local cwp = Style.Get().rules.creep_wave_priority or "last_hit_only"
+
 	local hitCreep, moveToCreep = GetBestLastHitCreep(nEnemyCreeps)
 
 	-- Last-hit / harass interleave (AIBattle): secure an IN-RANGE last-hit BEFORE heal check —
 	-- attack is instant and safe even at low HP; heal can fire next tick if still needed.
 	-- needMove simplified: only move when TRULY out of attack range (was: 0.8× caused bot to
 	-- walk toward a creep already in range, wasting the last-hit window).
-	local csAllowed = J.IsValid(hitCreep) and (J.GetPosition(bot) <= 2 or not J.IsThereNonSelfCoreNearby(700))
+	-- freeze: never attack enemy creeps so the wave drifts toward own tower.
+	local csLaneCheck = J.GetPosition(bot) <= 2 or not J.IsThereNonSelfCoreNearby(700)
+	if cwp == "freeze" and J.IsValid(hitCreep) and csLaneCheck then
+		Style.DiagRL(bot, "cw-freeze", 3.0)
+	end
+	local csAllowed = J.IsValid(hitCreep) and csLaneCheck and cwp ~= "freeze"
 	local needMove = csAllowed and (GetUnitToUnitDistance(bot, hitCreep) > botAttackRange)
 
 	-- 1) grab a securable last-hit that's already in range
@@ -396,14 +415,22 @@ function Think()
 	end
 
 	-- 2) Harass hero BEFORE kite: prevents kite-400 from pushing bot outside attack range.
-	--    Immediate action so the next tick doesn't cancel it. Probability = harass_desire.
-	if math.random() > (dials.farm_focus or 0.5) then
+	--    hero_priority=never  → skip entirely (pure creep focus).
+	--    hero_priority=always → bypass farm_focus roll and hp-disadvantage gate.
+	--    hero_priority=default → original probabilistic behaviour.
+	local heroPrio = Style.Get().rules.hero_priority or "default"
+	if heroPrio ~= "never" then
 		local atkHero = bot:GetNearbyHeroes(botAttackRange + 50, true, BOT_MODE_NONE)
 		if atkHero and #atkHero > 0 and atkHero[1]:IsAlive() then
 			local hpDisadv = J.GetHP(atkHero[1]) - J.GetHP(bot) > 0.25
-			if not hpDisadv and math.random() < (dials.harass_desire or 0.5) then
+			if heroPrio == "always" then
 				bot:Action_AttackUnit(atkHero[1], false)
-				return
+				AIB_Diag("hero-prio-always"); return
+			elseif math.random() > (dials.farm_focus or 0.5) then
+				if not hpDisadv and math.random() < (dials.harass_desire or 0.5) then
+					bot:Action_AttackUnit(atkHero[1], false)
+					return
+				end
 			end
 		end
 	end
@@ -430,11 +457,45 @@ function Think()
 		return
 	end
 
-	local denyCreep = GetBestDenyCreep(nAllyCreeps)
-	if J.IsValid(denyCreep) then
-		bot:SetTarget(denyCreep)
-		bot:Action_AttackUnit(denyCreep, true)
-		return
+	-- creep_wave_priority = push: attack any in-range enemy creep (not just last-hit window).
+	-- Guard: only push when allied creeps are nearby (<500) so aggro is shared with the wave.
+	-- Without this, the bot pulls the entire enemy wave alone and takes constant creep damage.
+	if cwp == "push" then
+		local allyNear = false
+		for _, a in pairs(nAllyCreeps or {}) do
+			if J.IsValid(a) and GetUnitToUnitDistance(bot, a) <= 500 then
+				allyNear = true; break
+			end
+		end
+		if allyNear then
+			for _, c in pairs(nEnemyCreeps or {}) do
+				if J.IsValid(c) and J.CanBeAttacked(c)
+					and GetUnitToUnitDistance(bot, c) <= botAttackRange then
+					bot:Action_AttackUnit(c, true)
+					AIB_Diag("cw-push"); return
+				end
+			end
+		end
+	end
+
+	-- deny_policy: never = skip; always = wider window (HP<60%); default = kill-guarantee only.
+	local denyPol = Style.Get().rules.deny_policy or "default"
+	if denyPol ~= "never" then
+		local denyCreep
+		if denyPol == "always" then
+			for _, c in pairs(nAllyCreeps or {}) do
+				if J.IsValid(c) and J.GetHP(c) < 0.60 and J.CanBeAttacked(c) then
+					denyCreep = c; break
+				end
+			end
+		else
+			denyCreep = GetBestDenyCreep(nAllyCreeps)
+		end
+		if J.IsValid(denyCreep) then
+			bot:SetTarget(denyCreep)
+			bot:Action_AttackUnit(denyCreep, true)
+			AIB_Diag("deny-act"); return
+		end
 	end
 
 	local fLaneFrontAmount = GetLaneFrontAmount(GetTeam(), botAssignedLane, false)
