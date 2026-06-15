@@ -126,7 +126,7 @@ def parse(path):
     win = {"0": "Radiant", "1": "Dire", "2": "Radiant", "3": "Dire"}.get(_win_raw, _win_raw)
     items = [l.split("Items:", 1)[1].strip() for l in lines if "Items:" in l and "Player 0" in l]
 
-    players, cur, dealt = [], {}, []
+    players, cur, dealt, received = [], {}, [], []
     for i, l in enumerate(lines):
         for k in FIELDS:
             m = re.search(r"\b" + k + r":\s*(-?\d+)", l)
@@ -134,12 +134,14 @@ def parse(path):
                 cur[k] = m.group(1)
         if "hero_damage_dealt {" in l and i + 1 < len(lines) and "pre_reduction" in lines[i + 1]:
             dealt.append(lines[i + 1].split("pre_reduction:")[1].strip())
+        if "hero_damage_received {" in l and i + 1 < len(lines) and "pre_reduction" in lines[i + 1]:
+            received.append(lines[i + 1].split("pre_reduction:")[1].strip())
         m = re.search(r"\bplayer_slot:\s*(\d+)", l)
         if m:
             cur["slot"] = m.group(1)
             players.append(cur)
             cur = {}
-    return cfg, diag, dur, win, items, players, dealt
+    return cfg, diag, dur, win, items, players, dealt, received
 
 
 def main():
@@ -152,7 +154,7 @@ def main():
         if not os.path.exists(path):
             print(f"  (not found: {path})")
             continue
-        cfg, diag, dur, win, items, players, dealt = parse(path)
+        cfg, diag, dur, win, items, players, dealt, received = parse(path)
         for c in cfg:
             print("  cfg:", c)
         dials = extract_dials(cfg)
@@ -166,6 +168,7 @@ def main():
             print("  diag:", key, sides)
         for idx, p in enumerate(players):
             dd = dealt[idx * 3:idx * 3 + 3]
+            dr = received[idx * 3:idx * 3 + 3]
             it = items[idx] if idx < len(items) else "?"
             lh = p.get('last_hits')
             dn = p.get('denies')
@@ -175,7 +178,7 @@ def main():
                   f"K/D {p.get('kills')}/{p.get('deaths')} "
                   f"LH {lh}({lh_min}) DN {dn}({dn_min}) lvl {p.get('level')} | "
                   f"heroDmg {p.get('hero_damage')} towerDmg {p.get('tower_damage')} "
-                  f"tp {p.get('teleports_used')} | dealt ph/mg/pu {dd} | "
+                  f"tp {p.get('teleports_used')} | dealt ph/mg/pu {dd} | rcvd ph/mg/pu {dr} | "
                   f"items {decode_items(it)}")
 
 

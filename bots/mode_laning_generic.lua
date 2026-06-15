@@ -341,6 +341,11 @@ function Think()
 	-- safe_tower=0.15 (own T1 front), aggressive_mid=0.45 (river), jungle_pressure=0.70 (deep).
 	-- Falls back to dials.forwardness if rule is unset.
 	if DotaTime() < 0 and GetGameMode() == GAMEMODE_1V1MID then
+		local nearby = bot:GetNearbyHeroes(1200, true, BOT_MODE_NONE)
+		if nearby and #nearby > 0 and nearby[1]:IsAlive() then
+			bot:Action_AttackUnit(nearby[1], false)
+			return
+		end
 		local ownT1 = GetTower(GetTeam(), TOWER_MID_1)
 		local enmT1 = GetTower(GetOpposingTeam(), TOWER_MID_1)
 		if ownT1 ~= nil and enmT1 ~= nil then
@@ -431,8 +436,16 @@ function Think()
 					return
 				end
 			end
+		elseif heroPrio == "always" then
+			local chase = bot:GetNearbyHeroes(1500, true, BOT_MODE_NONE)
+			if chase and #chase > 0 and chase[1]:IsAlive() then
+				bot:Action_MoveToUnit(chase[1])
+				AIB_Diag("hero-prio-chase"); return
+			end
 		end
 	end
+
+	if bot:WasRecentlyDamagedByCreep(1.0) then Style.DiagRL(bot, "creep-dmg", 3) end
 
 	-- Kite melee creeps: ranged hero (attack range > 300) must not stand in melee attack range.
 	-- CD 1.5s prevents jitter; "kite-creep" diag counts triggers.
@@ -459,7 +472,7 @@ function Think()
 	-- creep_wave_priority = push: attack any in-range enemy creep (not just last-hit window).
 	-- Guard: only push when allied creeps are nearby (<500) so aggro is shared with the wave.
 	-- Without this, the bot pulls the entire enemy wave alone and takes constant creep damage.
-	if cwp == "push" then
+	if cwp == "push" and AIB_EnemyTowerDanger() == nil then
 		local allyNear = false
 		for _, a in pairs(nAllyCreeps or {}) do
 			if J.IsValid(a) and GetUnitToUnitDistance(bot, a) <= 500 then
@@ -526,7 +539,7 @@ function Think()
 	-- Gated on retreat_caution: aggressive bots (low caution) hold the line, cautious/passive bots
 	-- back off; math.random()<rc makes it kite (step back / drift in) instead of robotically pinging.
 	local rc = dials.retreat_caution or 0.5
-	if rc >= 0.4 and bot:WasRecentlyDamagedByCreep(1.5) and math.random() < rc then
+	if rc >= 0.15 and bot:WasRecentlyDamagedByCreep(1.5) and math.random() < rc then
 		local cen = AIB_EnemyCreepCentroid(nEnemyCreeps)
 		local back = cen and J.VectorAway(bot:GetLocation(), cen, 400) or AIB_ForwardSurvivingTowerLoc()
 		if back then bot:Action_MoveToLocation(back); return end

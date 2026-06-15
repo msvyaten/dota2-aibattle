@@ -122,13 +122,17 @@ local function defensiveHeal(bot, dials)
 		end
 	end
 
-	-- 9. Flask: channel, any damage cancels
-	if hp < 0.40 and healReady then
-		local safe = not (bot:WasRecentlyDamagedByAnyHero(0.5) or bot:WasRecentlyDamagedByCreep(0.5))
-		if safe then
-			local flask = getItem(bot, "item_flask")
-			if flask then
-				bot.aib_healLast = DotaTime(); Style.Diag(bot, "heal-item")
+	-- 9. Flask: separate CD — not gated by healReady so tango/wand use doesn't block it.
+	-- Channel gets cancelled by damage, so at critical HP (< 0.30) bypass damage check too.
+	local FLASK_CD = 3.0
+	if hp < 0.40 and (bot.aib_flaskLast == nil or DotaTime() - bot.aib_flaskLast >= FLASK_CD) then
+		local flask = getItem(bot, "item_flask")
+		if flask then
+			local recently_dmg = bot:WasRecentlyDamagedByAnyHero(0.5) or bot:WasRecentlyDamagedByCreep(0.5)
+			if hp < 0.30 or not recently_dmg then
+				bot.aib_healLast  = DotaTime()
+				bot.aib_flaskLast = DotaTime()
+				Style.Diag(bot, "heal-item")
 				bot:Action_UseAbilityOnEntity(flask, bot); return true
 			end
 		end
