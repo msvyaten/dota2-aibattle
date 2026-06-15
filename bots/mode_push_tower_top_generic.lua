@@ -7,6 +7,7 @@ if bot == nil or bot:IsInvulnerable() or not bot:IsHero() or not bot:IsAlive() o
 if bot.PushLaneDesire == nil then bot.PushLaneDesire = {0, 0, 0} end
 
 function GetDesire()
+	if GetGameMode() == GAMEMODE_1V1MID then return BOT_MODE_DESIRE_NONE end
 	local raw = Push.GetPushDesire(bot, LANE_TOP)
 	bot.PushLaneDesire[LANE_TOP] = raw
 	local d = AIBStyle.ScaleDesire(raw, AIBStyle.Get().dials.push_desire)

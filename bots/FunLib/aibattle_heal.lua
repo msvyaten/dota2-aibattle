@@ -151,8 +151,8 @@ local function defensiveHeal(bot, dials)
 end
 
 -- ────────────────────────────────────────────────────────────
--- regen_lane: step back and wait for natural regen in lane.
--- Only fires when safe (no hero dmg 2.5s + no enemy chasing).
+-- regen_lane: step back toward own tower to recover HP.
+-- Always runs when HP is low — enemy chasing is exactly when you should retreat.
 -- ────────────────────────────────────────────────────────────
 local function regenLane(bot, dials, nEnemyCreeps)
 	if Style.Get().rules.low_hp_behavior ~= "regen_lane" then return false end
@@ -160,23 +160,16 @@ local function regenLane(bot, dials, nEnemyCreeps)
 	-- recovers more conservatively after a fight before re-engaging.
 	if J.GetHP(bot) >= 0.40 + 0.15 * (dials.retreat_caution or 0.5) then return false end
 
-	local nearEnemy    = bot:GetNearbyHeroes(900, true, BOT_MODE_NONE)
-	local enemyChasing = nearEnemy and #nearEnemy > 0 and nearEnemy[1]:IsAlive()
-
-	if not enemyChasing then
-		local back = forwardTowerLoc(bot)
-		if back and GetUnitToLocationDistance(bot, back) < 350 then
-			return false  -- already at tower, stand still and regen naturally
+	local back = forwardTowerLoc(bot)
+	if back and GetUnitToLocationDistance(bot, back) < 350 then
+		return false  -- already at tower, stand still and regen naturally
+	end
+	if bot.aib_regenLast == nil or DotaTime() - bot.aib_regenLast >= 3.0 then
+		if back then
+			bot.aib_regenLast = DotaTime()
+			Style.Diag(bot, "regen-lane")
+			bot:Action_MoveToLocation(back); return true
 		end
-		if bot.aib_regenLast == nil or DotaTime() - bot.aib_regenLast >= 3.0 then
-			if back then
-				bot.aib_regenLast = DotaTime()
-				Style.Diag(bot, "regen-lane")
-				bot:Action_MoveToLocation(back); return true
-			end
-		end
-	else
-		Style.DiagRL(bot, "retreat-blocked", 3.0)
 	end
 	return false
 end
@@ -228,9 +221,9 @@ local function recovery(bot, dials)
 							if runeLoc and GetUnitToLocationDistance(bot, runeLoc) <= 2000 then
 								if bot.aib_recMoveLast == nil or DotaTime() - bot.aib_recMoveLast >= 5.0 then
 									bot.aib_recMoveLast = DotaTime(); Style.Diag(bot, "recovery-rune-bottle")
-									bot:Action_MoveToLocation(runeLoc)
+									bot:Action_MoveToLocation(runeLoc); return true
 								end
-								return true
+								-- cooldown active: movement already issued, fall through to laning
 							end
 						end
 					end
@@ -240,11 +233,16 @@ local function recovery(bot, dials)
 		end
 	end
 
-	-- 3. Flask: no hpSafe check
+	-- 3. Flask: 8s cooldown guards against channel-interrupt re-spam
+	--    (damage cancels the channel → item stays castable → next tick tries again without CD)
 	if hp < 0.70 then
 		local flask = getItem(bot, "item_flask")
 		if flask then
-			Style.Diag(bot, "recovery-flask"); bot:Action_UseAbilityOnEntity(flask, bot); return true
+			if bot.aib_recFlaskLast == nil or DotaTime() - bot.aib_recFlaskLast >= 8.0 then
+				bot.aib_recFlaskLast = DotaTime()
+				Style.Diag(bot, "recovery-flask"); bot:Action_UseAbilityOnEntity(flask, bot)
+			end
+			return true
 		end
 	end
 
@@ -274,7 +272,7 @@ local function recovery(bot, dials)
 
 	-- Fallback chain: only when critically low and items exhausted
 	local threshold = 0.25 + 0.30 * (dials.retreat_caution or 0.5)
-	                + (bot:GetDeaths() >= 1 and 0.15 or 0.0)
+	                + (GetHeroDeaths(bot:GetPlayerID()) >= 1 and 0.15 or 0.0)
 	if hp >= threshold then return false end
 
 	local behavior = Style.Get().rules.low_hp_behavior or "tp_fountain"
@@ -285,8 +283,6 @@ local function recovery(bot, dials)
 		bot.aib_recBuyLast = DotaTime()
 		bot:ActionImmediate_PurchaseItem("item_flask")
 		Style.Diag(bot, "recovery-buy")
-		local courier = GetCourier(0)
-		if courier then courier:Action_Deliver() end
 		return true
 	end
 

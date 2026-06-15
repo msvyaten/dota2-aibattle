@@ -419,7 +419,6 @@ function Think()
 	if heroPrio ~= "never" then
 		local atkHero = bot:GetNearbyHeroes(botAttackRange + 50, true, BOT_MODE_NONE)
 		if atkHero and #atkHero > 0 and atkHero[1]:IsAlive() then
-			local hpDisadv = J.GetHP(atkHero[1]) - J.GetHP(bot) > 0.25
 			if heroPrio == "always" then
 				-- yield to last-hit movement so hero attacks don't block securing creeps
 				if not (csAllowed and needMove) then
@@ -427,7 +426,7 @@ function Think()
 					AIB_Diag("hero-prio-always"); return
 				end
 			elseif math.random() > (dials.farm_focus or 0.5) then
-				if not hpDisadv and math.random() < (dials.harass_desire or 0.5) then
+				if math.random() < (dials.harass_desire or 0.5) then
 					bot:Action_AttackUnit(atkHero[1], false)
 					return
 				end
