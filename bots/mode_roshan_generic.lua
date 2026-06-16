@@ -22,6 +22,7 @@ local initDPSFlag = false
 local Roshan
 
 function GetDesire()
+	if GetGameMode() == GAMEMODE_1V1MID then return BOT_MODE_DESIRE_NONE end
 	local res = GetDesireHelper()
 	if res > 0.6 then
 		J.ModeAnnounce(bot, 'say_roshan', 30)
