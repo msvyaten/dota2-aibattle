@@ -342,6 +342,24 @@ function Think()
 	-- Falls back to dials.forwardness if rule is unset.
 	if DotaTime() < 0 and GetGameMode() == GAMEMODE_1V1MID then
 		local nearby = bot:GetNearbyHeroes(1500, true, BOT_MODE_NONE)
+		-- Log positions every 3s: visible in console.<id>.log, parsed by match_stats.py
+		local pgNow = DotaTime()
+		if bot.aib_pgLocLast == nil or pgNow - bot.aib_pgLocLast >= 3.0 then
+			bot.aib_pgLocLast = pgNow
+			local sp   = bot:GetLocation()
+			local side = (bot:GetTeam() == TEAM_RADIANT) and "R" or "D"
+			if nearby and #nearby > 0 and nearby[1]:IsAlive() then
+				local ep   = nearby[1]:GetLocation()
+				local dist = GetUnitToUnitDistance(bot, nearby[1])
+				local rng  = bot:GetAttackRange()
+				bot:ActionImmediate_Chat(string.format(
+					"AIB[%s] pg-loc me=%.0f,%.0f enm=%.0f,%.0f dist=%.0f range=%.0f in-range=%d",
+					side, sp.x, sp.y, ep.x, ep.y, dist, rng, dist <= rng and 1 or 0), true)
+			else
+				bot:ActionImmediate_Chat(string.format(
+					"AIB[%s] pg-loc me=%.0f,%.0f no-enm", side, sp.x, sp.y), true)
+			end
+		end
 		if nearby and #nearby > 0 and nearby[1]:IsAlive() then
 			Style.DiagRL(bot, "pg-atk", 5)
 			if bot:GetCurrentActionType() ~= BOT_ACTION_TYPE_ATTACK then
@@ -349,6 +367,7 @@ function Think()
 			end
 			return
 		end
+		Style.DiagRL(bot, "pg-pos", 5)
 		local ownT1 = GetTower(GetTeam(), TOWER_MID_1)
 		local enmT1 = GetTower(GetOpposingTeam(), TOWER_MID_1)
 		if ownT1 ~= nil and enmT1 ~= nil then

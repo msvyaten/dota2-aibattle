@@ -104,10 +104,31 @@ def parse(path):
            if ("AIB[" in l) and (" harass=" in l or " defend=" in l)]
     # Diag: 'AIB[R] heal-item #5'. Aggregate per key -> {side: count}; new lines carry a
     # cumulative '#N' (keep the max), legacy lines (no '#') are counted by occurrence.
+    # pg-loc lines: "AIB[R] pg-loc me=X,Y enm=X,Y dist=N range=N in-range=0/1"
+    # Parsed separately; excluded from the generic diag counter below.
+    pg_locs = []
+    for side, body in re.findall(r"AIB\[([RD])\] (pg-loc .+)", text):
+        m_me  = re.search(r"me=([-\d.]+),([-\d.]+)", body)
+        m_enm = re.search(r"enm=([-\d.]+),([-\d.]+)", body)
+        m_dst = re.search(r"dist=([\d.]+)", body)
+        m_rng = re.search(r"range=([\d.]+)", body)
+        m_ir  = re.search(r"in-range=(\d)", body)
+        pg_locs.append({
+            "side": side,
+            "me":   (float(m_me.group(1)),  float(m_me.group(2)))  if m_me  else None,
+            "enm":  (float(m_enm.group(1)), float(m_enm.group(2))) if m_enm else None,
+            "dist": float(m_dst.group(1)) if m_dst else None,
+            "range": float(m_rng.group(1)) if m_rng else None,
+            "in_range": int(m_ir.group(1)) if m_ir else None,
+            "no_enm": "no-enm" in body,
+        })
+
     diag = {}
     _cfg_prefixes = ("harass=", "defend=")  # cfg announce start markers
     for side, body in re.findall(r"'AIB(\[[RD]\])?\s+([^']*)'", text):
         if any(body.startswith(p) for p in _cfg_prefixes):  # cfg line, not a diag
+            continue
+        if body.startswith("pg-loc"):  # position log — handled above
             continue
         s = side.strip("[]") or "?"
         pairs = re.findall(r"([\w-]+)=(\d+)", body)  # combined format 'anti-afk=15 heal-item=7'
@@ -141,7 +162,7 @@ def parse(path):
             cur["slot"] = m.group(1)
             players.append(cur)
             cur = {}
-    return cfg, diag, dur, win, items, players, dealt, received
+    return cfg, diag, dur, win, items, players, dealt, received, pg_locs
 
 
 def main():
@@ -154,7 +175,7 @@ def main():
         if not os.path.exists(path):
             print(f"  (not found: {path})")
             continue
-        cfg, diag, dur, win, items, players, dealt, received = parse(path)
+        cfg, diag, dur, win, items, players, dealt, received, pg_locs = parse(path)
         for c in cfg:
             print("  cfg:", c)
         dials = extract_dials(cfg)
@@ -166,6 +187,16 @@ def main():
         for key in sorted(diag):
             sides = " ".join(f"{s}#{n}" for s, n in sorted(diag[key].items()))
             print("  diag:", key, sides)
+        if pg_locs:
+            print(f"  pregame positions ({len(pg_locs)} snapshots, every ~3s):")
+            for p in pg_locs:
+                if p["no_enm"]:
+                    print(f"    [{p['side']}] me={p['me']}  (no enemy in 1500 range)")
+                else:
+                    ir = p["in_range"]
+                    flag = "IN-RANGE" if ir == 1 else "out-of-range"
+                    print(f"    [{p['side']}] me={p['me']}  enm={p['enm']}"
+                          f"  dist={p['dist']:.0f}  range={p['range']:.0f}  {flag}")
         for idx, p in enumerate(players):
             dd = dealt[idx * 3:idx * 3 + 3]
             dr = received[idx * 3:idx * 3 + 3]
