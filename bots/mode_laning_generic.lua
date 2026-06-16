@@ -367,6 +367,9 @@ function Think()
 			end
 			return
 		end
+		-- Enemy gone: heal up before repositioning (tango/flask/recovery items).
+		-- AIBHeal.Think() → recovery() fires without safety gates when no hero nearby.
+		if AIBHeal.Think(bot, dials, nil) then return end
 		Style.DiagRL(bot, "pg-pos", 5)
 		local ownT1 = GetTower(GetTeam(), TOWER_MID_1)
 		local enmT1 = GetTower(GetOpposingTeam(), TOWER_MID_1)
