@@ -458,11 +458,11 @@ function Think()
 				end
 			else
 				local inRange = GetUnitToUnitDistance(bot, atkHero[1]) <= botAttackRange
-				if inRange then
-					-- Baseline: enemy is already in our face — always swing, no dice rolls.
+				if inRange and AIB_EnemyTowerDanger() == nil then
+					-- Baseline: enemy in range, no tower danger — always swing, no dice rolls.
 					bot:Action_AttackUnit(atkHero[1], false)
 					return
-				elseif math.random() > (dials.farm_focus or 0.5) then
+				elseif not inRange and math.random() > (dials.farm_focus or 0.5) then
 					if math.random() < (dials.harass_desire or 0.5) then
 						bot:Action_AttackUnit(atkHero[1], false)
 						return
