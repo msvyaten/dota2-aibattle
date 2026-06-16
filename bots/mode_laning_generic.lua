@@ -455,10 +455,14 @@ function Think()
 					bot:Action_AttackUnit(atkHero[1], false)
 					AIB_Diag("hero-prio-always"); return
 				end
-			elseif math.random() > (dials.farm_focus or 0.5) then
-				if math.random() < (dials.harass_desire or 0.5) then
-					bot:Action_AttackUnit(atkHero[1], false)
-					return
+			else
+				-- farm_focus gates seeking enemies; bypass it when enemy is already in range.
+				local inRange = GetUnitToUnitDistance(bot, atkHero[1]) <= botAttackRange
+				if inRange or math.random() > (dials.farm_focus or 0.5) then
+					if math.random() < (dials.harass_desire or 0.5) then
+						bot:Action_AttackUnit(atkHero[1], false)
+						return
+					end
 				end
 			end
 		elseif heroPrio == "always" then
