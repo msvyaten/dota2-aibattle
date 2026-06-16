@@ -1,7 +1,7 @@
 # HANDOFF — AIBattle × Dota 2
 
 > Единственная точка входа. Обновлять ЕГО, новых доков не плодить.
-> Последнее обновление: 2026-06-12 (phase-17: improvements→rules refactor (healing_style/ability_usage), build_style 3-стиля, вода-руна distance cap).
+> Последнее обновление: 2026-06-16 (lane-stability: baseline attack, off-lane blocking, pregame fix, off-lane mode guards).
 > Полная история сессий — `docs/history/HANDOFF-full-2026-06-09.md`.
 > По-русски. Доказательство = цифра из лога или stат-дампа. «На глаз» не считается.
 
@@ -106,6 +106,35 @@
 | healing_style=active изолирован на Radiant | ✅ bottle-heal R#14, tango-heal R#2; Dire — 0 |
 | ability_usage=aggressive изолирован на Dire | ✅ ability-harass D#10; Radiant — 0 |
 | Баг: recovery-rune-bottle уходил к вражескому святилищу (7min) | 🐛 → FIXED |
+
+**Текущий тест:** LongGame v2 (оба бота одинаково: harass=0.50 abil=0.35 fwd=0.50 exec=0.15 farm=0.80, dive=never, hero=default, pregame=safe_tower). Базовый smoke-тест движка после lane-stability фиксов.
+
+---
+
+**phase-18 — LANE STABILITY (16.06.2026) — закоммичено, требует LLM-тест**
+
+Все фиксы ниже применены и закоммичены. Следующий шаг — запустить A/B матч с ChatGPT vs Gemini конфигами.
+
+| Коммит | Фикс | Результат |
+|---|---|---|
+| `400b1e0` | `farm_focus` bypass когда враг в радиусе атаки | Бот бил врага стоящего рядом |
+| `a02555c` | Baseline attack (в радиусе = всегда бить); dt-walk не прерывает CS (1400→1000u) | Бот фармит крипов, не гоняется |
+| `c3a4be8` | Tower danger check в baseline attack | Dire перестал умирать под Radiant T1 |
+| `2edaa64` | `mode_farm_generic`: DESIRE_NONE в 1v1MID | Боты не уходили фармить эншентов в ~10 мин |
+| `2046ad5` | `mode_roam/defend_top/bot/roshan`: DESIRE_NONE в 1v1MID | Блок роуминга, защиты side-башен, Рошана |
+| `350d836` | Pregame: 500u fixed offset вместо 15% интерполяции; `enemyHuggingTower` check | Dire no-dive: D#72→D#23; прегейм чуть симметричнее |
+
+**Новые диаги (добавлены в lane-stability):**
+- `pg-loc` — координаты ботов в прегейме каждые 3с (парсит `match_stats.py`)
+- `dt-walk` — бот идёт к врагу в "dead time" (нет крипов, враг 525–1000u)
+- `100cs-push` — TODO: ещё не реализован, обсуждался
+
+**Матчи lane-stability:**
+
+| MatchID | Dur | Победитель | R K/D LH/м | D K/D LH/м | Заметки |
+|---|---|---|---|---|---|
+| 8854084363 | 24.2м | **Dire** | 1/1 4.6 | 1/1 6.0 | no-dive D#72 R#1 (до enemyHuggingTower); Dire фармил эншентов (до farm fix) |
+| 8854228296 | 6.3м | **Dire** | 2/2 3.2 | 2/2 3.5 | no-dive D#23 (улучшение ×3); dt-walk D#5 R#7; боты активно дерутся |
 
 **Текущий тест:** нет. Следующая задача — §6 TOP-1.
 

@@ -11,6 +11,29 @@
 
 ---
 
+## 2026-06-16 — phase-18, lane stability (baseline attack + off-lane блокировки)
+
+**Конфиг оба (LongGame v2 smoke):** harass=0.50 farm=0.80 fwd=0.50 abil=0.35 exec=0.15 dive=never hero=default pregame=safe_tower healing=active
+**Цель:** smoke-тест движка после phase-18 heal-фиксов. Конфиги не в репо.
+**Применены 6 фиксов:** farm_focus bypass, dt-walk creep guard, baseline-attack, tower-danger guard, enemyHuggingTower guard, jungle block (mode_farm), off-lane guards (roam/defend_top/bot/roshan), pregame symmetry.
+
+| MatchID | Dur | Победитель | Конфиг R / D | Заметки |
+|---|---|---|---|---|
+| 8854084363 | 24.2м | **Dire** | LongGame v2 / LongGame v2 | До полного набора фиксов: бот уходил на эншенты ~10м; нет dive под вышку; Dire первый фраг. Диагностика: `dt-walk` не уступал крипам, farm_focus=0.80 блокировал харасс 80% тиков. |
+| 8854228296 | 6.3м | **Dire** | LongGame v2 / LongGame v2 | После частичных фиксов. «Повеселее на линии, не стояли в АФК». no-dive уменьшился D#72→D#23 ✅. Движок стабилен. |
+
+**Итог:** инфраструктура и heal-движок стабильны. 6 фиксов lane stability закоммичены (commits 400b1e0–350d836). Требует валидации в A/B матче.
+
+**Коммиты сессии:**
+- `400b1e0` — farm_focus bypass: атака в радиусе не зависит от farm_focus
+- `a02555c` — baseline attack + dt-walk уступает крипам
+- `c3a4be8` — tower-danger guard в baseline; out-of-range разделён
+- `2edaa64` — jungle farming заблокирован в GAMEMODE_1V1MID
+- `2046ad5` — mode_roam/defend_top/bot/roshan → DESIRE_NONE в 1v1
+- `350d836` — pregame safe_tower: фиксированный 500u от своей T1 (не % от расстояния)
+
+---
+
 ## 2026-06-14 — phase-17, новые правила + 1v1 блокировки
 
 **Новые правила:** `pregame_behavior`, `hero_priority`, `deny_policy`, `cw=freeze/push` + guard
