@@ -375,14 +375,18 @@ function Think()
 		local enmT1 = GetTower(GetOpposingTeam(), TOWER_MID_1)
 		if ownT1 ~= nil and enmT1 ~= nil then
 			local pgb = GetRules().pregame_behavior
-			local t
-			if     pgb == "safe_tower"       then t = 0.15
-			elseif pgb == "aggressive_mid"   then t = 0.45
-			elseif pgb == "jungle_pressure"  then t = 0.70
-			else                                  t = dials.forwardness or 0.5
-			end
 			local a, b = ownT1:GetLocation(), enmT1:GetLocation()
-			local target = Vector(a.x + (b.x-a.x)*t, a.y + (b.y-a.y)*t, a.z)
+			local totalDist = math.sqrt((b.x-a.x)^2 + (b.y-a.y)^2)
+			local dirX, dirY = (b.x-a.x)/totalDist, (b.y-a.y)/totalDist
+			-- Use fixed offsets from own T1 so map asymmetry doesn't skew positions.
+			-- % interpolation gave Dire (214,343) ≈ center because Dire T1 is close to river.
+			local dist
+			if     pgb == "safe_tower"       then dist = 500
+			elseif pgb == "aggressive_mid"   then dist = totalDist * 0.45
+			elseif pgb == "jungle_pressure"  then dist = totalDist * 0.70
+			else                                  dist = totalDist * (dials.forwardness or 0.5)
+			end
+			local target = Vector(a.x + dirX*dist, a.y + dirY*dist, a.z)
 			if GetUnitToLocationDistance(bot, target) > 100 then
 				bot:Action_MoveToLocation(target)
 			end
@@ -458,8 +462,10 @@ function Think()
 				end
 			else
 				local inRange = GetUnitToUnitDistance(bot, atkHero[1]) <= botAttackRange
-				if inRange and AIB_EnemyTowerDanger() == nil then
-					-- Baseline: enemy in range, no tower danger — always swing, no dice rolls.
+				local enmT1hw = GetTower(GetOpposingTeam(), TOWER_MID_1)
+				local enemyHuggingTower = enmT1hw ~= nil and GetUnitToUnitDistance(atkHero[1], enmT1hw) < 1200
+				if inRange and AIB_EnemyTowerDanger() == nil and not enemyHuggingTower then
+					-- Baseline: enemy in range, not hugging their tower — always swing.
 					bot:Action_AttackUnit(atkHero[1], false)
 					return
 				elseif not inRange and math.random() > (dials.farm_focus or 0.5) then
