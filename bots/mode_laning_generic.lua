@@ -444,7 +444,8 @@ function Think()
 	-- 2) Harass hero BEFORE kite: prevents kite-400 from pushing bot outside attack range.
 	--    hero_priority=never  → skip entirely (pure creep focus).
 	--    hero_priority=always → bypass farm_focus roll and hp-disadvantage gate.
-	--    hero_priority=default → original probabilistic behaviour.
+	--    hero_priority=default → attack immediately when in range (baseline); farm_focus+harass_desire
+	--                            gate only applies when enemy is out of range (seeking behaviour).
 	local heroPrio = Style.Get().rules.hero_priority or "default"
 	if heroPrio ~= "never" then
 		local atkHero = bot:GetNearbyHeroes(botAttackRange + 50, true, BOT_MODE_NONE)
@@ -456,9 +457,12 @@ function Think()
 					AIB_Diag("hero-prio-always"); return
 				end
 			else
-				-- farm_focus gates seeking enemies; bypass it when enemy is already in range.
 				local inRange = GetUnitToUnitDistance(bot, atkHero[1]) <= botAttackRange
-				if inRange or math.random() > (dials.farm_focus or 0.5) then
+				if inRange then
+					-- Baseline: enemy is already in our face — always swing, no dice rolls.
+					bot:Action_AttackUnit(atkHero[1], false)
+					return
+				elseif math.random() > (dials.farm_focus or 0.5) then
 					if math.random() < (dials.harass_desire or 0.5) then
 						bot:Action_AttackUnit(atkHero[1], false)
 						return
@@ -569,14 +573,14 @@ function Think()
 		end
 	end
 
-	-- AIBattle dead-time walk: hero_priority=always has its own chase (above); for "default",
-	-- when idle (no CS window, no in-range harass, no ability target) and enemy is visible at
-	-- up to 1400u, walk up toward them instead of drifting to lane-front position.
-	-- Gated on harass_desire>=0.5 so farm-focused configs (low harass) stay put.
-	-- No rate-limit: smooth continuous movement like the "always" chase above.
+	-- AIBattle dead-time walk: step toward enemy when truly idle (no creep wave to manage,
+	-- no ability target, no tower danger). Skipped when enemy creeps are present so the bot
+	-- doesn't abandon a CS wave to chase. Radius 1000u: close enough to actually close gap,
+	-- not so far that the bot leaves lane entirely.
 	if heroPrio == "default" and AIB_EnemyTowerDanger() == nil
-		and (dials.harass_desire or 0.5) >= 0.5 then
-		local dtEnemy = bot:GetNearbyHeroes(1400, true, BOT_MODE_NONE)
+		and (dials.harass_desire or 0.5) >= 0.5
+		and not (nEnemyCreeps and #nEnemyCreeps > 0) then
+		local dtEnemy = bot:GetNearbyHeroes(1000, true, BOT_MODE_NONE)
 		if dtEnemy and #dtEnemy > 0 and dtEnemy[1]:IsAlive() then
 			if GetUnitToUnitDistance(bot, dtEnemy[1]) > botAttackRange + 50 then
 				Style.DiagRL(bot, "dt-walk", 5)
