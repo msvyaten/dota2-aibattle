@@ -106,6 +106,7 @@ function GetRuneDesireRaw()
 		X.UpdateWisdom()
 
 		if  DotaTime() >= 7 * 60
+		and GetGameMode() ~= GAMEMODE_1V1MID
 		and not J.IsMeepoClone(bot)
 		and not bot:HasModifier('modifier_arc_warden_tempest_double')
 		and bot.rune and bot.rune.wisdom and bot.rune.wisdom[nShrineOfWisdomTime]

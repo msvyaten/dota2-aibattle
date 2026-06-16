@@ -341,9 +341,12 @@ function Think()
 	-- safe_tower=0.15 (own T1 front), aggressive_mid=0.45 (river), jungle_pressure=0.70 (deep).
 	-- Falls back to dials.forwardness if rule is unset.
 	if DotaTime() < 0 and GetGameMode() == GAMEMODE_1V1MID then
-		local nearby = bot:GetNearbyHeroes(1200, true, BOT_MODE_NONE)
+		local nearby = bot:GetNearbyHeroes(1500, true, BOT_MODE_NONE)
 		if nearby and #nearby > 0 and nearby[1]:IsAlive() then
-			bot:Action_AttackUnit(nearby[1], false)
+			Style.DiagRL(bot, "pg-atk", 5)
+			if bot:GetCurrentActionType() ~= BOT_ACTION_TYPE_ATTACK then
+				bot:Action_AttackUnit(nearby[1], false)
+			end
 			return
 		end
 		local ownT1 = GetTower(GetTeam(), TOWER_MID_1)
