@@ -562,6 +562,23 @@ function Think()
 		end
 	end
 
+	-- AIBattle dead-time walk: hero_priority=always has its own chase (above); for "default",
+	-- when idle (no CS window, no in-range harass, no ability target) and enemy is visible at
+	-- up to 1400u, walk up toward them instead of drifting to lane-front position.
+	-- Gated on harass_desire>=0.5 so farm-focused configs (low harass) stay put.
+	-- No rate-limit: smooth continuous movement like the "always" chase above.
+	if heroPrio == "default" and AIB_EnemyTowerDanger() == nil
+		and (dials.harass_desire or 0.5) >= 0.5 then
+		local dtEnemy = bot:GetNearbyHeroes(1400, true, BOT_MODE_NONE)
+		if dtEnemy and #dtEnemy > 0 and dtEnemy[1]:IsAlive() then
+			if GetUnitToUnitDistance(bot, dtEnemy[1]) > botAttackRange + 50 then
+				Style.DiagRL(bot, "dt-walk", 5)
+				bot:Action_MoveToUnit(dtEnemy[1])
+				return
+			end
+		end
+	end
+
 	-- AIBattle: don't stand and tank enemy creep fire while idle. We only reach here when no
 	-- in-range last-hit, walkable last-hit, or deny was available (those returned above), so the
 	-- bot would otherwise just stand. If it's taking creep damage, step out of creep attack range.
