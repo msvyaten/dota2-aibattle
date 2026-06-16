@@ -437,10 +437,17 @@ function Think()
 				end
 			end
 		elseif heroPrio == "always" then
-			local chase = bot:GetNearbyHeroes(1500, true, BOT_MODE_NONE)
-			if chase and #chase > 0 and chase[1]:IsAlive() then
-				bot:Action_MoveToUnit(chase[1])
-				AIB_Diag("hero-prio-chase"); return
+			-- suppress chase when regen_lane should be retreating (HP below its threshold)
+			local rc = dials.retreat_caution or 0.5
+			local regenThresh = 0.40 + 0.15 * rc
+			local shouldRegen = Style.Get().rules.low_hp_behavior == "regen_lane"
+				and J.GetHP(bot) < regenThresh
+			if not shouldRegen then
+				local chase = bot:GetNearbyHeroes(1500, true, BOT_MODE_NONE)
+				if chase and #chase > 0 and chase[1]:IsAlive() then
+					bot:Action_MoveToUnit(chase[1])
+					AIB_Diag("hero-prio-chase"); return
+				end
 			end
 		end
 	end
