@@ -121,6 +121,7 @@ function GetDesireHelper()
 	or (J.IsDoingRoshan(bot) and bNotClone)
 	or (J.IsDoingTormentor(bot) and bNotClone)
     or DotaTime() < 50
+	or GetGameMode() == GAMEMODE_1V1MID
     or ((botActiveMode == BOT_MODE_SECRET_SHOP
 		or botActiveMode == BOT_MODE_RUNE
 		or botActiveMode == BOT_MODE_WARD
