@@ -53,7 +53,7 @@
 		neutralItems =
 		{
 			-- duh
-			enabled = true,
+			enabled = false,  -- AIBattle: disabled (bots earn items naturally)
 			-- Set to false to reroll on the entier table every time.  True makes the awards more like real
 			-- jungle drops)
 			isRemoveUsedItems = true,
@@ -87,7 +87,7 @@
 			variance 			= {1, 1},
 			-- awards are clamped to these numbers. Note that if you make the minimum non-zero, then the
 			-- bot's actual GPM will increase by that amount every minute (you don't want to do this)
-			clamp 				= {0, 25},
+			clamp 				= {0, 0},  -- AIBattle: disabled gold bonus
 			-- ignore clamps?
 			clampOverride 		= false,
 			-- scales (per role) for multipliers if necessary
@@ -100,7 +100,7 @@
 		{
 			offset 				= 0,
 			variance 			= {1, 1},
-			clamp 				= {0, 25},
+			clamp 				= {0, 0},  -- AIBattle: disabled xp bonus
 			clampOverride 		= false,
 			scale 				= {1.2, 1.1, 1.0, 0.9, 0.9},
 			perMinuteScale		= 0.5
@@ -112,15 +112,15 @@
 			order = {'neutral', 'levels', 'stats', 'armor', 'magicResist', 'gold'},
 			--The maximum number of awards per death
 			maxAwards = 2,
-			-- individual bonus enables
+			-- individual bonus enables  -- AIBattle: all disabled for clean baseline
 			enabled =
 			{
-				gold 			= true,
-				armor 			= true,
-				magicResist 	= true,
-				levels 			= true,
-				neutral 		= true,
-				stats 			= true
+				gold 			= false,
+				armor 			= false,
+				magicResist 	= false,
+				levels 			= false,
+				neutral 		= false,
+				stats 			= false
 			},
 			-- Further option to only enable if the bots are behind in kills
 			isEnabledOnlyWhenBehind =
@@ -313,23 +313,23 @@
 		-- One Time awards (granted at game start)
 		-- note that neutral is not the count, it is the tier
 		-- still, it's probably better to just fix neutral timing rather than award one here
-		gameStartBonus =
+		gameStartBonus =  -- AIBattle: zeroed for clean baseline
 		{
-				gold 			= 100,
-				armor 			= 0.1,
-				magicResist 	= 0.1,
-				levels 			= 0.1,
+				gold 			= 0,
+				armor 			= 0,
+				magicResist 	= 0,
+				levels 			= 0,
 				neutral       	= 0,
-				stats 			= 1,
+				stats 			= 0,
 		},
 		gameStartBonusTimesDifficulty =
 		{
-				gold 			= 60,
-				armor 			= 1,
-				magicResist 	= 1,
+				gold 			= 0,
+				armor 			= 0,
+				magicResist 	= 0,
 				levels 			= 0,
-				neutral       	= 1,
-				stats 			= 1
+				neutral       	= 0,
+				stats 			= 0
 		},
 		-- caps for awards per game
 		awardCap =
@@ -345,7 +345,7 @@
 		dynamicDifficulty =
 		{
 			-- Set to false to disable completely.
-			enabled 			= true,
+			enabled 			= false,  -- AIBattle: disabled for clean baseline
 			-- 'knobs' to turn to adjust difficulty dynamically.
 			knobs =
 			{

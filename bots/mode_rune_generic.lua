@@ -63,6 +63,9 @@ function GetDesire()
 end
 
 function GetRuneDesireRaw()
+	-- In 1v1 mid, bots must never leave the lane for any rune (bounty, power, water, wisdom).
+	if GetGameMode() == GAMEMODE_1V1MID then return BOT_MODE_DESIRE_NONE end
+
 	X.InitRune()
 
 	if (DotaTime() > 2 * 60 and DotaTime() < 6 * 60 and GetUnitToLocationDistance(bot, GetRuneSpawnLocation(RUNE_POWERUP_2)) < 80) then

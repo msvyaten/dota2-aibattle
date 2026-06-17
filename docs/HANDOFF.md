@@ -1,7 +1,7 @@
 # HANDOFF — AIBattle × Dota 2
 
 > Единственная точка входа. Обновлять ЕГО, новых доков не плодить.
-> Последнее обновление: 2026-06-16 (lane-stability: baseline attack, off-lane blocking, pregame fix, off-lane mode guards).
+> Последнее обновление: 2026-06-17 (AFK-stability: botAhead fix, kite/pack-avoid → lane-aware, anti-idle-lane → lane front, syntax crash fix).
 > Полная история сессий — `docs/history/HANDOFF-full-2026-06-09.md`.
 > По-русски. Доказательство = цифра из лога или stат-дампа. «На глаз» не считается.
 
@@ -138,6 +138,42 @@
 
 **Текущий тест:** нет. Следующая задача — §6 TOP-1.
 
+---
+
+**phase-19 — AFK STABILITY (17.06.2026) — закоммичено ✅**
+
+Матчи-триггеры: 8855576439 (AFK+jitter), 8855652341 (crash), 8855694172 (crash), 8855812997 (AFK+лес), 8855867210 (AFK-фонтан 141s).
+
+**Валидационный матч 8855965648 (17.06):** `idle D#0 R#0` — настоящего idle нет. `recovery-wait` не появился (30s cap работает). `pack-avoid D#11 R#11` — все 11 срабатываний были заблокированы botAhead → fix #12 задеплоен.
+
+### Фиксы
+
+| # | Файл | Фикс | Причина |
+|---|---|---|---|
+| 1 | `aibattle_style.lua` | **Syntax crash**: `bot:GetAssignedLane` без `()` → `bot:GetAssignedLane()` | Lua-парсер крашил весь модуль при загрузке → OHA default (Рошан, гуляние). Матчи 8855652341, 8855694172. |
+| 2 | `mode_laning_generic.lua` | **botAhead fix**: `fwd` не тянет бота назад к `target_loc` когда бот уже ВПЕРЕДИ цели | `fwd` каждый тик отменял `MoveToUnit` из AntiIdleGlobal → осцилляция на одном месте. Все AFK в 8855576439. |
+| 3 | `mode_laning_generic.lua` | **GetUnitToLocationDistance arg order**: `GetUnitToLocationDistance(ownT1fwd, dest)` (было `(dest, ownT1fwd)`) | dest — Vector, не unit; VScript крашил с "invalid index". |
+| 4 | `aibattle_style.lua` | **anti-idle-lane**: offset `-200` → `0` (фронт лайна), порог `300u` → `150u` | При offset=-200 и thresh=300u бот никогда не двигался (dest всегда < 300u от него). В 8855812997 AFK на 2:36-3:06 (30s), 5:34-6:04 (30s). |
+| 5 | `mode_laning_generic.lua` | **kite-creep (retreat_caution)**: `J.VectorAway(bot, cen, 400)` → `GetLaneFrontLocation(GetTeam(), lane, -400)` | VectorAway уходил перпендикулярно лайну → лес. В 8855812997 бот застрял на -2683,-559 (90s, 4:40-5:00). |
+| 6 | `mode_laning_generic.lua` | **pack-avoid**: `J.VectorAway(bl, cen, 350)` → `GetLaneFrontLocation(GetTeam(), lane, -500) or VectorAway` | Та же проблема перпендикулярного дрейфа в джунгли. |
+| 7 | `mode_laning_generic.lua` | **kite-creep (melee-close)**: `J.VectorAway(bot, cen, 400)` → `GetLaneFrontLocation(GetTeam(), lane, -400) or VectorAway` | Второй kite-creep блок (hitByCreep/meleeClose ветка) тоже использовал VectorAway → лес. |
+| 8 | `mode_laning_generic.lua` | **HandleRespawn no-TP walk**: при `tp==nil` или `tp`-кд теперь явно идёт к `AIB_ForwardSurvivingTowerLoc()`, возвращает `true` | Явный ход из фонтана при отсутствии свитка. |
+| 9 | `mode_laning_generic.lua` | **tp_to_lane → таргетит T1, не фронт крипов**: `loc = t1:GetLocation()` вместо `GetLaneFrontLocation` | Фронт крипов Dire был глубоко во вражеской зоне; враг убивал их за 3с канала → TP отменялся → `aib_wasDead=false` → бот шёл пешком с TP в кармане. Матч 8855867210. |
+| 12 | `mode_laning_generic.lua` | **pack-avoid bypass botAhead**: вместо изменения `dest` внутри fwd-блока — напрямую `MoveToLocation(packDest); return` | botAhead блокировал отступление (dest позади бота → `dBotT1 > dDestT1+100 = true`), бот оставался внутри пака крипов. Матч 8855965648: pack-avoid D#11 — все 11 срабатываний были заблокированы. |
+
+### Корневые причины AFK в 8855812997
+
+- **t=0-61s**: обе стороны стоят — прегейм, OHA ведёт к стартовым позициям (не баг).
+- **t=81-101s, 153-183s, 334-364s**: бот на HP-aware `target_loc`, враг вне `dt-walk` (1000u), `anti-idle-lane` с порогом 300u не срабатывал. → **Fix #4**.
+- **t=203-294s (4:40-5:00)**: `kite-creep` выпихнул бота в лес (-2683,-559), там `fwd` + `pack-avoid` создали равновесие вне лайна. → **Fix #5+6**.
+
+### Новые диаги
+
+| Ключ | Смысл |
+|---|---|
+| `anti-idle-lane` | AntiIdleGlobal: пошёл к фронту своего лайна (rate-limit 5s) |
+| `kite-creep` | Отступил от крипов (вдоль лайна, не в джунгли) |
+
 **Исправлено в phase-16 (12.06.2026):**
 - `FunLib/aba_role.lua`: GAMEMODE_1V1MID → оба бота pos_2; диагностика через ActionImmediate_Chat
 - `mode_rune_generic.lua`: guard — во время лейнинга руна только если bottle + (HP<65% или MP<40%)
@@ -153,8 +189,22 @@
 
 ## 6. Открытые задачи
 
+### ⭐ ПЛАН НА ЗАВТРА (после fix #12 pack-avoid)
+
+1. **Запустить матч** — те же конфиги (Radiant=Gemini safe_tower, Dire=ChatGPT aggressive_mid)
+2. **Проверить `pack-avoid`** → должно быть > 0 И бот реально покидает пак (раньше: все 11 блокировал botAhead). Видно по диагу: если `pack-avoid D#X` и `fwd D#Y` → Y должен быть ниже (pack-avoid теперь выходит раньше fwd)
+3. **Проверить `idle D#0 R#0`** → всё ещё должно быть 0
+4. **Проверить `recovery-wait D#0 R#0`** → 30s cap держится
+5. **Если чисто** → пуш (спросить)
+6. **Следующая сессия** → Бенчмарк OHA default bot vs наш лучший конфиг
+
+---
+
 | # | Задача | Приоритет |
 |---|---|---|
+| **0** | **⭐ Тест fix #12** — см. план выше | **NEXT** |
+| **0b** | **⭐ Пуш phase-19** — спросить перед пушем | **NEXT** |
+| **0c** | **Бенчмарк** — дефолтный OHA vs наш лучший конфиг (реальный прирост) | HIGH |
 | **1** | **Кластер лейн-контроля** — реализовать `hero_priority` + `tower_aggression` + `deny_policy` + `creep_wave_priority` + `ability_timing` (дизайн готов, §11) | **TOP-1** |
 | **2** | **Item build вариативность** — Layer 1 (build_style) ✅ DONE; Layer 2 — ситуативный порядок (§12) | **TOP-2** |
 | 3 | **5v5 полный матч** Pusher vs Ganker | MEDIUM |
@@ -194,6 +244,8 @@
 | `finish-push` | push | finish-state override → push 0.90+ |
 | `ward-place` | ward | поставлен observer ward |
 | `roshan-kill` | roshan | Рошан убит (DiagRL 600s) |
+| `anti-idle-lane` | laning | AntiIdleGlobal: пошёл к фронту своего лайна (rate-limit 5s) |
+| `kite-creep` | laning | отступил вдоль лайна от вражеских крипов (lane-aware, не VectorAway) |
 
 ---
 

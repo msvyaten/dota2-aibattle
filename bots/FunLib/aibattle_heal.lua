@@ -18,7 +18,17 @@ local function forwardTowerLoc(bot)
 	local ids = { TOWER_MID_1, TOWER_MID_2, TOWER_MID_3, TOWER_BASE_1, TOWER_BASE_2 }
 	for _, id in ipairs(ids) do
 		local t = GetTower(bot:GetTeam(), id)
-		if t ~= nil and t:IsAlive() then return t:GetLocation() end
+		if t ~= nil and t:IsAlive() then
+			local oppT1 = GetTower(GetOpposingTeam(), TOWER_MID_1)
+			if oppT1 ~= nil then
+				local tl, el = t:GetLocation(), oppT1:GetLocation()
+				local d = math.sqrt((el.x-tl.x)^2 + (el.y-tl.y)^2)
+				if d > 1 then
+					return Vector(tl.x + (el.x-tl.x)/d * 350, tl.y + (el.y-tl.y)/d * 350, tl.z)
+				end
+			end
+			return t:GetLocation()
+		end
 	end
 	return nil
 end
@@ -158,19 +168,49 @@ end
 -- regen_lane: step back toward own tower to recover HP.
 -- Always runs when HP is low — enemy chasing is exactly when you should retreat.
 -- ────────────────────────────────────────────────────────────
+-- State machine: nil → "retreating" → "returned" → nil (cooldown set on lane re-entry).
+-- Cooldown starts only when the bot actually walks back and sees enemy creeps again,
+-- not when HP recovers at the tower (which can happen mid-retreat).
 local function regenLane(bot, dials, nEnemyCreeps)
 	if Style.Get().rules.low_hp_behavior ~= "regen_lane" then return false end
-	-- Raised from 0.30 to 0.40 base: step back at < ~51% HP (was < ~41%) so the bot
-	-- recovers more conservatively after a fight before re-engaging.
-	if J.GetHP(bot) >= 0.40 + 0.15 * (dials.retreat_caution or 0.5) then return false end
+
+	local hp     = J.GetHP(bot)
+	local rc     = dials.retreat_caution or 0.5
+	local thresh = 0.40 + 0.15 * rc
+
+	-- "returned": HP recovered, now walking back. Start cooldown once enemy creeps visible again.
+	if bot.aib_regenState == "returned" then
+		if nEnemyCreeps and #nEnemyCreeps > 0 then
+			bot.aib_regenState    = nil
+			bot.aib_regenCycleEnd = DotaTime()  -- cooldown starts here: bot is back in lane
+		end
+	end
+
+	-- HP recovered: transition from retreating → returned.
+	if hp >= thresh then
+		if bot.aib_regenState == "retreating" then
+			bot.aib_regenState = "returned"
+		end
+		return false
+	end
+
+	-- Emergency bypass: always retreat at < 25% HP regardless of cooldown.
+	local emergency = hp < 0.25
+	if not emergency then
+		if bot.aib_regenCycleEnd and DotaTime() - bot.aib_regenCycleEnd < 20.0 then
+			return false
+		end
+	end
 
 	local back = forwardTowerLoc(bot)
 	if back and GetUnitToLocationDistance(bot, back) < 350 then
-		return false  -- already at tower, stand still and regen naturally
+		bot.aib_regenState = "retreating"
+		return false  -- at tower, regen naturally
 	end
 	if bot.aib_regenLast == nil or DotaTime() - bot.aib_regenLast >= 3.0 then
 		if back then
-			bot.aib_regenLast = DotaTime()
+			bot.aib_regenLast  = DotaTime()
+			bot.aib_regenState = "retreating"
 			Style.Diag(bot, "regen-lane")
 			bot:Action_MoveToLocation(back); return true
 		end
@@ -269,7 +309,7 @@ local function recovery(bot, dials)
 					Style.Diag(bot, "recovery-regen")
 					bot:Action_MoveToLocation(back)
 				end
-				return true
+				-- Don't block laning: move command issued, let Think() continue normally.
 			end
 		end
 	end
@@ -277,7 +317,7 @@ local function recovery(bot, dials)
 	-- Fallback chain: only when critically low and items exhausted
 	local threshold = 0.25 + 0.30 * (dials.retreat_caution or 0.5)
 	                + (GetHeroDeaths(bot:GetPlayerID()) >= 1 and 0.15 or 0.0)
-	if hp >= threshold then return false end
+	if hp >= threshold then bot.aib_recWaitStart = nil; return false end
 
 	local behavior = Style.Get().rules.low_hp_behavior or "tp_fountain"
 	local gold     = bot:GetGold()
@@ -318,14 +358,20 @@ local function recovery(bot, dials)
 		end
 	end
 
-	-- e. Stand near tower (passive regen)
+	-- e. Stand near tower (passive regen) — 30s cap to prevent indefinite AFK when items exhausted.
 	local back = forwardTowerLoc(bot)
 	if back then
-		if bot.aib_recMoveLast == nil or DotaTime() - bot.aib_recMoveLast >= 5.0 then
-			bot.aib_recMoveLast = DotaTime(); Style.Diag(bot, "recovery-wait")
-			bot:Action_MoveToLocation(back)
+		if bot.aib_recWaitStart == nil then bot.aib_recWaitStart = DotaTime() end
+		if DotaTime() - bot.aib_recWaitStart < 30.0 then
+			if bot.aib_recMoveLast == nil or DotaTime() - bot.aib_recMoveLast >= 5.0 then
+				bot.aib_recMoveLast = DotaTime(); Style.Diag(bot, "recovery-wait")
+				bot:Action_MoveToLocation(back)
+			end
+			return true
 		end
-		return true
+		-- 30s elapsed with no items: go to lane at reduced HP rather than staying AFK.
+		bot.aib_recWaitStart = nil
+		Style.DiagRL(bot, "recovery-timeout", 10)
 	end
 
 	return false

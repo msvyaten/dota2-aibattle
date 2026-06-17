@@ -499,13 +499,18 @@ end
 -- so it only fires when the mode itself has nothing to do.
 -- Counters: anti-idle-combat / anti-idle-assist
 function M.AntiIdleGlobal(bot)
-    -- AIBattle #7: don't pick fights at low HP — let retreat logic handle it
-    if J.GetHP(bot) < 0.25 then return end
-    local enemies = bot:GetNearbyHeroes(1200, true, BOT_MODE_NONE)
-    if enemies and #enemies > 0 and enemies[1]:IsAlive() then
-        bot:Action_AttackUnit(enemies[1], true)
-        M.Diag(bot, "anti-idle-combat")
-        return
+    local lowHp = J.GetHP(bot) < 0.25
+    if not lowHp then
+        local enemies = bot:GetNearbyHeroes(1200, true, BOT_MODE_NONE)
+        if enemies and #enemies > 0 and enemies[1]:IsAlive() then
+            if GetUnitToUnitDistance(bot, enemies[1]) <= bot:GetAttackRange() then
+                bot:Action_AttackUnit(enemies[1], true)
+            else
+                bot:Action_MoveToUnit(enemies[1])
+            end
+            M.Diag(bot, "anti-idle-combat")
+            return
+        end
     end
     local allies = bot:GetNearbyHeroes(1500, false, BOT_MODE_NONE)
     if allies then
@@ -521,6 +526,28 @@ function M.AntiIdleGlobal(bot)
             end
         end
     end
+    -- Fallback: attack nearest enemy creep in attack range — never stand completely idle.
+    local creeps = bot:GetNearbyCreeps(bot:GetAttackRange() + 100, true)
+    if creeps and #creeps > 0 then
+        for _, c in ipairs(creeps) do
+            if c:IsAlive() then
+                bot:Action_AttackUnit(c, true)
+                M.Diag(bot, "anti-idle-creep")
+                return
+            end
+        end
+    end
+    -- Nothing found: walk to the actual lane front so bot never stands idle with no targets.
+    -- Offset=0 targets the current creep front (not -200 behind it) so anti-idle always
+    -- pushes forward past the fwd HP-aware target. Threshold 150u matches fwd's own check.
+    local lane = bot:GetAssignedLane()
+    local dest = GetLaneFrontLocation(bot:GetTeam(), lane, 0)
+    if dest ~= nil and GetUnitToLocationDistance(bot, dest) > 150 then
+        bot:Action_MoveToLocation(dest)
+        M.DiagRL(bot, "anti-idle-lane", 5)
+        return
+    end
+    M.DiagRL(bot, "idle", 3)
 end
 
 -- ─── Hero ability config ──────────────────────────────────────────────────────
