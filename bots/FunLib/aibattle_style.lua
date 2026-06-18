@@ -501,7 +501,7 @@ end
 function M.AntiIdleGlobal(bot)
     local lowHp = J.GetHP(bot) < 0.25
     if not lowHp then
-        local enemies = bot:GetNearbyHeroes(1200, true, BOT_MODE_NONE)
+        local enemies = bot:GetNearbyHeroes(1600, true, BOT_MODE_NONE)
         if enemies and #enemies > 0 and enemies[1]:IsAlive() then
             if GetUnitToUnitDistance(bot, enemies[1]) <= bot:GetAttackRange() then
                 bot:Action_AttackUnit(enemies[1], true)

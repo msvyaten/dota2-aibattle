@@ -1,7 +1,7 @@
 # HANDOFF — AIBattle × Dota 2
 
 > Единственная точка входа. Обновлять ЕГО, новых доков не плодить.
-> Последнее обновление: 2026-06-17 (AFK-stability: botAhead fix, kite/pack-avoid → lane-aware, anti-idle-lane → lane front, syntax crash fix).
+> Последнее обновление: 2026-06-18 (phase-20: AFK-standoff: death-window, fwd-fallback вне dest-nil, kite HP-gate, idle-creep-atk, pregame-анонс).
 > Полная история сессий — `docs/history/HANDOFF-full-2026-06-09.md`.
 > По-русски. Доказательство = цифра из лога или stат-дампа. «На глаз» не считается.
 
@@ -187,28 +187,48 @@
 
 ---
 
-## 6. Открытые задачи
+---
 
-### ⭐ ПЛАН НА ЗАВТРА (после fix #12 pack-avoid)
+**phase-20 — AFK STANDOFF (18.06.2026) — закоммичено ✅**
 
-1. **Запустить матч** — те же конфиги (Radiant=Gemini safe_tower, Dire=ChatGPT aggressive_mid)
-2. **Проверить `pack-avoid`** → должно быть > 0 И бот реально покидает пак (раньше: все 11 блокировал botAhead). Видно по диагу: если `pack-avoid D#X` и `fwd D#Y` → Y должен быть ниже (pack-avoid теперь выходит раньше fwd)
-3. **Проверить `idle D#0 R#0`** → всё ещё должно быть 0
-4. **Проверить `recovery-wait D#0 R#0`** → 30s cap держится
-5. **Если чисто** → пуш (спросить)
-6. **Следующая сессия** → Бенчмарк OHA default bot vs наш лучший конфиг
+Матчи-триггеры: 8856304426, 8856343351, 8856358551, 8856380112.
+
+| # | Файл | Фикс | Причина |
+|---|---|---|---|
+| 13 | `mode_laning_generic.lua` | **HandleRespawn pregame guard**: `DotaTime() < 0` → clear wasDead, return false | Бот TP-ил до крипов в прегейме; `respawn-tp-cd R#2` при втором реснере — потраченный свиток |
+| 14 | `mode_laning_generic.lua` | **Death-window block** (dw-heal/dw-farm/dw-fwd): когда враг мёртв — лечиться, фармить, двигаться вперёд | Бот стоял столбом 40-60s пока враг на ресне (8856304426, 8856343351) |
+| 15 | `mode_laning_generic.lua` | **dt-walk range**: 1000→1400u | Standoff на ~1288u; враг был вне старого dt-walk, ни один бот не сближался |
+| 16 | `aibattle_style.lua` | **AntiIdleGlobal P1 range**: 1200→1600u | Та же причина — враг за порогом |
+| 17 | `mode_laning_generic.lua` | **fwd-fallback (tower-lerp)**: когда `botAhead=true` — бот идёт к `fwd`% точке между T1-башнями вместо стояния | `botAhead` блокировал fwd когда волна крипов ещё за ботом; бот не двигался 40s+ (8856343351) |
+| 18 | `mode_laning_generic.lua` | **fwd-fallback вынесен ЗА `if dest ~= nil`** | fwd-fallback не срабатывал когда dest было nil или < 150u от бота (внутри `if dest` — никогда не доходило) |
+| 19 | `mode_laning_generic.lua` | **Прегейм анонс конфига** — перемещён в pregame-блок | `bot.aib_announced` в Think() мог не дойти до прегейма; теперь гарантированно печатает до старта |
+| 20 | `mode_laning_generic.lua` | **pack-avoid offset**: -500→-150; VectorAway 350→200 | Бот откатывался слишком далеко от фронта, оставаясь за волной без врагов → 0 LH (8856358551) |
+| 21 | `mode_laning_generic.lua` | **idle-creep-atk**: если ничего не сработало и враг-крипы в ренже — бить их | `last_hit_only` → бот стоял рядом с крипами на 100% HP без единого удара (8856358551) |
+| 22 | `mode_laning_generic.lua` | **kite-creep HP-gate**: кайтить только при hp < 0.70; offset -400→-200 (оба блока) | При 65-70% HP бот кайтил и потом стоял 20s пока регенится (3:37-3:47 в 8856380112) |
+
+### Новые диаги
+
+| Ключ | Смысл |
+|---|---|
+| `dw-heal` | Death window: использовал tango/flask пока враг на ресне |
+| `dw-farm` | Death window: атаковал вражеского крипа |
+| `dw-fwd` | Death window: двинулся к фронту (нет крипов в ренже) |
+| `fwd-fallback` | Продвижение через tower-lerp когда botAhead или dest nil |
+| `idle-creep-atk` | Fallback атака вражеского крипа (последний шанс перед AntiIdleGlobal) |
+| `pre-aig` | Достиг AntiIdleGlobal (счётчик частоты) |
 
 ---
 
+## 6. Открытые задачи
+
 | # | Задача | Приоритет |
 |---|---|---|
-| **0** | **⭐ Тест fix #12** — см. план выше | **NEXT** |
-| **0b** | **⭐ Пуш phase-19** — спросить перед пушем | **NEXT** |
-| **0c** | **Бенчмарк** — дефолтный OHA vs наш лучший конфиг (реальный прирост) | HIGH |
-| **1** | **Кластер лейн-контроля** — реализовать `hero_priority` + `tower_aggression` + `deny_policy` + `creep_wave_priority` + `ability_timing` (дизайн готов, §11) | **TOP-1** |
-| **2** | **Item build вариативность** — Layer 1 (build_style) ✅ DONE; Layer 2 — ситуативный порядок (§12) | **TOP-2** |
+| **0** | **⭐ Бенчмарк** — дефолтный OHA vs наш лучший конфиг (реальный прирост) | **NEXT** |
+| **1** | **Кластер лейн-контроля** — `hero_priority` + `tower_aggression` + `deny_policy` + `creep_wave_priority` + `ability_timing` (дизайн готов, §11) | **TOP-1** |
+| **2** | **Item build вариативность** — Layer 1 ✅; Layer 2 — ситуативный порядок (§12) | **TOP-2** |
 | 3 | **5v5 полный матч** Pusher vs Ganker | MEDIUM |
-| 4 | **Больше героев** — пилот на Axe (defensive/aggressive очевидны по роли) | LOW |
+| 4 | **Ult "в молоко"** — SF Requiem вхолостую: враг уходит. Наблюдать, возможно max_range в HeroAbilityConfig | LOW |
+| 5 | **Больше героев** — пилот на Axe | LOW |
 
 ---
 

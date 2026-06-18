@@ -138,6 +138,9 @@ local function AIB_HandleRespawn()
 	if not bot:IsAlive() then bot.aib_wasDead = true; bot.aib_tping = false; return false end
 	if not bot.aib_wasDead then return false end
 
+	-- Pregame: no TP waste -- let pregame block handle positioning instead.
+	if DotaTime() < 0 then bot.aib_wasDead = false; return false end
+
 	-- We already issued our TP: PROTECT THE CHANNEL so normal Think can't move the bot mid-cast
 	-- (this was the tp_to_tower bug: clearing the flag on the cast tick let Think walk the bot
 	-- toward creeps and cancel the 3s channel to a rear tower). Hold until the channel resolves.
@@ -400,6 +403,28 @@ function Think()
 	-- safe_tower=0.15 (own T1 front), aggressive_mid=0.45 (river), jungle_pressure=0.70 (deep).
 	-- Falls back to dials.forwardness if rule is unset.
 	if DotaTime() < 0 and GetGameMode() == GAMEMODE_1V1MID then
+		-- Announce config once during pregame (guaranteed path, visible before horn).
+		if not bot.aib_announced then
+			bot.aib_announced = true
+			bot:ActionImmediate_Chat("▶ " .. bot:GetName() .. " [" .. AIB_SIDE .. "]", false)
+			bot:ActionImmediate_Chat(string.format(
+				"AIB[%s] harass=%.2f farm=%.2f fwd=%.2f abil=%.2f rune=%.2f retreat=%.2f exec=%.2f gank=%.2f push=%.2f",
+				AIB_SIDE,
+				dials.harass_desire, dials.farm_focus, dials.forwardness, dials.ability_aggro,
+				dials.rune_control, dials.retreat_caution, dials.execute_threshold,
+				dials.gank_desire, dials.push_desire), true)
+			local r = Style.Get().rules
+			bot:ActionImmediate_Chat(string.format(
+				"AIB[%s] defend=%.2f ward=%.2f roshan=%.2f dive=%s heal=%s abil=%s cw=%s at=%s pgb=%s",
+				AIB_SIDE,
+				dials.defend_desire, dials.ward_desire, dials.roshan_desire,
+				tostring(r.dive_policy or "finish_only"),
+				tostring(r.healing_style or "default"),
+				tostring(r.ability_usage or "default"),
+				tostring(r.creep_wave_priority or "last_hit_only"),
+				tostring(r.ability_timing or "on_cooldown"),
+				tostring(r.pregame_behavior or "default")), true)
+		end
 		local nearby = bot:GetNearbyHeroes(1500, true, BOT_MODE_NONE)
 		if nearby and #nearby > 0 and nearby[1]:IsAlive() then
 			Style.DiagRL(bot, "pg-atk", 5)
@@ -462,6 +487,60 @@ function Think()
 		end
 		-- AIBattle: if staying under enemy tower (dive allowed), attack an allied creep to redirect tower fire
 		if twr ~= nil and AIB_TowerAggroDrop(twr) then return end
+	end
+
+	-- AIBattle: death window -- enemy hero is dead (respawn timer). No combat threat.
+	-- Heal with consumables, farm aggressively, and advance the lane to build advantage.
+	-- Returns to standard logic as soon as the enemy is alive again.
+	do
+		local ePlayers = GetTeamPlayers(GetOpposingTeam())
+		local eHero = nil
+		for _, pid in pairs(ePlayers) do
+			local m = GetTeamMember(pid)
+			if m ~= nil and m:IsHero() and not m:IsIllusion() then eHero = m; break end
+		end
+		if eHero ~= nil and not eHero:IsAlive() then
+			-- Heal with consumables while safe
+			if J.GetHP(bot) < 0.95 then
+				for s = 0, 5 do
+					local it = bot:GetItemInSlot(s)
+					if it ~= nil and it:IsFullyCastable() then
+						local nm = it:GetName()
+						if nm == "item_flask" then
+							bot:Action_UseAbilityOnEntity(it, bot)
+							AIB_Diag("dw-heal"); return
+						elseif nm == "item_tango" then
+							local trees = bot:GetNearbyTrees(400)
+							if trees and trees[1] then
+								bot:Action_UseAbilityOnTree(it, trees[1])
+								AIB_Diag("dw-heal"); return
+							end
+						end
+					end
+				end
+			end
+			-- Farm: attack any enemy creep in attack range (push the wave)
+			local ec = bot:GetNearbyCreeps(botAttackRange + 50, true)
+			if ec and #ec > 0 then
+				for _, c in ipairs(ec) do
+					if c:IsAlive() and J.CanBeAttacked(c) then
+						bot:Action_AttackUnit(c, true)
+						AIB_Diag("dw-farm"); return
+					end
+			end
+			end
+			-- No creeps in range: advance toward lane front (override botAhead)
+			local dwDest = GetLaneFrontLocation(GetTeam(), botAssignedLane, 0)
+			if dwDest == nil then
+				local enmT1 = GetTower(GetOpposingTeam(), TOWER_MID_1)
+				if enmT1 ~= nil then dwDest = enmT1:GetLocation() end
+			end
+			if dwDest ~= nil and GetUnitToLocationDistance(bot, dwDest) > 150 then
+				bot:Action_MoveToLocation(dwDest + RandomVector(50))
+			end
+			Style.DiagRL(bot, "dw-fwd", 5)
+			return
+		end
 	end
 
 	local cwp = Style.Get().rules.creep_wave_priority or "last_hit_only"
@@ -583,11 +662,13 @@ function Think()
 					end
 				end
 			end
-			if (hitByCreep or meleeClose) and GetUnitToLocationDistance(bot, cen) < botAttackRange - 50 then
+			-- Only kite when HP is low enough to matter: tanking a hit at 70%+ HP is fine.
+			if (hitByCreep or meleeClose) and GetUnitToLocationDistance(bot, cen) < botAttackRange - 50
+				and J.GetHP(bot) < 0.70 then
 				if bot.aib_kiteLast == nil or DotaTime() - bot.aib_kiteLast >= 1.5 then
 					bot.aib_kiteLast = DotaTime()
-					local back = GetLaneFrontLocation(GetTeam(), botAssignedLane, -400)
-						or J.VectorAway(bot:GetLocation(), cen, 400)
+					local back = GetLaneFrontLocation(GetTeam(), botAssignedLane, -200)
+						or J.VectorAway(bot:GetLocation(), cen, 200)
 					if back then AIB_Diag("kite-creep"); bot:Action_MoveToLocation(back); return end
 				end
 			end
@@ -703,7 +784,7 @@ function Think()
 	if heroPrio == "default" and AIB_EnemyTowerDanger() == nil
 		and (dials.harass_desire or 0.5) >= 0.5
 		and not (nEnemyCreeps and #nEnemyCreeps > 0) then
-		local dtEnemy = bot:GetNearbyHeroes(1000, true, BOT_MODE_NONE)
+		local dtEnemy = bot:GetNearbyHeroes(1400, true, BOT_MODE_NONE)
 		if dtEnemy and #dtEnemy > 0 and dtEnemy[1]:IsAlive() then
 			if GetUnitToUnitDistance(bot, dtEnemy[1]) > botAttackRange + 50 then
 				Style.DiagRL(bot, "dt-walk", 5)
@@ -719,10 +800,9 @@ function Think()
 	-- Gated on retreat_caution: aggressive bots (low caution) hold the line, cautious/passive bots
 	-- back off; math.random()<rc makes it kite (step back / drift in) instead of robotically pinging.
 	local rc = dials.retreat_caution or 0.5
-	if rc >= 0.15 and bot:WasRecentlyDamagedByCreep(1.5) and math.random() < rc then
-		-- Kite along the lane axis (not raw VectorAway which can push into the jungle).
-		-- 400u behind lane front keeps the bot on the lane while clearing creep fire range.
-		local back = GetLaneFrontLocation(GetTeam(), botAssignedLane, -400)
+	if rc >= 0.15 and bot:WasRecentlyDamagedByCreep(1.5) and math.random() < rc
+		and J.GetHP(bot) < 0.70 then
+		local back = GetLaneFrontLocation(GetTeam(), botAssignedLane, -200)
 			or AIB_ForwardSurvivingTowerLoc()
 		if back then bot:Action_MoveToLocation(back); AIB_Diag("kite-creep"); return end
 	end
@@ -776,8 +856,8 @@ function Think()
 				local safe = botAttackRange - 60
 				if d < safe then
 					-- Step back directly: bypass botAhead (retreat is safety, not advance).
-					local packDest = GetLaneFrontLocation(GetTeam(), botAssignedLane, -500)
-						or J.VectorAway(bl, cen, 350)
+					local packDest = GetLaneFrontLocation(GetTeam(), botAssignedLane, -150)
+						or J.VectorAway(bl, cen, 200)
 					if packDest then
 						AIB_Diag("pack-avoid")
 						bot:Action_MoveToLocation(packDest)
@@ -802,10 +882,44 @@ function Think()
 				return
 			end
 		end
+		-- botAhead OR dest nil/close: fall back to tower interpolation as a forward
+		-- target so the bot advances when its own creep front is behind it.
+		local ownT1fb = GetTower(GetTeam(), TOWER_MID_1)
+		local enmT1fb = GetTower(GetOpposingTeam(), TOWER_MID_1)
+		if ownT1fb ~= nil and enmT1fb ~= nil then
+			local a, b = ownT1fb:GetLocation(), enmT1fb:GetLocation()
+			local fbDest = Vector(a.x+(b.x-a.x)*fwd, a.y+(b.y-a.y)*fwd, a.z)
+			local dBotT1fb = GetUnitToUnitDistance(bot, ownT1fb)
+			local dFbT1    = GetUnitToLocationDistance(ownT1fb, fbDest)
+			if dBotT1fb <= dFbT1 + 100 and GetUnitToLocationDistance(bot, fbDest) > 150 then
+				bot:Action_MoveToLocation(fbDest + RandomVector(50))
+				AIB_Diag("fwd-fallback")
+				return
+			end
+		end
+	end
+
+	-- AIBattle: idle-creep attack — if enemy creeps are in attack range and nothing else fired,
+	-- swing at the nearest one. Prevents the bot from standing motionless next to creeps when
+	-- last_hit_only mode has nothing to execute yet. Rate-limited to avoid spamming.
+	do
+		local ec = bot:GetNearbyCreeps(botAttackRange, true)
+		if ec and #ec > 0 then
+			local tgt = ec[1]
+			for _, c in ipairs(ec) do
+				if J.IsValid(c) and c:IsAlive() then tgt = c; break end
+			end
+			if J.IsValid(tgt) and tgt:IsAlive() then
+				bot:Action_AttackUnit(tgt, true)
+				AIB_Diag("idle-creep-atk")
+				return
+			end
+		end
 	end
 
 	-- AIBattle: anti-idle fallback — reached when forwardness had no dest OR bot is already at target.
 	-- Attack a visible enemy or move to assist an ally in combat.
+	Style.DiagRL(bot, "pre-aig", 3)
 	Style.AntiIdleGlobal(bot)
 end
 
