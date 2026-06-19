@@ -60,22 +60,16 @@ local function AIB_Diag(key)
 	Style.Diag(bot, key)
 end
 
+local AIBUtils = require(GetScriptDirectory()..'/FunLib/aibattle_utils')
+
+-- Utility wrappers: logic lives in aibattle_utils.lua, these close over module-level `bot`.
+local function AIB_EnemyTowerDanger()          return AIBUtils.EnemyTowerDanger(bot) end
+local function AIB_ForwardSurvivingTowerLoc()  return AIBUtils.ForwardSurvivingTowerLoc(bot) end
+local function AIB_EnemyCreepCentroid(creeps)  return AIBUtils.EnemyCreepCentroid(creeps) end
+local function AIB_UphillMiss(target)          return AIBUtils.UphillMiss(bot, target) end
+
 -- AIBattle: tower aggro drop cooldown (per bot instance)
 local aib_lastAggroDrop = 0
-
--- AIBattle improvement helper: nearest ALIVE enemy tower whose attack range threatens the bot
--- (range ~700 + buffer). Returns the tower handle or nil.
-local function AIB_EnemyTowerDanger()
-	local opp = GetOpposingTeam()
-	local ids = { TOWER_MID_1, TOWER_MID_2, TOWER_TOP_1, TOWER_BOT_1, TOWER_MID_3, TOWER_BASE_1, TOWER_BASE_2 }
-	for _, id in ipairs(ids) do
-		local t = GetTower(opp, id)
-		if t ~= nil and t:IsAlive() and GetUnitToUnitDistance(bot, t) < 900 then
-			return t
-		end
-	end
-	return nil
-end
 
 -- AIBattle: tower aggro drop — attack an allied creep to redirect enemy tower fire onto it.
 -- Only fires when bot is in actual tower attack range (not just detection range).
@@ -96,41 +90,6 @@ local function AIB_TowerAggroDrop(twr)
 		end
 	end
 	return false
-end
-
--- AIBattle: returns a safe point 350 units IN FRONT of the nearest surviving friendly tower.
--- Returns tower center itself only as a fallback (avoids stuck-in-tower-collision bug).
-local function AIB_ForwardSurvivingTowerLoc()
-	local team = GetBot():GetTeam()
-	local ids = { TOWER_MID_1, TOWER_MID_2, TOWER_MID_3, TOWER_BASE_1, TOWER_BASE_2 }
-	for _, id in ipairs(ids) do
-		local t = GetTower(team, id)
-		if t ~= nil and t:IsAlive() then
-			local oppT1 = GetTower(GetOpposingTeam(), TOWER_MID_1)
-			if oppT1 ~= nil then
-				local tl, el = t:GetLocation(), oppT1:GetLocation()
-				local d = math.sqrt((el.x-tl.x)^2 + (el.y-tl.y)^2)
-				if d > 1 then
-					return Vector(tl.x + (el.x-tl.x)/d * 350, tl.y + (el.y-tl.y)/d * 350, tl.z)
-				end
-			end
-			return t:GetLocation()
-		end
-	end
-	return nil
-end
-
--- AIBattle: centroid of nearby enemy lane creeps (the threat to step away from). nil if none.
-local function AIB_EnemyCreepCentroid(enemyCreeps)
-	local cx, cy, n = 0, 0, 0
-	for _, c in pairs(enemyCreeps or {}) do
-		if J.IsValid(c) then
-			local l = c:GetLocation()
-			cx = cx + l.x; cy = cy + l.y; n = n + 1
-		end
-	end
-	if n == 0 then return nil end
-	return Vector(cx / n, cy / n, 0)
 end
 
 -- AIBattle: on death->alive transition, act per rules.respawn_behavior. Returns true if it issued an action.
@@ -341,235 +300,211 @@ function GetBestDenyCreep(hCreepList)
 	return nil
 end
 
+-- ─── THINK SECTION FUNCTIONS ─────────────────────────────────────────────────
+-- Each function handles one phase of the Think() loop. They close over module-level
+-- variables (bot, nEnemyCreeps, etc.) and take dials/ctx as explicit parameters.
+-- Returning true signals "action taken — exit Think() for this tick."
+
+-- Dumps config to all-chat once per game. Called before pregame check so it fires even
+-- when the game hasn't started. Splits into two messages (Dota silently drops >~160 chars).
+local function ThinkAnnounce(dials)
+	if bot.aib_announced then return end
+	bot.aib_announced = true
+	bot:ActionImmediate_Chat("▶ " .. bot:GetName() .. " [" .. AIB_SIDE .. "]", false)
+	bot:ActionImmediate_Chat(string.format(
+		"AIB[%s] harass=%.2f farm=%.2f fwd=%.2f abil=%.2f rune=%.2f retreat=%.2f exec=%.2f gank=%.2f push=%.2f",
+		AIB_SIDE,
+		dials.harass_desire, dials.farm_focus, dials.forwardness, dials.ability_aggro,
+		dials.rune_control, dials.retreat_caution, dials.execute_threshold,
+		dials.gank_desire, dials.push_desire), true)
+	local r = Style.Get().rules
+	bot:ActionImmediate_Chat(string.format(
+		"AIB[%s] defend=%.2f ward=%.2f roshan=%.2f dive=%s heal=%s abil=%s cw=%s at=%s pgb=%s",
+		AIB_SIDE,
+		dials.defend_desire, dials.ward_desire, dials.roshan_desire,
+		tostring(r.dive_policy or "finish_only"),
+		tostring(r.healing_style or "default"),
+		tostring(r.ability_usage or "default"),
+		tostring(r.creep_wave_priority or "last_hit_only"),
+		tostring(r.ability_timing or "on_cooldown"),
+		tostring(r.pregame_behavior or "default")), true)
+end
+
+-- Periodic location report every 10s (in-game only, DotaTime > 0).
+local function ThinkLocationReport()
+	local now = DotaTime()
+	if now <= 0 then return end
+	if bot.aib_igLocLast ~= nil and now - bot.aib_igLocLast < 10.0 then return end
+	bot.aib_igLocLast = now
+	local sp   = bot:GetLocation()
+	local side = (bot:GetTeam() == TEAM_RADIANT) and "R" or "D"
+	local nearby = bot:GetNearbyHeroes(1600, true, BOT_MODE_NONE)
+	if nearby and #nearby > 0 and nearby[1]:IsAlive() then
+		bot:ActionImmediate_Chat(string.format(
+			"AIB[%s] t=%.0fs hp=%.0f%% gold=%d loc=%.0f,%.0f enemy-dist=%.0f",
+			side, now, J.GetHP(bot)*100, bot:GetGold(), sp.x, sp.y,
+			GetUnitToUnitDistance(bot, nearby[1])), true)
+	else
+		bot:ActionImmediate_Chat(string.format(
+			"AIB[%s] t=%.0fs hp=%.0f%% gold=%d loc=%.0f,%.0f",
+			side, now, J.GetHP(bot)*100, bot:GetGold(), sp.x, sp.y), true)
+	end
+end
+
+-- Pre-game positioning (DotaTime < 0, GAMEMODE_1V1MID). Returns true → Think() exits.
+-- Positions based on pregame_behavior rule; attacks enemy hero on sight.
+local function ThinkPregame(dials)
+	if DotaTime() >= 0 or GetGameMode() ~= GAMEMODE_1V1MID then return false end
+	local nearby = bot:GetNearbyHeroes(1500, true, BOT_MODE_NONE)
+	if nearby and #nearby > 0 and nearby[1]:IsAlive() then
+		Style.DiagRL(bot, "pg-atk", 5)
+		if bot:GetCurrentActionType() ~= BOT_ACTION_TYPE_ATTACK then
+			bot:Action_AttackUnit(nearby[1], false)
+		end
+		return true
+	end
+	if AIBSurvive.Think(bot, dials, nil) then return true end
+	Style.DiagRL(bot, "pg-pos", 5)
+	local pgb = GetRules().pregame_behavior
+	if pgb == "water_rune" then
+		local runeLoc, minD = nil, math.huge
+		for _, rid in ipairs({ RUNE_POWERUP_1, RUNE_POWERUP_2 }) do
+			local loc = GetRuneSpawnLocation(rid)
+			if loc then
+				local d = GetUnitToLocationDistance(bot, loc)
+				if d < minD then minD = d; runeLoc = loc end
+			end
+		end
+		if runeLoc and GetUnitToLocationDistance(bot, runeLoc) > 100 then
+			bot:Action_MoveToLocation(runeLoc)
+		end
+	else
+		local ownT1 = GetTower(GetTeam(), TOWER_MID_1)
+		local enmT1 = GetTower(GetOpposingTeam(), TOWER_MID_1)
+		if ownT1 ~= nil and enmT1 ~= nil then
+			local a, b = ownT1:GetLocation(), enmT1:GetLocation()
+			local totalDist = math.sqrt((b.x-a.x)^2 + (b.y-a.y)^2)
+			local dirX, dirY = (b.x-a.x)/totalDist, (b.y-a.y)/totalDist
+			local dist
+			if     pgb == "safe_tower"       then dist = 500
+			elseif pgb == "aggressive_mid"   then dist = totalDist * 0.45
+			elseif pgb == "jungle_pressure"  then dist = totalDist * 0.70
+			else                                  dist = totalDist * (dials.forwardness or 0.5)
+			end
+			local target = Vector(a.x + dirX*dist, a.y + dirY*dist, a.z)
+			if GetUnitToLocationDistance(bot, target) > 100 then
+				bot:Action_MoveToLocation(target)
+			end
+		end
+	end
+	return true
+end
+
+-- Enemy tower: pull back when dive policy forbids it; redirect tower aggro when diving.
+-- Returns true → Think() exits.
+local function ThinkDivePolicy()
+	local twr = AIB_EnemyTowerDanger()
+	if twr == nil then return false end
+	if not Style.MayDive(bot) then
+		AIB_Diag("no-dive")
+		bot:Action_MoveToLocation(J.VectorAway(bot:GetLocation(), twr:GetLocation(), 350))
+		return true
+	end
+	if AIB_TowerAggroDrop(twr) then return true end
+	return false
+end
+
+-- Enemy is dead: heal up, farm aggressively, push the lane. Returns true → Think() exits.
+local function ThinkDeathWindow()
+	-- Cache enemy PID when first seen alive, then track deaths via GetHeroDeaths.
+	-- GetTeamMember returns nil for dead bots — IsAlive() approach unreliable.
+	if bot.aib_ePID == nil then
+		local allNear = bot:GetNearbyHeroes(2000, true, BOT_MODE_NONE)
+		if allNear then
+			for _, h in ipairs(allNear) do
+				if h:IsHero() and not h:IsIllusion() then
+					for pid = 0, 9 do
+						if GetTeamMember(pid) == h then
+							bot.aib_ePID = pid
+							bot.aib_eDeathCount = GetHeroDeaths(pid)
+							break
+						end
+					end
+					if bot.aib_ePID then break end
+				end
+			end
+		end
+	end
+	local eIsDead = false
+	if bot.aib_ePID ~= nil then
+		local deaths = GetHeroDeaths(bot.aib_ePID)
+		if deaths > (bot.aib_eDeathCount or 0) then
+			bot.aib_eDeathCount = deaths
+			bot.aib_eDeadSince  = DotaTime()
+		end
+		local respawnWindow = 8 + 4 * (GetHeroLevel and GetHeroLevel(bot.aib_ePID) or 1)
+		eIsDead = bot.aib_eDeadSince ~= nil
+			and DotaTime() - bot.aib_eDeadSince < respawnWindow
+	end
+	if not eIsDead then return false end
+	-- Heal with consumables while safe
+	if J.GetHP(bot) < 0.95 then
+		for s = 0, 5 do
+			local it = bot:GetItemInSlot(s)
+			if it ~= nil and it:IsFullyCastable() then
+				local nm = it:GetName()
+				if nm == "item_flask" then
+					bot:Action_UseAbilityOnEntity(it, bot)
+					AIB_Diag("dw-heal"); return true
+				elseif nm == "item_tango" then
+					local trees = bot:GetNearbyTrees(400)
+					if trees and trees[1] then
+						bot:Action_UseAbilityOnTree(it, trees[1])
+						AIB_Diag("dw-heal"); return true
+					end
+				end
+			end
+		end
+	end
+	-- Farm: attack any enemy creep in attack range (push the wave)
+	local ec = bot:GetNearbyCreeps(botAttackRange + 50, true)
+	if ec and #ec > 0 then
+		for _, c in ipairs(ec) do
+			if c:IsAlive() and J.CanBeAttacked(c) then
+				bot:Action_AttackUnit(c, true)
+				AIB_Diag("dw-farm"); return true
+			end
+		end
+	end
+	-- No creeps in range: advance toward lane front (override botAhead)
+	local dwDest = GetLaneFrontLocation(GetTeam(), botAssignedLane, 0)
+	if dwDest == nil then
+		local enmT1 = GetTower(GetOpposingTeam(), TOWER_MID_1)
+		if enmT1 ~= nil then dwDest = enmT1:GetLocation() end
+	end
+	if dwDest ~= nil and GetUnitToLocationDistance(bot, dwDest) > 150 then
+		bot:Action_MoveToLocation(dwDest + RandomVector(50))
+	end
+	Style.DiagRL(bot, "dw-fwd", 5)
+	return true
+end
+
 -- AIBattle: Think() defined unconditionally so the engine always has a callable function.
 -- Vanilla only defined it inside a condition that's false for normal heroes in all-bot games,
 -- causing EXC_GUARD when the engine tried to call nil.
 function Think()
-	if local_mode_laning_generic then
-		local_mode_laning_generic.Think()
-		return
-	end
-
+	if local_mode_laning_generic then local_mode_laning_generic.Think(); return end
 	if AIB_HandleRespawn() then return end
 	local dials = GetDials()
-
-	-- AIBattle: announce the loaded config once in chat (visible in console.log).
-	-- Split into two messages: Dota silently drops chat messages > ~160 chars.
-	if not bot.aib_announced then
-		bot.aib_announced = true
-		-- Name announce: public chat (false), fixes spectator UI nickname quirk.
-		bot:ActionImmediate_Chat("▶ " .. bot:GetName() .. " [" .. AIB_SIDE .. "]", false)
-		-- MSG1: combat dials (~105 chars)
-		bot:ActionImmediate_Chat(string.format(
-			"AIB[%s] harass=%.2f farm=%.2f fwd=%.2f abil=%.2f rune=%.2f retreat=%.2f exec=%.2f gank=%.2f push=%.2f",
-			AIB_SIDE,
-			dials.harass_desire, dials.farm_focus, dials.forwardness, dials.ability_aggro,
-			dials.rune_control, dials.retreat_caution, dials.execute_threshold,
-			dials.gank_desire, dials.push_desire), true)
-		-- MSG2: secondary dials + rules (~115 chars)
-		local r = Style.Get().rules
-		bot:ActionImmediate_Chat(string.format(
-			"AIB[%s] defend=%.2f ward=%.2f roshan=%.2f dive=%s heal=%s abil=%s cw=%s at=%s",
-			AIB_SIDE,
-			dials.defend_desire, dials.ward_desire, dials.roshan_desire,
-			tostring(r.dive_policy or "finish_only"),
-			tostring(r.healing_style or "default"),
-			tostring(r.ability_usage or "default"),
-			tostring(r.creep_wave_priority or "last_hit_only"),
-			tostring(r.ability_timing or "on_cooldown")), true)
-	end
-
-	-- In-game location report: once every 10s during the match (DotaTime > 0).
-	local igNow = DotaTime()
-	if igNow > 0 and (bot.aib_igLocLast == nil or igNow - bot.aib_igLocLast >= 10.0) then
-		bot.aib_igLocLast = igNow
-		local sp   = bot:GetLocation()
-		local side = (bot:GetTeam() == TEAM_RADIANT) and "R" or "D"
-		local nearby = bot:GetNearbyHeroes(1600, true, BOT_MODE_NONE)
-		if nearby and #nearby > 0 and nearby[1]:IsAlive() then
-			local dist = GetUnitToUnitDistance(bot, nearby[1])
-			bot:ActionImmediate_Chat(string.format(
-				"AIB[%s] t=%.0fs hp=%.0f%% gold=%d loc=%.0f,%.0f enemy-dist=%.0f",
-				side, igNow, J.GetHP(bot)*100, bot:GetGold(),
-				sp.x, sp.y, dist), true)
-		else
-			bot:ActionImmediate_Chat(string.format(
-				"AIB[%s] t=%.0fs hp=%.0f%% gold=%d loc=%.0f,%.0f",
-				side, igNow, J.GetHP(bot)*100, bot:GetGold(), sp.x, sp.y), true)
-		end
-	end
-
-	-- Pre-game 1v1: position before the horn based on pregame_behavior rule.
-	-- safe_tower=0.15 (own T1 front), aggressive_mid=0.45 (river), jungle_pressure=0.70 (deep).
-	-- Falls back to dials.forwardness if rule is unset.
-	if DotaTime() < 0 and GetGameMode() == GAMEMODE_1V1MID then
-		-- Announce config once during pregame (guaranteed path, visible before horn).
-		if not bot.aib_announced then
-			bot.aib_announced = true
-			bot:ActionImmediate_Chat("▶ " .. bot:GetName() .. " [" .. AIB_SIDE .. "]", false)
-			bot:ActionImmediate_Chat(string.format(
-				"AIB[%s] harass=%.2f farm=%.2f fwd=%.2f abil=%.2f rune=%.2f retreat=%.2f exec=%.2f gank=%.2f push=%.2f",
-				AIB_SIDE,
-				dials.harass_desire, dials.farm_focus, dials.forwardness, dials.ability_aggro,
-				dials.rune_control, dials.retreat_caution, dials.execute_threshold,
-				dials.gank_desire, dials.push_desire), true)
-			local r = Style.Get().rules
-			bot:ActionImmediate_Chat(string.format(
-				"AIB[%s] defend=%.2f ward=%.2f roshan=%.2f dive=%s heal=%s abil=%s cw=%s at=%s pgb=%s",
-				AIB_SIDE,
-				dials.defend_desire, dials.ward_desire, dials.roshan_desire,
-				tostring(r.dive_policy or "finish_only"),
-				tostring(r.healing_style or "default"),
-				tostring(r.ability_usage or "default"),
-				tostring(r.creep_wave_priority or "last_hit_only"),
-				tostring(r.ability_timing or "on_cooldown"),
-				tostring(r.pregame_behavior or "default")), true)
-		end
-		local nearby = bot:GetNearbyHeroes(1500, true, BOT_MODE_NONE)
-		if nearby and #nearby > 0 and nearby[1]:IsAlive() then
-			Style.DiagRL(bot, "pg-atk", 5)
-			if bot:GetCurrentActionType() ~= BOT_ACTION_TYPE_ATTACK then
-				bot:Action_AttackUnit(nearby[1], false)
-			end
-			return
-		end
-		-- Enemy gone: heal up before repositioning (tango/flask/recovery items).
-		-- AIBSurvive.Think() → recovery() fires without safety gates when no hero nearby.
-		if AIBSurvive.Think(bot, dials, nil) then return end
-		Style.DiagRL(bot, "pg-pos", 5)
-		local pgb = GetRules().pregame_behavior
-		if pgb == "water_rune" then
-			local runeLoc, minD = nil, math.huge
-			for _, rid in ipairs({ RUNE_POWERUP_1, RUNE_POWERUP_2 }) do
-				local loc = GetRuneSpawnLocation(rid)
-				if loc then
-					local d = GetUnitToLocationDistance(bot, loc)
-					if d < minD then minD = d; runeLoc = loc end
-				end
-			end
-			if runeLoc and GetUnitToLocationDistance(bot, runeLoc) > 100 then
-				bot:Action_MoveToLocation(runeLoc)
-			end
-		else
-			local ownT1 = GetTower(GetTeam(), TOWER_MID_1)
-			local enmT1 = GetTower(GetOpposingTeam(), TOWER_MID_1)
-			if ownT1 ~= nil and enmT1 ~= nil then
-				local a, b = ownT1:GetLocation(), enmT1:GetLocation()
-				local totalDist = math.sqrt((b.x-a.x)^2 + (b.y-a.y)^2)
-				local dirX, dirY = (b.x-a.x)/totalDist, (b.y-a.y)/totalDist
-				-- Use fixed offsets from own T1 so map asymmetry doesn't skew positions.
-				-- % interpolation gave Dire (214,343) ≈ center because Dire T1 is close to river.
-				local dist
-				if     pgb == "safe_tower"       then dist = 500
-				elseif pgb == "aggressive_mid"   then dist = totalDist * 0.45
-				elseif pgb == "jungle_pressure"  then dist = totalDist * 0.70
-				else                                  dist = totalDist * (dials.forwardness or 0.5)
-				end
-				local target = Vector(a.x + dirX*dist, a.y + dirY*dist, a.z)
-				if GetUnitToLocationDistance(bot, target) > 100 then
-					bot:Action_MoveToLocation(target)
-				end
-			end
-		end
-		return
-	end
-
-	-- AIBattle rule (dive_policy): don't sit in enemy tower range unless the rule + situation allow
-	-- it. Fixes bots farming/standing under the tower and burning for no reason. Laning-only —
-	-- push/siege runs in another mode, so this never blocks taking towers. Style.MayDive applies the
-	-- policy (never/finish_only/when_grouped/when_ahead/always). Diag 'no-dive' counts pull-outs.
-	do
-		local twr = AIB_EnemyTowerDanger()
-		if twr ~= nil and not Style.MayDive(bot) then
-			AIB_Diag("no-dive")
-			bot:Action_MoveToLocation(J.VectorAway(bot:GetLocation(), twr:GetLocation(), 350))
-			return
-		end
-		-- AIBattle: if staying under enemy tower (dive allowed), attack an allied creep to redirect tower fire
-		if twr ~= nil and AIB_TowerAggroDrop(twr) then return end
-	end
-
-	-- AIBattle: death window -- enemy hero is dead (respawn timer). No combat threat.
-	-- Heal with consumables, farm aggressively, and advance the lane to build advantage.
-	-- Returns to standard logic as soon as the enemy is alive again.
-	do
-		-- Cache enemy PID when first seen alive, then track deaths via GetHeroDeaths.
-		-- GetTeamMember returns nil for dead bots — IsAlive() approach unreliable.
-		if bot.aib_ePID == nil then
-			local allNear = bot:GetNearbyHeroes(2000, true, BOT_MODE_NONE)
-			if allNear then
-				for _, h in ipairs(allNear) do
-					if h:IsHero() and not h:IsIllusion() then
-						for pid = 0, 9 do
-							if GetTeamMember(pid) == h then
-								bot.aib_ePID = pid
-								bot.aib_eDeathCount = GetHeroDeaths(pid)
-								break
-							end
-						end
-						if bot.aib_ePID then break end
-					end
-				end
-			end
-		end
-		local eIsDead = false
-		if bot.aib_ePID ~= nil then
-			local deaths = GetHeroDeaths(bot.aib_ePID)
-			if deaths > (bot.aib_eDeathCount or 0) then
-				bot.aib_eDeathCount = deaths
-				bot.aib_eDeadSince  = DotaTime()
-			end
-			local respawnWindow = 8 + 4 * (GetHeroLevel and GetHeroLevel(bot.aib_ePID) or 1)
-			eIsDead = bot.aib_eDeadSince ~= nil
-				and DotaTime() - bot.aib_eDeadSince < respawnWindow
-		end
-		if eIsDead then
-			-- Heal with consumables while safe
-			if J.GetHP(bot) < 0.95 then
-				for s = 0, 5 do
-					local it = bot:GetItemInSlot(s)
-					if it ~= nil and it:IsFullyCastable() then
-						local nm = it:GetName()
-						if nm == "item_flask" then
-							bot:Action_UseAbilityOnEntity(it, bot)
-							AIB_Diag("dw-heal"); return
-						elseif nm == "item_tango" then
-							local trees = bot:GetNearbyTrees(400)
-							if trees and trees[1] then
-								bot:Action_UseAbilityOnTree(it, trees[1])
-								AIB_Diag("dw-heal"); return
-							end
-						end
-					end
-				end
-			end
-			-- Farm: attack any enemy creep in attack range (push the wave)
-			local ec = bot:GetNearbyCreeps(botAttackRange + 50, true)
-			if ec and #ec > 0 then
-				for _, c in ipairs(ec) do
-					if c:IsAlive() and J.CanBeAttacked(c) then
-						bot:Action_AttackUnit(c, true)
-						AIB_Diag("dw-farm"); return
-					end
-			end
-			end
-			-- No creeps in range: advance toward lane front (override botAhead)
-			local dwDest = GetLaneFrontLocation(GetTeam(), botAssignedLane, 0)
-			if dwDest == nil then
-				local enmT1 = GetTower(GetOpposingTeam(), TOWER_MID_1)
-				if enmT1 ~= nil then dwDest = enmT1:GetLocation() end
-			end
-			if dwDest ~= nil and GetUnitToLocationDistance(bot, dwDest) > 150 then
-				bot:Action_MoveToLocation(dwDest + RandomVector(50))
-			end
-			Style.DiagRL(bot, "dw-fwd", 5)
-			return
-		end
-	end
+	ThinkAnnounce(dials)
+	ThinkLocationReport()
+	if ThinkPregame(dials) then return end
+	if ThinkDivePolicy() then return end
+	if ThinkDeathWindow() then return end
 
 	local cwp = Style.Get().rules.creep_wave_priority or "last_hit_only"
 
-	local hitCreep, moveToCreep = GetBestLastHitCreep(nEnemyCreeps)
+	local hitCreep = (GetBestLastHitCreep(nEnemyCreeps))
 
 	-- Last-hit / harass interleave (AIBattle): secure an IN-RANGE last-hit BEFORE heal check —
 	-- attack is instant and safe even at low HP; heal can fire next tick if still needed.
@@ -635,10 +570,40 @@ function Think()
 		end
 	end
 
-	-- 2) Harass hero BEFORE kite: prevents kite-400 from pushing bot outside attack range.
+	-- Survival baseline: low HP near own tower → suppress forward movement but not farming.
+	local aib_lowHpHold = false
+	do
+		local holdThresh = GetRules().low_hp_hold or 0.45
+		if holdThresh > 0 and J.GetHP(bot) < holdThresh then
+			local ownT1 = GetTower(GetTeam(), TOWER_MID_1)
+			if ownT1 ~= nil and GetUnitToUnitDistance(bot, ownT1) < 900 then
+				aib_lowHpHold = true
+				AIB_Diag("low-hp-hold")
+			end
+		end
+	end
+
+	-- Uphill repositioning: fires BEFORE harass — no trading from low ground.
+	-- Target = own T1 location (guaranteed high ground). 350u-ahead offset overshoots the ramp.
+	if not aib_lowHpHold then
+		local uphEnemy = bot:GetNearbyHeroes(1200, true, BOT_MODE_NONE)
+		if uphEnemy and #uphEnemy > 0 and uphEnemy[1]:IsAlive()
+			and AIB_UphillMiss(uphEnemy[1]) then
+			local ownT1uph = GetTower(GetTeam(), TOWER_MID_1)
+			local highPos = (ownT1uph ~= nil and ownT1uph:IsAlive()) and ownT1uph:GetLocation()
+				or AIB_ForwardSurvivingTowerLoc()
+			if highPos and GetUnitToLocationDistance(bot, highPos) > 300 then
+				bot:Action_MoveToLocation(highPos + RandomVector(50))
+				AIB_Diag("uphill-reposition")
+				return
+			end
+		end
+	end
+
+	-- 2) Harass hero (uphill already handled above — bot is on own ramp or no terrain disadvantage).
 	--    hero_priority=never  → skip entirely (pure creep focus).
 	--    hero_priority=always → bypass farm_focus roll and hp-disadvantage gate.
-	--    hero_priority=default → attack immediately when in range (baseline); farm_focus+harass_desire
+	--    hero_priority=default → attack immediately when in range; farm_focus+harass_desire
 	--                            gate only applies when enemy is out of range (seeking behaviour).
 	local heroPrio = Style.Get().rules.hero_priority or "default"
 	if heroPrio ~= "never" then
@@ -652,13 +617,19 @@ function Think()
 				end
 			else
 				local inRange = GetUnitToUnitDistance(bot, atkHero[1]) <= botAttackRange
-				if inRange and AIB_EnemyTowerDanger() == nil and not aib_deathSurvive then
-					-- Baseline: enemy in range, bot safe from tower — always swing.
+				-- harass_desire controls rate: hd=1.0 → 0.5s CD, hd=0.0 → 2.5s CD.
+				local harassCD = 0.5 + (1.0 - (dials.harass_desire or 0.5)) * 2.0
+				local harassReady = bot.aib_harassLast == nil
+					or DotaTime() - bot.aib_harassLast >= harassCD
+				if inRange and AIB_EnemyTowerDanger() == nil and not aib_deathSurvive
+					and harassReady then
+					bot.aib_harassLast = DotaTime()
 					bot:Action_AttackUnit(atkHero[1], false)
 					AIB_Diag("harass-atk")
 					return
 				elseif not inRange and math.random() > (dials.farm_focus or 0.5) then
-					if math.random() < (dials.harass_desire or 0.5) then
+					if math.random() < (dials.harass_desire or 0.5)
+						and not AIB_UphillMiss(atkHero[1]) then
 						bot:Action_AttackUnit(atkHero[1], false)
 						AIB_Diag("harass-seek")
 						return
@@ -682,36 +653,6 @@ function Think()
 	end
 
 	if bot:WasRecentlyDamagedByCreep(1.0) then Style.DiagRL(bot, "creep-dmg", 3) end
-
-	-- Kite creeps: ranged hero backs off when hit by any creep OR melee creep is inside 190u.
-	-- Triggers: (A) recently damaged by creep, (B) melee creep < 190u.
-	-- Guards: HP < 70%, inside attack-range of pack (centroid < attackRange-50), retreat_caution roll, 1.5s CD.
-	if botAttackRange > 300 and J.GetHP(bot) < 0.70 then
-		local rc = dials.retreat_caution or 0.5
-		local hitByCreep = bot:WasRecentlyDamagedByCreep(1.5)
-		local meleeClose = false
-		if not hitByCreep then
-			for _, c in pairs(nEnemyCreeps or {}) do
-				if J.IsValid(c) and c:GetAttackCapabilities() == ATTACK_CAPABILITY_MELEE_ATTACK
-					and GetUnitToUnitDistance(bot, c) < 190 then
-					meleeClose = true; break
-				end
-			end
-		end
-		if (hitByCreep or meleeClose) and rc >= 0.15 and math.random() < rc then
-			local cen = AIB_EnemyCreepCentroid(nEnemyCreeps)
-			local insidePack = cen == nil or GetUnitToLocationDistance(bot, cen) < botAttackRange - 50
-			if insidePack then
-				if bot.aib_kiteLast == nil or DotaTime() - bot.aib_kiteLast >= 1.5 then
-					bot.aib_kiteLast = DotaTime()
-					local back = GetLaneFrontLocation(GetTeam(), botAssignedLane, -200)
-						or (cen and J.VectorAway(bot:GetLocation(), cen, 200))
-						or AIB_ForwardSurvivingTowerLoc()
-					if back then AIB_Diag("kite-creep"); bot:Action_MoveToLocation(back); return end
-				end
-			end
-		end
-	end
 
 	-- 3) walk toward last-hit creep, but stop at attack-range edge (not inside pack).
 	-- For ranged heroes: calculate a safe point at (attackRange-50) from the creep in our direction.
@@ -824,7 +765,6 @@ function Think()
 	-- doesn't abandon a CS wave to chase. Radius 1000u: close enough to actually close gap,
 	-- not so far that the bot leaves lane entirely.
 	if heroPrio == "default" and AIB_EnemyTowerDanger() == nil
-		and (dials.harass_desire or 0.5) >= 0.5
 		and not (nEnemyCreeps and #nEnemyCreeps > 0) then
 		local dtEnemy = bot:GetNearbyHeroes(1400, true, BOT_MODE_NONE)
 		if dtEnemy and #dtEnemy > 0 and dtEnemy[1]:IsAlive() then
@@ -836,20 +776,6 @@ function Think()
 		end
 	end
 
-
-	-- Survival baseline: don't advance into lane with low HP near own tower.
-	-- Sets a flag only — bot can still farm creeps, just won't push forward.
-	local aib_lowHpHold = false
-	do
-		local holdThresh = GetRules().low_hp_hold or 0.45
-		if holdThresh > 0 and J.GetHP(bot) < holdThresh then
-			local ownT1 = GetTower(GetTeam(), TOWER_MID_1)
-			if ownT1 ~= nil and GetUnitToUnitDistance(bot, ownT1) < 900 then
-				aib_lowHpHold = true
-				AIB_Diag("low-hp-hold")
-			end
-		end
-	end
 
 	-- forwardness: controls desired depth in lane (offset from creep front).
 	-- For ranged heroes with enemy creeps present: clamp dest so the bot never ends up
@@ -868,10 +794,10 @@ function Think()
 				dest = Vector(a.x + (b.x - a.x) * fwd, a.y + (b.y - a.y) * fwd, a.z)
 			end
 		end
-		-- Ranged hero at LOW HP: override dest with safe edge of pack (defensive positioning).
-		-- At full HP, advance normally — packSafeDest only applies when bot is holding back.
+		-- Ranged hero: always stand at attack-range edge of the enemy pack, not inside it.
+		-- At full HP the offset is small (~540u from centroid); at low HP it's attack range.
 		local packSafeDest = nil
-		if aib_lowHpHold and botAttackRange > 300 and nEnemyCreeps and #nEnemyCreeps > 0 then
+		if botAttackRange > 300 and nEnemyCreeps and #nEnemyCreeps > 0 then
 			local cen = AIB_EnemyCreepCentroid(nEnemyCreeps)
 			if cen ~= nil then
 				local safe = botAttackRange - 60
@@ -886,8 +812,6 @@ function Think()
 			end
 		end
 		if dest ~= nil and GetUnitToLocationDistance(bot, dest) > 150 then
-			-- Only pull toward target if bot is BEHIND it (not already past it toward enemy).
-			-- Prevents fwd from cancelling AntiIdleGlobal/dt-walk forward momentum on the next tick.
 			local botAhead = false
 			local ownT1fwd = GetTower(GetTeam(), TOWER_MID_1)
 			if ownT1fwd ~= nil then
@@ -988,6 +912,7 @@ function AnnounceMessages()
 	end
 
 	if GetGameMode() ~= GAMEMODE_1V1MID
+	   and GetGameMode() ~= 0
 	   and GetGameState() == GAME_STATE_PRE_GAME
 	   and (bot.announcedRole == nil or bot.announcedRole ~= J.GetPosition(bot))
 	then
@@ -1003,78 +928,3 @@ function AnnounceMessages()
 	end
 end
 
---[[
-================================================================================
-ARCHIVE: AIB_ThinkPreGame (disabled 2026-06-11, to rewrite from scratch)
---------------------------------------------------------------------------------
-Purpose: custom pregame positioning based on rules.pregame_behavior dial.
-  safe_tower       — 15% toward enemy T1 (in front of own tower)
-  aggressive_mid   — 45% toward enemy T1 (river crossing)
-  jungle_pressure  — 70% toward enemy T1 (deep into enemy half)
-History: multiple iterations failed to fix bots standing AFK. Removed to restore
-OHA default walk-to-lane behaviour. Preserve for future rewrite.
-Notes:
-  - GetEnemyTeam() may be undefined in OHA; use GetOpposingTeam() instead
-  - GetLaneFrontLocation returns nil at t=0..5 before creeps register
-  - In 1v1: no bounty runes; for 5v5 a role-based module is needed
---------------------------------------------------------------------------------
-
-local function AIB_ThinkPreGame()
-	AIB_Diag("pg-called")
-	if not bot.aib_pgf then
-		bot.aib_pgf = true
-		bot:ActionImmediate_Chat("AIB-PGF t=" .. math.floor(DotaTime()), true)
-	end
-	local pgb = GetRules().pregame_behavior
-	if pgb == nil then AIB_Diag("pg-no-pgb"); return false end
-
-	local a, b
-	local ownT1 = GetTower(GetTeam(), TOWER_MID_1)
-	local enmT1 = GetTower(GetOpposingTeam(), TOWER_MID_1)  -- NB: GetOpposingTeam() not GetEnemyTeam()
-	if ownT1 ~= nil and enmT1 ~= nil then
-		a = ownT1:GetLocation()
-		b = enmT1:GetLocation()
-	else
-		a = GetLaneFrontLocation(GetTeam(), LANE_MID, 0)
-		b = GetLaneFrontLocation(GetOpposingTeam(), LANE_MID, 0)
-		if a == nil or b == nil then AIB_Diag("pg-ref-nil"); return false end
-	end
-
-	local t = 0.15
-	if pgb == "aggressive_mid"    then t = 0.45
-	elseif pgb == "jungle_pressure" then t = 0.70 end
-	local target = Vector(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z)
-
-	if not bot.aib_pgDiag then bot.aib_pgDiag = true; AIB_Diag("pregame-" .. pgb) end
-
-	if DotaTime() < 0 then
-		if GetUnitToLocationDistance(bot, target) > 150 then
-			if bot.aib_pgLast == nil or DotaTime() - bot.aib_pgLast >= 2.0 then
-				bot.aib_pgLast = DotaTime(); bot:Action_MoveToLocation(target)
-			end
-		end
-		return true
-	end
-
-	-- t >= 0: walk ahead of creep wave; falls back to deeper lerp until creeps register
-	local advOffset = math.max(botAttackRange, 400)
-	local walkTarget = GetLaneFrontLocation(GetTeam(), LANE_MID, advOffset)
-	if walkTarget == nil then
-		local tDeep = math.min(t + 0.20, 0.70)
-		walkTarget = Vector(a.x + (b.x - a.x) * tDeep, a.y + (b.y - a.y) * tDeep, a.z)
-	end
-	if GetUnitToLocationDistance(bot, walkTarget) > 150 then
-		if bot.aib_pgLast == nil or DotaTime() - bot.aib_pgLast >= 2.0 then
-			bot.aib_pgLast = DotaTime(); bot:Action_MoveToLocation(walkTarget)
-		end
-		return true
-	end
-	return false
-end
-
--- To re-enable: uncomment this function, then in Think() add:
---   if AIB_ThinkPreGame() then return end
--- and in GetDesire() add:
---   if DotaTime() < 0 then return 0.95 end
-================================================================================
-]]

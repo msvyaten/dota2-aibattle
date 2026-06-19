@@ -6,6 +6,10 @@ local M = {}
 
 local J     = require(GetScriptDirectory()..'/FunLib/jmz_func')
 local Style = require(GetScriptDirectory()..'/FunLib/aibattle_style')
+local AIBUtils = require(GetScriptDirectory()..'/FunLib/aibattle_utils')
+
+local TANGO_CD = 10.0  -- shared across all tango calls; guards re-issue while CD / modifier active
+local FLASK_CD = 3.0   -- laning flask (defensiveHeal); recovery uses aib_recFlaskLast at 8s (separate context)
 
 local function getItem(bot, name)
 	local slot = bot:FindItemSlot(name)
@@ -14,58 +18,53 @@ local function getItem(bot, name)
 	return (it ~= nil and it:IsFullyCastable()) and it or nil
 end
 
-local function forwardTowerLoc(bot)
-	local ids = { TOWER_MID_1, TOWER_MID_2, TOWER_MID_3, TOWER_BASE_1, TOWER_BASE_2 }
-	for _, id in ipairs(ids) do
-		local t = GetTower(bot:GetTeam(), id)
-		if t ~= nil and t:IsAlive() then
-			local oppT1 = GetTower(GetOpposingTeam(), TOWER_MID_1)
-			if oppT1 ~= nil then
-				local tl, el = t:GetLocation(), oppT1:GetLocation()
-				local d = math.sqrt((el.x-tl.x)^2 + (el.y-tl.y)^2)
-				if d > 1 then
-					return Vector(tl.x + (el.x-tl.x)/d * 350, tl.y + (el.y-tl.y)/d * 350, tl.z)
-				end
-			end
-			return t:GetLocation()
-		end
-	end
-	return nil
-end
+local function forwardTowerLoc(bot) return AIBUtils.ForwardSurvivingTowerLoc(bot) end
 
-local function enemyCreepCentroid(enemyCreeps)
-	local cx, cy, n = 0, 0, 0
-	for _, c in pairs(enemyCreeps or {}) do
-		if J.IsValid(c) then
-			local l = c:GetLocation(); cx = cx + l.x; cy = cy + l.y; n = n + 1
+-- tryTango: unified tango logic used by defensiveHeal and recovery.
+-- Returns true when tree-walk is in progress (caller must return to protect the walk).
+-- Releases automatically once modifier_tango_heal appears (HasModifier check below).
+local function tryTango(bot, hpThreshold, treeRadius, diagKey)
+	-- Walking protection: block until modifier appears (bot reached tree) or 2s timeout.
+	if bot.aib_tangoWalking ~= nil then
+		if bot:HasModifier("modifier_tango_heal") then
+			bot.aib_tangoWalking = nil  -- tree reached, unblock
+		elseif DotaTime() - bot.aib_tangoWalking < 2.0 then
+			return true  -- still walking to tree
+		else
+			bot.aib_tangoWalking = nil  -- timeout, give up
 		end
 	end
-	return n > 0 and Vector(cx / n, cy / n, 0) or nil
+	if J.GetHP(bot) >= hpThreshold then return false end
+	if bot.aib_tangoLast ~= nil and DotaTime() - bot.aib_tangoLast < TANGO_CD then return false end
+	if bot:HasModifier("modifier_tango_heal") then return false end
+	local item = getItem(bot, "item_tango") or getItem(bot, "item_tango_single")
+	if not item then return false end
+	local trees = bot:GetNearbyTrees(treeRadius)
+	if not trees or #trees == 0 then return false end
+	bot.aib_tangoLast   = DotaTime()
+	bot.aib_tangoWalking = DotaTime()
+	Style.Diag(bot, diagKey)
+	bot:Action_UseAbilityOnTree(item, trees[1])
+	return true
 end
 
 -- ────────────────────────────────────────────────────────────
--- defensive_heal: items WITH safety gates (normal laning).
+-- defensiveHeal: consumables WITH safety gates (normal laning).
 -- ────────────────────────────────────────────────────────────
 local function defensiveHeal(bot, dials)
-	-- Proactive consumables: fire regardless of healing_style.
-	-- Tango: below 70% HP (meaningful damage taken, not just a stray hit). Flask: missing 400+ HP.
-	local hp = J.GetHP(bot)
+	local hp        = J.GetHP(bot)
 	local hpMissing = bot:GetMaxHealth() - bot:GetHealth()
-	local TANGO_CD = 10.0
-	if hp < 0.70
-		and (bot.aib_tangoLast == nil or DotaTime() - bot.aib_tangoLast >= TANGO_CD)
-		and not bot:HasModifier("modifier_tango_heal") then
-		local tango = getItem(bot, "item_tango") or getItem(bot, "item_tango_single")
-		if tango then
-			local trees = bot:GetNearbyTrees(700)
-			if trees and #trees > 0 then
-				bot.aib_tangoLast = DotaTime()
-				Style.Diag(bot, "tango-heal")
-				bot:Action_UseAbilityOnTree(tango, trees[1]); return true
-			end
-		end
+	local maxMana   = bot:GetMaxMana()
+	local mana      = maxMana > 0 and (bot:GetMana() / maxMana) or 1.0
+
+	-- Proactive: fires for ALL healing styles.
+	-- Returns true to protect the walk-to-tree (~1-2s). Releases as soon as modifier appears
+	-- (HasModifier check in tryTango returns false → defensiveHeal falls through normally).
+	if tryTango(bot, 0.70, 700, "tango-heal") then
+		bot.aib_healLast = DotaTime()
+		return true
 	end
-	local FLASK_CD = 3.0
+
 	if hpMissing >= 400
 		and (bot.aib_flaskLast == nil or DotaTime() - bot.aib_flaskLast >= FLASK_CD)
 		and not (bot:WasRecentlyDamagedByAnyHero(0.5) or bot:WasRecentlyDamagedByCreep(0.5)) then
@@ -73,35 +72,21 @@ local function defensiveHeal(bot, dials)
 		if flask then
 			bot.aib_flaskLast = DotaTime()
 			Style.Diag(bot, "heal-item")
-			bot:Action_UseAbilityOnEntity(flask, bot); return true
+			bot:Action_UseAbilityOnEntity(flask, bot)
 		end
 	end
 
 	if Style.Get().rules.healing_style ~= "active" then return false end
-	local hp      = J.GetHP(bot)
-	local maxMana = bot:GetMaxMana()
-	local mana    = maxMana > 0 and (bot:GetMana() / maxMana) or 1.0
 
 	local HEAL_CD   = 2.5
 	local MANA_CD   = 4.0
 	local healReady = bot.aib_healLast == nil or DotaTime() - bot.aib_healLast >= HEAL_CD
 	local manaReady = bot.aib_manaLast == nil or DotaTime() - bot.aib_manaLast >= MANA_CD
 
-	-- 1. Tango: TANGO_CD guards against rapid re-issue when bot walks to a distant tree
-	--    and the next Think tick cancels the action before reaching it.
-	local TANGO_CD = 10.0
-	if hp < 0.65
-		and (bot.aib_tangoLast == nil or DotaTime() - bot.aib_tangoLast >= TANGO_CD)
-		and not bot:HasModifier("modifier_tango_heal") then
-		local tango = getItem(bot, "item_tango") or getItem(bot, "item_tango_single")
-		if tango then
-			local trees = bot:GetNearbyTrees(700)
-			if trees and #trees > 0 then
-				bot.aib_tangoLast = DotaTime(); bot.aib_healLast = DotaTime()
-				Style.Diag(bot, "tango-heal")
-				bot:Action_UseAbilityOnTree(tango, trees[1]); return true
-			end
-		end
+	-- 1. Tango at tighter threshold (0.65 vs 0.70 proactive); shared CD prevents double-use.
+	if tryTango(bot, 0.65, 700, "tango-heal") then
+		bot.aib_healLast = DotaTime()
+		return true
 	end
 
 	-- 2. Bottle: channel-safe; hero damage cancels it
@@ -122,7 +107,7 @@ local function defensiveHeal(bot, dials)
 		end
 	end
 
-	-- 4+5. Wand (≥10 ch) / Stick (≥8 ch): instant, meaningful charge threshold only
+	-- 4+5. Wand (>=10 ch) / Stick (>=8 ch): instant, meaningful charge threshold only
 	if hp < 0.50 and healReady then
 		local wand = getItem(bot, "item_magic_wand")
 		if wand and wand:GetCurrentCharges() >= 10 then
@@ -150,7 +135,7 @@ local function defensiveHeal(bot, dials)
 		end
 	end
 
-	-- 8. Clarity: channel, any damage cancels — separate mana CD
+	-- 8. Clarity: channel, any damage cancels -- separate mana CD
 	if mana < 0.40 and manaReady then
 		local safe = not (bot:WasRecentlyDamagedByAnyHero(0.5) or bot:WasRecentlyDamagedByCreep(0.5))
 		if safe then
@@ -162,9 +147,8 @@ local function defensiveHeal(bot, dials)
 		end
 	end
 
-	-- 9. Flask: separate CD — not gated by healReady so tango/wand use doesn't block it.
-	-- Channel gets cancelled by damage, so at critical HP (< 0.30) bypass damage check too.
-	local FLASK_CD = 3.0
+	-- 9. Flask at lower threshold -- not gated by healReady so tango/wand use doesn't block it.
+	-- At critical HP (< 0.30) bypass recent-damage check (channel gets cancelled but worth trying).
 	if hp < 0.40 and (bot.aib_flaskLast == nil or DotaTime() - bot.aib_flaskLast >= FLASK_CD) then
 		local flask = getItem(bot, "item_flask")
 		if flask then
@@ -194,63 +178,31 @@ local function defensiveHeal(bot, dials)
 	return false
 end
 
--- ────────────────────────────────────────────────────────────
--- regen_lane: step back toward own tower to recover HP.
--- Always runs when HP is low — enemy chasing is exactly when you should retreat.
--- ────────────────────────────────────────────────────────────
--- State machine: nil → "retreating" → "returned" → nil (cooldown set on lane re-entry).
--- Cooldown starts only when the bot actually walks back and sees enemy creeps again,
--- not when HP recovers at the tower (which can happen mid-retreat).
+-- regen_lane: retreat to forward tower when HP is low AND enemy hero is nearby.
+-- Returns true only while walking back — once at safe position returns false so normal
+-- farming/healing runs. aib_lowHpHold in mode_laning_generic already blocks fwd at HP<0.45.
 local function regenLane(bot, dials, nEnemyCreeps)
-	return false -- disabled: rely on heals + low-hp-hold + emerg-retreat
+	if Style.Get().rules.low_hp_behavior ~= "regen_lane" then return false end
+	local holdThresh = Style.Get().rules.low_hp_hold or 0.45
+	if J.GetHP(bot) >= holdThresh then return false end
 
-	local hp     = J.GetHP(bot)
-	local rc     = dials.retreat_caution or 0.5
-	local thresh = 0.40 + 0.15 * rc
-
-	-- "returned": HP recovered, now walking back. Start cooldown once enemy creeps visible again.
-	if bot.aib_regenState == "returned" then
-		if nEnemyCreeps and #nEnemyCreeps > 0 then
-			bot.aib_regenState    = nil
-			bot.aib_regenCycleEnd = DotaTime()  -- cooldown starts here: bot is back in lane
-		end
-	end
-
-	-- HP recovered: transition from retreating → returned.
-	if hp >= thresh then
-		if bot.aib_regenState == "retreating" then
-			bot.aib_regenState = "returned"
-		end
-		return false
-	end
-
-	-- Emergency bypass: always retreat at < 25% HP regardless of cooldown.
-	local emergency = hp < 0.25
-	if not emergency then
-		if bot.aib_regenCycleEnd and DotaTime() - bot.aib_regenCycleEnd < 20.0 then
-			return false
-		end
-	end
+	local near = bot:GetNearbyHeroes(900, true, BOT_MODE_NONE)
+	if not (near and #near > 0 and near[1]:IsAlive()) then return false end
 
 	local back = forwardTowerLoc(bot)
-	if back and GetUnitToLocationDistance(bot, back) < 350 then
-		bot.aib_regenState = "retreating"
-		return false  -- at tower, regen naturally
+	if back == nil or GetUnitToLocationDistance(bot, back) <= 200 then return false end
+
+	if bot.aib_regenMoveLast == nil or DotaTime() - bot.aib_regenMoveLast >= 1.5 then
+		bot.aib_regenMoveLast = DotaTime()
+		Style.Diag(bot, "regen-walk")
+		bot:Action_MoveToLocation(back)
 	end
-	if bot.aib_regenLast == nil or DotaTime() - bot.aib_regenLast >= 3.0 then
-		if back then
-			bot.aib_regenLast  = DotaTime()
-			bot.aib_regenState = "retreating"
-			Style.Diag(bot, "regen-lane")
-			bot:Action_MoveToLocation(back); return true
-		end
-	end
-	return false
+	return true
 end
 
 -- ────────────────────────────────────────────────────────────
 -- recovery: post-fight heal WITHOUT safety gates.
--- Enemy is dead/gone — no need to wait for "safe" windows.
+-- Enemy is dead/gone -- no need to wait for "safe" windows.
 -- ────────────────────────────────────────────────────────────
 local function recovery(bot, dials)
 	if Style.Get().rules.healing_style ~= "active" or not bot:IsAlive() then return false end
@@ -261,20 +213,8 @@ local function recovery(bot, dials)
 	local near    = bot:GetNearbyHeroes(900, true, BOT_MODE_NONE)
 	if near and #near > 0 and near[1]:IsAlive() then return false end
 
-	-- 1. Tango: aib_tangoLast CD prevents double-use while bot walks to the first tree
-	--    (modifier_tango_heal only appears AFTER reaching the tree, so HasModifier alone isn't enough).
-	if hp < 0.65
-		and (bot.aib_tangoLast == nil or DotaTime() - bot.aib_tangoLast >= 10.0)
-		and not bot:HasModifier("modifier_tango_heal") then
-		local tango = getItem(bot, "item_tango") or getItem(bot, "item_tango_single")
-		if tango then
-			local trees = bot:GetNearbyTrees(800)
-			if trees and #trees > 0 then
-				bot.aib_tangoLast = DotaTime(); Style.Diag(bot, "recovery-tango")
-				bot:Action_UseAbilityOnTree(tango, trees[1]); return true
-			end
-		end
-	end
+	-- 1. Tango: 800u radius (wider than laning -- enemy gone, safe to step to farther tree).
+	if tryTango(bot, 0.65, 800, "recovery-tango") then return true end
 
 	-- 2. Bottle: no WasRecentlyDamagedByAnyHero check.
 	-- Empty bottle (0 charges): seek water rune to refill; don't fountain just for empty bottle.
@@ -307,24 +247,25 @@ local function recovery(bot, dials)
 		end
 	end
 
-	-- 3. Flask: 8s cooldown guards against channel-interrupt re-spam
-	--    (damage cancels the channel → item stays castable → next tick tries again without CD)
+	-- 3. Flask: 8s CD guards against channel-interrupt re-spam (damage cancels channel -> item stays
+	--    castable -> next tick retries). aib_recFlaskLast is separate from aib_flaskLast so laning
+	--    (3s CD, enemy present) and recovery (8s CD, enemy gone) don't block each other.
+	--    Don't return true when on CD — laning should continue during the cooldown window.
 	if hp < 0.70 then
 		local flask = getItem(bot, "item_flask")
 		if flask then
 			if bot.aib_recFlaskLast == nil or DotaTime() - bot.aib_recFlaskLast >= 8.0 then
 				bot.aib_recFlaskLast = DotaTime()
 				Style.Diag(bot, "recovery-flask"); bot:Action_UseAbilityOnEntity(flask, bot)
+				return true  -- protect first tick after cast
 			end
-			return true
+			-- CD active (channel was interrupted): fall through to laning
 		end
 	end
 
 	-- Post-fight step-back: enemy gone, recently took hero damage, HP still suboptimal and
 	-- all items exhausted. Back off near forward tower so natural regen works during
-	-- the enemy's respawn window. 8s window: 15s caused the bot to idle near its own
-	-- tower for the entire enemy respawn timer even after a successful kill.
-	-- Threshold 0.45+0.20*rc → at rc=0.75: 0.60; at rc=0.60: 0.57.
+	-- the enemy's respawn window.
 	do
 		local postFightBack = 0.45 + 0.20 * (dials.retreat_caution or 0.5)
 		local tangoWalk = bot.aib_tangoLast ~= nil and DotaTime() - bot.aib_tangoLast < 12.0
@@ -388,7 +329,7 @@ local function recovery(bot, dials)
 		end
 	end
 
-	-- e. Stand near tower (passive regen) — 30s cap to prevent indefinite AFK when items exhausted.
+	-- e. Stand near tower (passive regen) -- 30s cap to prevent indefinite AFK when items exhausted.
 	local back = forwardTowerLoc(bot)
 	if back then
 		if bot.aib_recWaitStart == nil then bot.aib_recWaitStart = DotaTime() end

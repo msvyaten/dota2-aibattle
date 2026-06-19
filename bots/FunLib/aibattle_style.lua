@@ -526,26 +526,49 @@ function M.AntiIdleGlobal(bot)
             end
         end
     end
-    -- Fallback: attack nearest enemy creep in attack range — never stand completely idle.
-    local creeps = bot:GetNearbyCreeps(bot:GetAttackRange() + 100, true)
+    -- P3: no enemy hero → attack enemy creeps. Walk to them if outside attack range.
+    local creeps = bot:GetNearbyCreeps(1200, true)
     if creeps and #creeps > 0 then
         for _, c in ipairs(creeps) do
             if c:IsAlive() then
-                bot:Action_AttackUnit(c, true)
-                M.Diag(bot, "anti-idle-creep")
+                if GetUnitToUnitDistance(bot, c) <= bot:GetAttackRange() then
+                    bot:Action_AttackUnit(c, true)
+                    M.Diag(bot, "anti-idle-creep")
+                else
+                    bot:Action_MoveToUnit(c)
+                    M.DiagRL(bot, "anti-idle-creep-walk", 5)
+                end
                 return
             end
         end
     end
-    -- Nothing found: walk to the actual lane front so bot never stands idle with no targets.
-    -- Offset=0 targets the current creep front (not -200 behind it) so anti-idle always
-    -- pushes forward past the fwd HP-aware target. Threshold 150u matches fwd's own check.
+    -- P4: no creeps visible → walk to lane front (creeps will be there).
     local lane = bot:GetAssignedLane()
     local dest = GetLaneFrontLocation(bot:GetTeam(), lane, 0)
     if dest ~= nil and GetUnitToLocationDistance(bot, dest) > 150 then
         bot:Action_MoveToLocation(dest)
         M.DiagRL(bot, "anti-idle-lane", 5)
         return
+    end
+    -- P5: already at lane front, no creeps visible → lane is pushed; attack or advance toward tower.
+    -- Use attack range as the stop threshold, not 150u — ranged hero doesn't need to walk up close.
+    -- Tower danger is re-checked each tick in main Think() — bot pulls back automatically if needed.
+    if not lowHp then
+        local enmT1 = GetTower(GetOpposingTeam(), TOWER_MID_1)
+        if enmT1 ~= nil and enmT1:IsAlive() then
+            local atkRange = bot:GetAttackRange()
+            if GetUnitToUnitDistance(bot, enmT1) <= atkRange then
+                bot:Action_AttackUnit(enmT1, true)
+                M.DiagRL(bot, "anti-idle-push", 5)
+                return
+            end
+            local pushDest = GetLaneFrontLocation(bot:GetTeam(), lane, -400) or enmT1:GetLocation()
+            if GetUnitToLocationDistance(bot, pushDest) > atkRange then
+                bot:Action_MoveToLocation(pushDest)
+                M.DiagRL(bot, "anti-idle-push", 5)
+                return
+            end
+        end
     end
     M.DiagRL(bot, "idle", 3)
 end
