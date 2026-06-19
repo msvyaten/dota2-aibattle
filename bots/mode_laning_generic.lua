@@ -484,9 +484,10 @@ local function ThinkDeathWindow()
 	end
 	if dwDest ~= nil and GetUnitToLocationDistance(bot, dwDest) > 150 then
 		bot:Action_MoveToLocation(dwDest + RandomVector(50))
+		Style.DiagRL(bot, "dw-fwd", 5)
+		return true
 	end
-	Style.DiagRL(bot, "dw-fwd", 5)
-	return true
+	return false
 end
 
 -- AIBattle: Think() defined unconditionally so the engine always has a callable function.
@@ -503,6 +504,13 @@ function Think()
 	if ThinkDeathWindow() then return end
 
 	local cwp = Style.Get().rules.creep_wave_priority or "last_hit_only"
+	local debugSkeleton = GetRules().debug_skeleton_laning == true
+	local debugNoForward = debugSkeleton or GetRules().debug_disable_forwardness_fallbacks == true
+	if debugSkeleton then
+		Style.DiagRL(bot, "dbg-skeleton", 10)
+	elseif debugNoForward then
+		Style.DiagRL(bot, "dbg-no-fwd", 10)
+	end
 
 	local hitCreep = (GetBestLastHitCreep(nEnemyCreeps))
 
@@ -574,7 +582,7 @@ function Think()
 	local aib_lowHpHold = false
 	do
 		local holdThresh = GetRules().low_hp_hold or 0.45
-		if holdThresh > 0 and J.GetHP(bot) < holdThresh then
+		if not debugSkeleton and holdThresh > 0 and J.GetHP(bot) < holdThresh then
 			local ownT1 = GetTower(GetTeam(), TOWER_MID_1)
 			if ownT1 ~= nil and GetUnitToUnitDistance(bot, ownT1) < 900 then
 				aib_lowHpHold = true
@@ -780,7 +788,7 @@ function Think()
 	-- forwardness: controls desired depth in lane (offset from creep front).
 	-- For ranged heroes with enemy creeps present: clamp dest so the bot never ends up
 	-- inside the enemy pack — stay at (attackRange-60) from the wave centroid at minimum.
-	do
+	if not debugNoForward then
 		local fwd = dials.forwardness or 0.5
 		local dest = target_loc
 		if dest == nil then
@@ -851,12 +859,14 @@ function Think()
 			end
 			AIB_Diag("fb-skip")
 		end
+	else
+		Style.DiagRL(bot, "dbg-skip-fwd", 5)
 	end
 
 	-- AIBattle: idle-creep attack — if enemy creeps are in attack range and nothing else fired,
 	-- swing at the nearest one. Prevents the bot from standing motionless next to creeps when
 	-- last_hit_only mode has nothing to execute yet. Rate-limited to avoid spamming.
-	do
+	if not debugNoForward then
 		local ec = bot:GetNearbyCreeps(botAttackRange, true)
 		if ec and #ec > 0 and J.GetHP(bot) > 0.15 then
 			local tgt = ec[1]

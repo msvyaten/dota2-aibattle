@@ -249,6 +249,11 @@ local function buildStyle(raw)
     local denp = rawRules.deny_policy
     local deny_policy = (type(denp) == "string" and DENY_POLICY_VALUES[denp]) and denp or DEFAULT_DENY_POLICY
 
+    -- Debug-only switches for isolating AFK/jitter. These are deliberately not LLM-visible
+    -- style rules; set them by hand in playstyle_*.lua for one diagnostic match.
+    local debug_disable_forwardness_fallbacks = rawRules.debug_disable_forwardness_fallbacks == true
+    local debug_skeleton_laning = rawRules.debug_skeleton_laning == true
+
     -- Technical-only flags: not LLM-visible rules, always-off unless explicitly set.
     -- anti_afk / tower_avoid are bug-fixes, not style choices — kept here for opt-in testing.
     local improvements = {
@@ -263,6 +268,8 @@ local function buildStyle(raw)
         healing_style = healing_style, ability_usage = ability_usage,
         creep_wave_priority = creep_wave_priority, ability_timing = ability_timing,
         hero_priority = hero_priority, deny_policy = deny_policy,
+        debug_disable_forwardness_fallbacks = debug_disable_forwardness_fallbacks,
+        debug_skeleton_laning = debug_skeleton_laning,
     }, item_build = items, skill_build = skills, item_rules = item_rules, improvements = improvements }
 end
 
