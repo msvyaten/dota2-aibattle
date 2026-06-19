@@ -11,6 +11,83 @@
 
 ---
 
+## 2026-06-19 — Codex phase-23, visual-AFK watchdog
+
+**Триггер:** пользовательский критерий AFK = герой стоит на месте, даже если кодово он фармит/денает.
+
+| MatchID | Dur | Победитель | Заметки |
+|---|---|---|---|
+| 8858472901 | game=534s | ? | неполный матч, shutdown/abandon без финального stat dump; skeleton был активен (`dbg-skeleton R#52 D#53`, `dbg-skip-fwd R#64 D#21`), но stationary остался: R `0-322s`, D `81-393s`; при этом `cs-inrange R#441 D#149`, `deny-act R#77 D#12` |
+
+**Вывод:** forwardness/fallback не единственный root cause. Бот может быть "полезно занят" внутри Dota API и всё равно выглядеть AFK для зрителя. Поэтому добавлен visual-AFK watchdog перед last-hit: после `vafk=6s` почти без смещения бот обязан сделать видимое движение (`anti-afk-*`).
+
+**Что проверять в следующем матче:** cfg должен показать `vafk=6`; в diag должны появиться `anti-afk-back/safe/chase/strafe/wave/lane`; `stationary[...]` не должен показывать длинные интервалы >10-15s.
+
+---
+
+## 2026-06-19 — phase-22, диагностика skeleton-режима (jitter/AFK изоляция)
+
+**Цель:** проверить гипотезу что forwardness/fwd-fallback/fwd-push перехватывают тики и вызывают jitter/AFK.
+**⚠️ ВАЖНО: debug_skeleton_laning НЕ задеплоен в LIVE** — матч прошёл с обычным phase-22 кодом (fwd-блок активен).
+**Конфиг Radiant:** assassin — harass=0.80 ability=0.80 fwd=0.60 retreat=0.45 exec=0.60 farm=0.35 / healing=active ability=aggressive pregame=aggressive_mid dive=never
+**Конфиг Dire:** farmer — harass=0.25 ability=0.25 fwd=0.60 retreat=0.75 exec=0.15 farm=0.90 / healing=default pregame=safe_tower dive=never
+
+| MatchID | Dur | Победитель | R K/D LH/м | D K/D LH/м | Заметки |
+|---|---|---|---|---|---|
+| 8857897714 | 6.9м | **Dire** | 0/2 2.2/м DN 3 lvl6 | 2/0 4.1/м DN 5 lvl7 | skeleton НЕ активен (не задеплоен); fwd-fallback D#101 R#198 + fwd-push D#162 R#100 = jitter подтверждён; Dire: low-hp-hold D#327 (~108s); fb-skip D#396 (Dire почти не атаковал героя); Радиант АФК ~6:45 → смерть |
+
+**Наблюдения (визуально из игры):**
+- 0:46–0:56: Radiant стоял рядом со своими мили-крипами без движения (до прихода вражеских крипов — AntiIdleGlobal P3/P4 не находят цель)
+- Оба бота: jitter туда-сюда пока крипы шли к линии
+- 3:05–3:20: Radiant ходил без цели, к крипам не подходил
+- 4:53–5:05: оба стояли под вышкой и хилились, никто не пошёл к руне за bottle-heal
+- Dire отступал глубоко к своей вышке (low-hp-hold D#327 + packSafeDest — выглядело как "фонтан")
+- ~6:45: Radiant встал в АФК → Dire убил с рейзов + ульт
+
+**Ключевые диаги:**
+- `pre-aig D#24` — AntiIdleGlobal только 24 раза за 6.9м (fwd-слой перехватывал большинство тиков)
+- `fwd-ahead D#581 R#237` — бот уже впереди цели forwardness, fwd-fallback берёт управление
+- `fb-skip D#396 R#31` — Dire ultra-passive на execute (396 пропусков!); победил через фарм и АФК врага
+
+**Вывод:** fwd-fallback/fwd-push активны и мешают. АФК до прихода крипов = AntiIdleGlobal P3 ищет вражеские крипы, их ещё нет → idle. **Следующий шаг:** задеплоить skeleton-режим и повторить.
+
+---
+
+## 2026-06-18 — phase-21, survivability (закоммичено, матчи-триггеры)
+
+**Коммит:** `3268631`. Фиксы: aib_deathSurvive gate, aib_lowHpHold→flag, packSafeDest, death-window v2 (GetHeroDeaths), tango/flask пороги.
+
+| MatchID | Заметки |
+|---|---|
+| 8856793181 | триггер-матч phase-21 |
+| 8857025900 | триггер-матч phase-21 |
+| 8857092260 | триггер-матч phase-21 |
+| 8857127028 | триггер-матч phase-21 |
+| 8857712302 | дебаг анонса позиции (R vs D позиция в прегейме); фикс GetGameMode()~=0 |
+| 8857785564 | 1.7м / Dire 2/0 / короткий матч; tango-heal D#3 ✅; low-hp-hold D#18 ✅ |
+
+---
+
+## 2026-06-17/18 — phase-19/20, lane stability (закоммичено, матчи-триггеры)
+
+**phase-19** (`e95a2a5`–`2843fbe`): botAhead, VectorAway→lane-aware, anti-idle-lane, HandleRespawn walk, pack-avoid bypass.
+**phase-20** (`40edbd4`): idle-creep-atk fallback, kite-creep HP gate, fwd-fallback tower-lerp, dt-walk 1000→1400u.
+
+| MatchID | Фаза | Заметки |
+|---|---|---|
+| 8855576439 | phase-19 | триггер-матч |
+| 8855652341 | phase-19 | триггер-матч |
+| 8855694172 | phase-19 | триггер-матч |
+| 8855812997 | phase-19 | триггер-матч |
+| 8855867210 | phase-19 | триггер-матч |
+| 8855965648 | phase-19 | триггер-матч |
+| 8856304426 | phase-20 | триггер-матч (AFK standoff) |
+| 8856343351 | phase-20 | триггер-матч (0 LH) |
+| 8856358551 | phase-20 | триггер-матч (kite oscillation) |
+| 8856380112 | phase-20 | триггер-матч |
+
+---
+
 ## 2026-06-16 — phase-18, lane stability (baseline attack + off-lane блокировки)
 
 **Конфиг оба (LongGame v2 smoke):** harass=0.50 farm=0.80 fwd=0.50 abil=0.35 exec=0.15 dive=never hero=default pregame=safe_tower healing=active

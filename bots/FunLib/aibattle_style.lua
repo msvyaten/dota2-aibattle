@@ -253,6 +253,12 @@ local function buildStyle(raw)
     -- style rules; set them by hand in playstyle_*.lua for one diagnostic match.
     local debug_disable_forwardness_fallbacks = rawRules.debug_disable_forwardness_fallbacks == true
     local debug_skeleton_laning = rawRules.debug_skeleton_laning == true
+    local visual_afk_seconds = tonumber(rawRules.visual_afk_seconds) or 6.0
+    if visual_afk_seconds < 3.0 then visual_afk_seconds = 3.0 end
+    if visual_afk_seconds > 12.0 then visual_afk_seconds = 12.0 end
+    local visual_afk_distance = tonumber(rawRules.visual_afk_distance) or 90.0
+    if visual_afk_distance < 50.0 then visual_afk_distance = 50.0 end
+    if visual_afk_distance > 180.0 then visual_afk_distance = 180.0 end
 
     -- Technical-only flags: not LLM-visible rules, always-off unless explicitly set.
     -- anti_afk / tower_avoid are bug-fixes, not style choices — kept here for opt-in testing.
@@ -270,6 +276,8 @@ local function buildStyle(raw)
         hero_priority = hero_priority, deny_policy = deny_policy,
         debug_disable_forwardness_fallbacks = debug_disable_forwardness_fallbacks,
         debug_skeleton_laning = debug_skeleton_laning,
+        visual_afk_seconds = visual_afk_seconds,
+        visual_afk_distance = visual_afk_distance,
     }, item_build = items, skill_build = skills, item_rules = item_rules, improvements = improvements }
 end
 
@@ -506,6 +514,7 @@ end
 -- so it only fires when the mode itself has nothing to do.
 -- Counters: anti-idle-combat / anti-idle-assist
 function M.AntiIdleGlobal(bot)
+    M.DiagRL(bot, "anti-idle-enter", 3)
     local lowHp = J.GetHP(bot) < 0.25
     if not lowHp then
         local enemies = bot:GetNearbyHeroes(1600, true, BOT_MODE_NONE)
@@ -516,7 +525,7 @@ function M.AntiIdleGlobal(bot)
                 bot:Action_MoveToUnit(enemies[1])
             end
             M.Diag(bot, "anti-idle-combat")
-            return
+            return true
         end
     end
     local allies = bot:GetNearbyHeroes(1500, false, BOT_MODE_NONE)
@@ -528,7 +537,7 @@ function M.AntiIdleGlobal(bot)
                     -- AIBattle #6: RandomVector avoids creep-collision stalling
                     bot:Action_MoveToLocation(a:GetLocation() + RandomVector(100))
                     M.Diag(bot, "anti-idle-assist")
-                    return
+                    return true
                 end
             end
         end
@@ -545,7 +554,7 @@ function M.AntiIdleGlobal(bot)
                     bot:Action_MoveToUnit(c)
                     M.DiagRL(bot, "anti-idle-creep-walk", 5)
                 end
-                return
+                return true
             end
         end
     end
@@ -555,7 +564,7 @@ function M.AntiIdleGlobal(bot)
     if dest ~= nil and GetUnitToLocationDistance(bot, dest) > 150 then
         bot:Action_MoveToLocation(dest)
         M.DiagRL(bot, "anti-idle-lane", 5)
-        return
+        return true
     end
     -- P5: already at lane front, no creeps visible → lane is pushed; attack or advance toward tower.
     -- Use attack range as the stop threshold, not 150u — ranged hero doesn't need to walk up close.
@@ -567,17 +576,18 @@ function M.AntiIdleGlobal(bot)
             if GetUnitToUnitDistance(bot, enmT1) <= atkRange then
                 bot:Action_AttackUnit(enmT1, true)
                 M.DiagRL(bot, "anti-idle-push", 5)
-                return
+                return true
             end
             local pushDest = GetLaneFrontLocation(bot:GetTeam(), lane, -400) or enmT1:GetLocation()
             if GetUnitToLocationDistance(bot, pushDest) > atkRange then
                 bot:Action_MoveToLocation(pushDest)
                 M.DiagRL(bot, "anti-idle-push", 5)
-                return
+                return true
             end
         end
     end
     M.DiagRL(bot, "idle", 3)
+    return false
 end
 
 -- ─── Hero ability config ──────────────────────────────────────────────────────

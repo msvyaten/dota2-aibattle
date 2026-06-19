@@ -319,7 +319,7 @@ local function ThinkAnnounce(dials)
 		dials.gank_desire, dials.push_desire), true)
 	local r = Style.Get().rules
 	bot:ActionImmediate_Chat(string.format(
-		"AIB[%s] defend=%.2f ward=%.2f roshan=%.2f dive=%s heal=%s abil=%s cw=%s at=%s pgb=%s",
+		"AIB[%s] defend=%.2f ward=%.2f roshan=%.2f dive=%s heal=%s abil=%s cw=%s at=%s pgb=%s vafk=%.0f",
 		AIB_SIDE,
 		dials.defend_desire, dials.ward_desire, dials.roshan_desire,
 		tostring(r.dive_policy or "finish_only"),
@@ -327,14 +327,15 @@ local function ThinkAnnounce(dials)
 		tostring(r.ability_usage or "default"),
 		tostring(r.creep_wave_priority or "last_hit_only"),
 		tostring(r.ability_timing or "on_cooldown"),
-		tostring(r.pregame_behavior or "default")), true)
+		tostring(r.pregame_behavior or "default"),
+		r.visual_afk_seconds or 6.0), true)
 end
 
--- Periodic location report every 10s (in-game only, DotaTime > 0).
+-- Periodic location report every 5s (in-game only, DotaTime > 0).
 local function ThinkLocationReport()
 	local now = DotaTime()
 	if now <= 0 then return end
-	if bot.aib_igLocLast ~= nil and now - bot.aib_igLocLast < 10.0 then return end
+	if bot.aib_igLocLast ~= nil and now - bot.aib_igLocLast < 5.0 then return end
 	bot.aib_igLocLast = now
 	local sp   = bot:GetLocation()
 	local side = (bot:GetTeam() == TEAM_RADIANT) and "R" or "D"
@@ -353,6 +354,100 @@ end
 
 -- Pre-game positioning (DotaTime < 0, GAMEMODE_1V1MID). Returns true → Think() exits.
 -- Positions based on pregame_behavior rule; attacks enemy hero on sight.
+local function AIB_Dist2D(a, b)
+	if a == nil or b == nil then return math.huge end
+	local dx, dy = a.x - b.x, a.y - b.y
+	return math.sqrt(dx*dx + dy*dy)
+end
+
+local function AIB_ResetVisualAFK(now, loc)
+	bot.aib_afkAnchorLoc = loc
+	bot.aib_afkAnchorTime = now
+end
+
+local function AIB_MoveAwayFrom(loc, awayFrom, distance)
+	local dx, dy = loc.x - awayFrom.x, loc.y - awayFrom.y
+	local d = math.sqrt(dx*dx + dy*dy)
+	if d < 1 then return loc + RandomVector(distance) end
+	return Vector(loc.x + (dx/d)*distance, loc.y + (dy/d)*distance, loc.z)
+end
+
+local function AIB_VisualAFKStep(rules)
+	local now = DotaTime()
+	if now <= 0 then return false end
+	local limit = rules.visual_afk_seconds or 6.0
+	if limit <= 0 then return false end
+	local loc = bot:GetLocation()
+	local moveDist = rules.visual_afk_distance or 90.0
+	if bot.aib_afkAnchorLoc == nil or bot.aib_afkAnchorTime == nil then
+		AIB_ResetVisualAFK(now, loc)
+		return false
+	end
+	if AIB_Dist2D(loc, bot.aib_afkAnchorLoc) >= moveDist then
+		AIB_ResetVisualAFK(now, loc)
+		return false
+	end
+	if now - bot.aib_afkAnchorTime < limit then return false end
+	if bot.aib_afkLast ~= nil and now - bot.aib_afkLast < 2.5 then return false end
+
+	local dest = nil
+	local key = "anti-afk-step"
+	local twr = AIB_EnemyTowerDanger()
+	if twr ~= nil and not Style.MayDive(bot) then
+		dest = AIB_MoveAwayFrom(loc, twr:GetLocation(), 260)
+		key = "anti-afk-back"
+	elseif J.GetHP(bot) < 0.30 then
+		dest = AIB_ForwardSurvivingTowerLoc()
+		key = "anti-afk-safe"
+	else
+		local enemies = bot:GetNearbyHeroes(1400, true, BOT_MODE_NONE)
+		if enemies and #enemies > 0 and enemies[1]:IsAlive() then
+			local enemy = enemies[1]
+			local enemyLoc = enemy:GetLocation()
+			local dist = GetUnitToUnitDistance(bot, enemy)
+			if dist > botAttackRange + 120 then
+				bot:Action_MoveToUnit(enemy)
+				bot.aib_afkLast = now
+				AIB_ResetVisualAFK(now, loc)
+				AIB_Diag("anti-afk-chase")
+				return true
+			end
+			local dx, dy = loc.x - enemyLoc.x, loc.y - enemyLoc.y
+			local d = math.sqrt(dx*dx + dy*dy)
+			if d > 1 then
+				local side = (math.floor(now / limit) % 2 == 0) and 1 or -1
+				dest = Vector(loc.x + (-dy/d)*220*side, loc.y + (dx/d)*220*side, loc.z)
+				key = "anti-afk-strafe"
+			end
+		end
+	end
+	if dest == nil and nEnemyCreeps and #nEnemyCreeps > 0 then
+		local cen = AIB_EnemyCreepCentroid(nEnemyCreeps)
+		local ownT1 = GetTower(GetTeam(), TOWER_MID_1)
+		if cen ~= nil and ownT1 ~= nil then
+			local anch = ownT1:GetLocation()
+			local dx, dy = anch.x - cen.x, anch.y - cen.y
+			local d = math.sqrt(dx*dx + dy*dy)
+			if d > 1 then
+				local safe = math.max(220, botAttackRange - 120)
+				dest = Vector(cen.x + (dx/d)*safe, cen.y + (dy/d)*safe, cen.z)
+				key = "anti-afk-wave"
+			end
+		end
+	end
+	if dest == nil then
+		dest = GetLaneFrontLocation(GetTeam(), botAssignedLane, 0)
+		key = "anti-afk-lane"
+	end
+	if dest == nil then return false end
+	if GetUnitToLocationDistance(bot, dest) < 120 then dest = dest + RandomVector(220) end
+	bot:Action_MoveToLocation(dest)
+	bot.aib_afkLast = now
+	AIB_ResetVisualAFK(now, loc)
+	AIB_Diag(key)
+	return true
+end
+
 local function ThinkPregame(dials)
 	if DotaTime() >= 0 or GetGameMode() ~= GAMEMODE_1V1MID then return false end
 	local nearby = bot:GetNearbyHeroes(1500, true, BOT_MODE_NONE)
@@ -511,6 +606,7 @@ function Think()
 	elseif debugNoForward then
 		Style.DiagRL(bot, "dbg-no-fwd", 10)
 	end
+	if AIB_VisualAFKStep(GetRules()) then return end
 
 	local hitCreep = (GetBestLastHitCreep(nEnemyCreeps))
 

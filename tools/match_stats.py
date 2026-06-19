@@ -10,7 +10,7 @@ Windows Steam path). Prints: AIB config chat lines, duration/winner, and per pla
 KDA, last_hits/denies, hero_damage, tower_damage, teleports_used, damage dealt by type
 (phys/mag/pure pre-reduction), items, and any 'AIB ...' diagnostic chat lines.
 """
-import os, re, sys
+import math, os, re, sys
 
 DEFAULT_DIR = r"C:\Program Files (x86)\Steam\steamapps\common\dota 2 beta\game\dota"
 LOG_DIR = os.environ.get("DOTA_LOG_DIR", DEFAULT_DIR)
@@ -66,7 +66,7 @@ def decode_items(id_str):
     return " ".join(parts)
 
 
-DIAL_KEYS = ["harass", "farm", "exec", "retreat", "fwd", "abil", "rune", "gank", "push", "defend", "ward", "roshan", "dive", "heal"]
+DIAL_KEYS = ["harass", "farm", "exec", "retreat", "fwd", "abil", "rune", "gank", "push", "defend", "ward", "roshan", "dive", "heal", "vafk"]
 
 def extract_dials(cfg_lines):
     """Extract dial values from cfg announce lines, keyed by side R/D.
@@ -96,9 +96,52 @@ def print_dials(dials):
         row = "  [" + side + "]:    " + "  ".join(f"{dials[side].get(k, '-'):>7}" for k in keys)
         print(row)
 
+def extract_telemetry(text):
+    """Parse periodic AIB location reports separately from action diagnostics."""
+    telemetry = {"R": [], "D": []}
+    pat = (r"AIB\[([RD])\]\s+t=([\d.]+)s\s+hp=([\d.]+)%\s+gold=(\d+)\s+"
+           r"loc=([-\d.]+),([-\d.]+)(?:\s+enemy-dist=([\d.]+))?")
+    for side, t, hp, gold, x, y, enemy_dist in re.findall(pat, text):
+        telemetry[side].append({
+            "t": float(t),
+            "hp": float(hp),
+            "gold": int(gold),
+            "loc": (float(x), float(y)),
+            "enemy_dist": float(enemy_dist) if enemy_dist else None,
+        })
+    for samples in telemetry.values():
+        samples.sort(key=lambda p: p["t"])
+    return telemetry
+
+def stationary_spans(samples, move_threshold=90.0, min_seconds=10.0):
+    """Return spans where consecutive location samples barely moved."""
+    spans = []
+    start = None
+    last = None
+    prev = None
+    for cur in samples:
+        if prev is None:
+            prev = cur
+            continue
+        dist = math.hypot(cur["loc"][0] - prev["loc"][0], cur["loc"][1] - prev["loc"][1])
+        if dist < move_threshold:
+            if start is None:
+                start = prev
+            last = cur
+        else:
+            if start is not None and last is not None and last["t"] - start["t"] >= min_seconds:
+                spans.append((start, last))
+            start = None
+            last = None
+        prev = cur
+    if start is not None and last is not None and last["t"] - start["t"] >= min_seconds:
+        spans.append((start, last))
+    return spans
+
 def parse(path):
     lines = open(path, encoding="utf-8", errors="ignore").read().splitlines()
     text = "\n".join(lines)
+    telemetry = extract_telemetry(text)
     # Pick up both MSG1 (harass=) and MSG2 (defend=) config announce lines.
     cfg = [l.split("localize: ", 1)[1] for l in lines
            if ("AIB[" in l) and (" harass=" in l or " defend=" in l)]
@@ -127,6 +170,8 @@ def parse(path):
     _cfg_prefixes = ("harass=", "defend=")  # cfg announce start markers
     for side, body in re.findall(r"'AIB(\[[RD]\])?\s+([^']*)'", text):
         if any(body.startswith(p) for p in _cfg_prefixes):  # cfg line, not a diag
+            continue
+        if body.startswith("t="):
             continue
         if body.startswith("pg-loc"):  # position log — handled above
             continue
@@ -162,7 +207,7 @@ def parse(path):
             cur["slot"] = m.group(1)
             players.append(cur)
             cur = {}
-    return cfg, diag, dur, win, items, players, dealt, received, pg_locs
+    return cfg, diag, dur, win, items, players, dealt, received, pg_locs, telemetry
 
 
 def main():
@@ -175,18 +220,47 @@ def main():
         if not os.path.exists(path):
             print(f"  (not found: {path})")
             continue
-        cfg, diag, dur, win, items, players, dealt, received, pg_locs = parse(path)
+        cfg, diag, dur, win, items, players, dealt, received, pg_locs, telemetry = parse(path)
         for c in cfg:
             print("  cfg:", c)
         dials = extract_dials(cfg)
         if dials:
             print_dials(dials)
-        dur_min = float(dur) / 60 if dur != "?" else None
-        dur_str = f"{dur_min:.1f}min" if dur_min else "?min"
-        print(f"  duration={dur}s ({dur_str})  winner_team={win}")
+        dur_f = float(dur) if dur != "?" else None
+
+        # game_s: actual DotaTime at game end, from location-report diag 't=N'.
+        # The diag parser stores max value, so diag['t'][side] = last DotaTime seen.
+        # duration from the log includes pregame (DotaTime<0 period), game_s does not.
+        t_vals = diag.pop("t", {})  # remove from diag output — shown in duration line
+        game_s = max(t_vals.values()) if t_vals else None
+        last_ts = [samples[-1]["t"] for samples in telemetry.values() if samples]
+        if last_ts:
+            game_s = max(last_ts)
+        pregame_s = round(dur_f - game_s) if (dur_f and game_s) else None
+
+        if game_s:
+            game_str = f"game={game_s}s"
+            pre_str  = f"  pregame=~{pregame_s}s" if (pregame_s and pregame_s > 5) else ""
+            print(f"  duration={dur}s ({game_str}{pre_str})  winner_team={win}")
+        else:
+            dur_min = dur_f / 60 if dur_f else None
+            print(f"  duration={dur}s ({f'{dur_min:.1f}min' if dur_min else '?'})  winner_team={win}")
+
+        # Per-minute rates use actual game time, not total duration.
+        rate_min = game_s / 60 if game_s else (dur_f / 60 if dur_f else None)
+
         for key in sorted(diag):
             sides = " ".join(f"{s}#{n}" for s, n in sorted(diag[key].items()))
             print("  diag:", key, sides)
+        for side in ["R", "D"]:
+            spans = stationary_spans(telemetry.get(side, []))
+            if spans:
+                shown = []
+                for start, end in spans[:5]:
+                    dur_span = end["t"] - start["t"]
+                    shown.append(f"{start['t']:.0f}-{end['t']:.0f}s({dur_span:.0f}s)@{end['loc'][0]:.0f},{end['loc'][1]:.0f}")
+                more = f" +{len(spans)-5} more" if len(spans) > 5 else ""
+                print(f"  stationary[{side}]: " + "; ".join(shown) + more)
         if pg_locs:
             print(f"  pregame positions ({len(pg_locs)} snapshots, every ~3s):")
             for p in pg_locs:
@@ -197,18 +271,25 @@ def main():
                     flag = "IN-RANGE" if ir == 1 else "out-of-range"
                     print(f"    [{p['side']}] me={p['me']}  enm={p['enm']}"
                           f"  dist={p['dist']:.0f}  range={p['range']:.0f}  {flag}")
+        max_kills = max((int(p.get('kills') or 0) for p in players), default=0)
+        kill_win = max_kills >= 2  # game ended by kill condition (2-0, 2-1, 2-2)
         for idx, p in enumerate(players):
             dd = dealt[idx * 3:idx * 3 + 3]
             dr = received[idx * 3:idx * 3 + 3]
             it = items[idx] if idx < len(items) else "?"
             lh = p.get('last_hits')
             dn = p.get('denies')
-            lh_min = f"{int(lh)/dur_min:.1f}/m" if lh and dur_min else "?"
-            dn_min = f"{int(dn)/dur_min:.1f}/m" if dn and dur_min else "?"
+            lh_min = f"{int(lh)/rate_min:.1f}/m" if lh and rate_min else "?"
+            dn_min = f"{int(dn)/rate_min:.1f}/m" if dn and rate_min else "?"
+            td = int(p.get('tower_damage') or 0)
+            if 4200 <= td <= 4800 and kill_win:
+                td_note = " [AUTO-DESTROYED: kill-win, not real tower dmg]"
+            else:
+                td_note = ""
             print(f"  slot{p.get('slot')}: "
                   f"K/D {p.get('kills')}/{p.get('deaths')} "
                   f"LH {lh}({lh_min}) DN {dn}({dn_min}) lvl {p.get('level')} | "
-                  f"heroDmg {p.get('hero_damage')} towerDmg {p.get('tower_damage')} "
+                  f"heroDmg {p.get('hero_damage')} towerDmg {td}{td_note} "
                   f"tp {p.get('teleports_used')} | dealt ph/mg/pu {dd} | rcvd ph/mg/pu {dr} | "
                   f"items {decode_items(it)}")
 

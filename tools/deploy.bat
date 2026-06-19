@@ -12,12 +12,16 @@ echo.
 
 :: --- Core bot files (FunLib) ---
 copy /Y "%DEV%\FunLib\aibattle_style.lua"  "%DOTA%\FunLib\aibattle_style.lua"  && echo [OK] FunLib/aibattle_style.lua
-copy /Y "%DEV%\FunLib\aibattle_heal.lua"  "%DOTA%\FunLib\aibattle_heal.lua"  && echo [OK] FunLib/aibattle_heal.lua
+copy /Y "%DEV%\FunLib\aibattle_survive.lua" "%DOTA%\FunLib\aibattle_survive.lua" && echo [OK] FunLib/aibattle_survive.lua
+copy /Y "%DEV%\FunLib\aibattle_utils.lua"   "%DOTA%\FunLib\aibattle_utils.lua"   && echo [OK] FunLib/aibattle_utils.lua
 copy /Y "%DEV%\FunLib\jmz_func.lua"        "%DOTA%\FunLib\jmz_func.lua"        && echo [OK] FunLib/jmz_func.lua
 
 :: --- Mode files ---
 copy /Y "%DEV%\mode_laning_generic.lua"    "%DOTA%\mode_laning_generic.lua"    && echo [OK] mode_laning_generic.lua
 copy /Y "%DEV%\mode_roam_generic.lua"      "%DOTA%\mode_roam_generic.lua"      && echo [OK] mode_roam_generic.lua
+
+:: --- FretBots settings ---
+copy /Y "%DEV%\FretBots\SettingsDefault.lua"   "%DOTA%\FretBots\SettingsDefault.lua"   && echo [OK] FretBots/SettingsDefault.lua
 
 :: --- Customize (НЕ коммитить playstyle_radiant/dire) ---
 copy /Y "%DEV%\Customize\general.lua"          "%DOTA%\Customize\general.lua"          && echo [OK] Customize/general.lua

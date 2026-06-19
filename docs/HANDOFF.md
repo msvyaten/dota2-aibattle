@@ -1,7 +1,7 @@
 # HANDOFF — AIBattle × Dota 2
 
 > Единственная точка входа. Обновлять ЕГО, новых доков не плодить.
-> Последнее обновление: 2026-06-18 (phase-20: AFK-standoff: death-window, fwd-fallback вне dest-nil, kite HP-gate, idle-creep-atk, pregame-анонс).
+> Последнее обновление: 2026-06-19 (Codex phase-23: visual-AFK watchdog, stationary telemetry, deploy list fix).
 > Полная история сессий — `docs/history/HANDOFF-full-2026-06-09.md`.
 > По-русски. Доказательство = цифра из лога или stат-дампа. «На глаз» не считается.
 
@@ -11,7 +11,7 @@
 
 - **Репо:** `C:\Users\Shadow\dota2-aibattle` · ветка `phase-2-team-dials` · git-личность: `don / don@users.noreply.github.com`
 - **LIVE (что грузит Dota):** `…\dota 2 beta\game\dota\scripts\vscripts\bots\`
-- **Deploy:** `tools/deploy.bat` — xcopy 7 файлов из репо → LIVE (запускать перед каждым тестом)
+- **Deploy:** `tools/deploy.bat` — copy dev → LIVE; важно копировать `aibattle_survive.lua` + `aibattle_utils.lua` (не старый `aibattle_heal.lua`)
 - **Конфиги:** `bots/Customize/playstyle_radiant.lua` / `playstyle_dire.lua`
 - **Логи:** `…\game\dota\console.<matchid>.log` (опция `-condebug`)
 - **Анализ:** `python tools/match_stats.py <id> [id2 …]` — KDA/LH/урон/предметы/диаги по слотам
@@ -35,7 +35,7 @@
 | `item_purchase_generic.lua` | item_build override sBuyList; item_rules (opt-in) |
 | `BotLib/hero_nevermore.lua` | SF: skill_build дефолт, item_build pos_2 (OHA) |
 | `Customize/general.lua` | Состав: pos1 обе стороны; имена ChatGPT_1-4/Gemini_1-4 |
-| `tools/match_stats.py` | Парсер логов: KDA/LH/items(decoded)/diags; dial-таблица R vs D |
+| `tools/match_stats.py` | Парсер логов: KDA/LH/items(decoded)/diags; dial-таблица R vs D; stationary spans из `AIB[...] t=... loc=...` |
 | `tools/deploy.bat` | xcopy dev → LIVE |
 
 ---
@@ -186,6 +186,27 @@
 - `mode_laning_generic.lua`: MSG2 анонс `heal=` + `abil=`
 
 ---
+
+---
+
+**phase-23 — CODEX VISUAL-AFK WATCHDOG (19.06.2026) — закоммичено Codex ✅**
+
+Триггер-матч: 8858472901. Матч был неполный (`game=534s`, shutdown/abandon, финального stat dump нет), но telemetry доказала именно визуальный AFK: Radiant стоял `0-322s`, Dire стоял `81-393s`. При этом `cs-inrange R#441/D#149`, `deny-act R#77/D#12` показывают, что это не "код ничего не делает", а "герой стоит на месте и фармит/денает". Для зрителя это всё равно AFK.
+
+| # | Файл | Фикс | Причина |
+|---|---|---|---|
+| 23 | `mode_laning_generic.lua` | **Visual AFK watchdog** перед last-hit: если герой почти не меняет координаты `visual_afk_seconds` (default/current 6s, clamp 3-12s), выдать видимый move/chase/strafe/wave/lane step | Старые fallback'и считали in-range last-hit полезным действием, но на экране бот стоял 5+ минут |
+| 24 | `mode_laning_generic.lua` | Location report 10s → 5s; cfg-анонс печатает `vafk=<seconds>` | Старый 10s лог пропускал короткие AFK-окна; в следующем матче сразу видно, что порог загружен |
+| 25 | `aibattle_style.lua` | Добавлены rules `visual_afk_seconds`, `visual_afk_distance`; `AntiIdleGlobal()` теперь пишет `anti-idle-enter` и возвращает true/false | Раньше `pre-aig` был, но не было видно, чем закончился AntiIdleGlobal |
+| 26 | `tools/match_stats.py` | Telemetry (`t/hp/gold/loc/enemy-dist`) отделена от action-diag; выводит `stationary[R/D]` интервалы | Больше не надо руками читать координаты; AFK по картинке стал числом |
+| 27 | `tools/deploy.bat` | Deploy копирует `aibattle_survive.lua` и `aibattle_utils.lua` вместо удалённого `aibattle_heal.lua` | Phase-22 удалил heal-модуль, а deploy всё ещё мог оставлять LIVE без новых shared модулей |
+| 28 | `Customize/playstyle_*.lua` | Текущий тестовый конфиг: `debug_skeleton_laning` выключен, `visual_afk_seconds = 6` | Следующий матч проверяет нормальный режим + новый watchdog, а не диагностический skeleton |
+
+Новые diag-ключи: `anti-afk-back`, `anti-afk-safe`, `anti-afk-chase`, `anti-afk-strafe`, `anti-afk-wave`, `anti-afk-lane`, `anti-idle-enter`.
+
+Проверка перед коммитом: `match_stats.py 8858472901` показывает старые stationary spans; Python AST OK; `git diff --check` по изменённым файлам OK; Lua/luac в окружении нет. Изменения задеплоены в LIVE Dota folder, SHA256 локальных/live файлов совпал для `aibattle_style.lua`, `mode_laning_generic.lua`, `playstyle_radiant.lua`, `playstyle_dire.lua`.
+
+Следующий тест: свежий матч должен иметь cfg `vafk=6`, должны появиться `anti-afk-*`, а `stationary[...]` не должен показывать длинные интервалы >10-15s.
 
 ---
 
