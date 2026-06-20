@@ -20,6 +20,45 @@ end
 
 local function forwardTowerLoc(bot) return AIBUtils.ForwardSurvivingTowerLoc(bot) end
 
+local function seekBottleRune(bot, hp, mana, diagKey, maxDist)
+	if hp >= 0.78 and mana >= 0.45 then return false end
+	if bot:WasRecentlyDamagedByAnyHero(1.5) then return false end
+
+	local bSlot = bot:FindItemSlot("item_bottle")
+	if bSlot < 0 then return false end
+	local bottle = bot:GetItemInSlot(bSlot)
+	if bottle == nil or bottle:GetCurrentCharges() ~= 0 then return false end
+
+	local near = bot:GetNearbyHeroes(650, true, BOT_MODE_NONE)
+	if near and #near > 0 and near[1]:IsAlive() then return false end
+
+	local bestLoc, bestDist, bestScore = nil, math.huge, math.huge
+	for _, runeId in ipairs({ RUNE_POWERUP_1, RUNE_POWERUP_2 }) do
+		if GetRuneStatus(runeId) == RUNE_STATUS_AVAILABLE then
+			local loc = GetRuneSpawnLocation(runeId)
+			if loc ~= nil then
+				local dist = GetUnitToLocationDistance(bot, loc)
+				local runeType = GetRuneType(runeId)
+				local score = dist + ((runeType == RUNE_WATER) and 0 or 350)
+				if dist <= (maxDist or 2600) and score < bestScore then
+					bestLoc, bestDist, bestScore = loc, dist, score
+				end
+			end
+		end
+	end
+	if bestLoc == nil then return false end
+
+	local now = DotaTime()
+	if bot.aib_bottleRuneLast ~= nil and now - bot.aib_bottleRuneLast < 3.0 then
+		return bestDist > 180
+	end
+
+	bot.aib_bottleRuneLast = now
+	Style.Diag(bot, diagKey)
+	bot:Action_MoveToLocation(bestLoc)
+	return true
+end
+
 -- tryTango: unified tango logic used by defensiveHeal and recovery.
 -- Returns true when tree-walk is in progress (caller must return to protect the walk).
 -- Releases automatically once modifier_tango_heal appears (HasModifier check below).
@@ -73,8 +112,11 @@ local function defensiveHeal(bot, dials)
 			bot.aib_flaskLast = DotaTime()
 			Style.Diag(bot, "heal-item")
 			bot:Action_UseAbilityOnEntity(flask, bot)
+			return true
 		end
 	end
+
+	if seekBottleRune(bot, hp, mana, "bottle-rune", 2600) then return true end
 
 	if Style.Get().rules.healing_style ~= "active" then return false end
 
@@ -226,21 +268,7 @@ local function recovery(bot, dials)
 				if bItem:GetCurrentCharges() > 0 and bItem:IsFullyCastable() then
 					Style.Diag(bot, "recovery-bottle"); bot:Action_UseAbility(bItem); return true
 				elseif bItem:GetCurrentCharges() == 0 then
-					-- Empty: grab a nearby water rune to refill (2 charges).
-					-- 2000-unit cap: newer patches spawn water runes near shrines (far side of map),
-					-- without the cap the bot would walk into enemy territory.
-					for _, runeId in ipairs({ RUNE_POWERUP_1, RUNE_POWERUP_2 }) do
-						if GetRuneStatus(runeId) == RUNE_STATUS_AVAILABLE and GetRuneType(runeId) == RUNE_WATER then
-							local runeLoc = GetRuneSpawnLocation(runeId)
-							if runeLoc and GetUnitToLocationDistance(bot, runeLoc) <= 2000 then
-								if bot.aib_recMoveLast == nil or DotaTime() - bot.aib_recMoveLast >= 5.0 then
-									bot.aib_recMoveLast = DotaTime(); Style.Diag(bot, "recovery-rune-bottle")
-									bot:Action_MoveToLocation(runeLoc); return true
-								end
-								-- cooldown active: movement already issued, fall through to laning
-							end
-						end
-					end
+					if seekBottleRune(bot, hp, mana, "recovery-rune-bottle", 2600) then return true end
 					-- No rune: fall through to threshold check (fountain only if HP critically low)
 				end
 			end

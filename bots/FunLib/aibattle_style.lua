@@ -123,6 +123,7 @@ local DEFAULT_HERO_PRIORITY = "default"
 local DENY_POLICY_VALUES = { always = true, default = true, never = true }
 local DEFAULT_DENY_POLICY = "default"
 local DEFAULT_LOW_HP_HOLD = 0.45
+local DEFAULT_CREEP_AGGRO_RELIEF_HP = 0.68
 
 local function clamp01(x)
     if type(x) ~= "number" then return nil end
@@ -275,6 +276,7 @@ local function buildStyle(raw)
     local deny_policy = (type(denp) == "string" and DENY_POLICY_VALUES[denp]) and denp or DEFAULT_DENY_POLICY
 
     local low_hp_hold = clampNumber(rawRules.low_hp_hold, DEFAULT_LOW_HP_HOLD, 0.25, 0.70)
+    local creep_aggro_relief_hp = clampNumber(rawRules.creep_aggro_relief_hp, DEFAULT_CREEP_AGGRO_RELIEF_HP, 0.45, 0.90)
 
     -- Debug-only switches for isolating AFK/jitter. These are deliberately not LLM-visible
     -- style rules; set them by hand in playstyle_*.lua for one diagnostic match.
@@ -291,6 +293,7 @@ local function buildStyle(raw)
         creep_wave_priority = creep_wave_priority, ability_timing = ability_timing,
         hero_priority = hero_priority, deny_policy = deny_policy,
         low_hp_hold = low_hp_hold,
+        creep_aggro_relief_hp = creep_aggro_relief_hp,
         debug_disable_forwardness_fallbacks = debug_disable_forwardness_fallbacks,
         debug_skeleton_laning = debug_skeleton_laning,
         visual_afk_seconds = visual_afk_seconds,

@@ -447,6 +447,69 @@ local function AIB_VisualAFKStep(rules)
 	return true
 end
 
+local function AIB_HasCancelableHealModifier(unit)
+	if unit == nil then return false end
+	return unit:HasModifier("modifier_flask_healing")
+		or unit:HasModifier("modifier_bottle_regeneration")
+		or unit:HasModifier("modifier_clarity_potion")
+end
+
+local function AIB_CreepAggroRelief(rules)
+	if not bot:WasRecentlyDamagedByCreep(1.0) then return false end
+	Style.DiagRL(bot, "creep-dmg", 3)
+
+	local hp = J.GetHP(bot)
+	local enemyCreepCount = (nEnemyCreeps ~= nil) and #nEnemyCreeps or 0
+	local hpGate = rules.creep_aggro_relief_hp or 0.68
+	if hp >= hpGate and enemyCreepCount < 3 then return false end
+
+	local now = DotaTime()
+	if bot.aib_creepReliefLast ~= nil and now - bot.aib_creepReliefLast < 1.2 then
+		return true
+	end
+
+	local dest = AIB_ForwardSurvivingTowerLoc()
+	local cen = AIB_EnemyCreepCentroid(nEnemyCreeps)
+	if dest == nil and cen ~= nil then
+		dest = AIB_MoveAwayFrom(bot:GetLocation(), cen, 420)
+	end
+	if dest == nil then dest = GetLaneFrontLocation(GetTeam(), botAssignedLane, -350) end
+	if dest == nil then return false end
+
+	if GetUnitToLocationDistance(bot, dest) < 220 and cen ~= nil then
+		dest = AIB_MoveAwayFrom(bot:GetLocation(), cen, 360)
+	end
+
+	bot.aib_creepReliefLast = now
+	bot:Action_MoveToLocation(dest)
+	AIB_Diag("creep-aggro-back")
+	return true
+end
+
+local function AIB_InterruptEnemyHealing()
+	if J.GetHP(bot) < 0.35 then return false end
+	local enemies = bot:GetNearbyHeroes(900, true, BOT_MODE_NONE)
+	if not (enemies and #enemies > 0) then return false end
+	for _, enemy in ipairs(enemies) do
+		if enemy:IsAlive() and AIB_HasCancelableHealModifier(enemy) then
+			local dist = GetUnitToUnitDistance(bot, enemy)
+			if dist <= botAttackRange + 50 and AIB_EnemyTowerDanger() == nil then
+				bot:Action_AttackUnit(enemy, true)
+				AIB_Diag("heal-interrupt-atk")
+				return true
+			end
+			if dist <= math.max(700, botAttackRange + 260)
+				and not AIB_UphillMiss(enemy)
+				and not bot:WasRecentlyDamagedByAnyHero(1.0) then
+				bot:Action_MoveToUnit(enemy)
+				AIB_Diag("heal-interrupt-chase")
+				return true
+			end
+		end
+	end
+	return false
+end
+
 local function ThinkPregame(dials)
 	if DotaTime() >= 0 or GetGameMode() ~= GAMEMODE_1V1MID then return false end
 	if AIBSurvive.Think(bot, dials, nil) then return true end
@@ -587,6 +650,8 @@ local function ThinkLaningCore(dials, rules)
 		Style.DiagRL(bot, "dbg-no-fwd", 10)
 	end
 	if AIB_VisualAFKStep(rules) then return end
+	if AIB_CreepAggroRelief(rules) then return end
+	if AIB_InterruptEnemyHealing() then return end
 
 	local hitCreep = (GetBestLastHitCreep(nEnemyCreeps))
 
@@ -735,8 +800,6 @@ local function ThinkLaningCore(dials, rules)
 			end
 		end
 	end
-
-	if bot:WasRecentlyDamagedByCreep(1.0) then Style.DiagRL(bot, "creep-dmg", 3) end
 
 	-- 3) walk toward last-hit creep, but stop at attack-range edge (not inside pack).
 	-- For ranged heroes: calculate a safe point at (attackRange-50) from the creep in our direction.
