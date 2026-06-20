@@ -1,7 +1,7 @@
 # HANDOFF — AIBattle × Dota 2
 
 > Единственная точка входа. Обновлять ЕГО, новых доков не плодить.
-> Последнее обновление: 2026-06-19 (Codex phase-23: visual-AFK watchdog, stationary telemetry, deploy list fix).
+> Последнее обновление: 2026-06-20 (Codex phase-24: small decision engine, safe deploy profiles, canonical configs).
 > Полная история сессий — `docs/history/HANDOFF-full-2026-06-09.md`.
 > По-русски. Доказательство = цифра из лога или stат-дампа. «На глаз» не считается.
 
@@ -11,8 +11,8 @@
 
 - **Репо:** `C:\Users\Shadow\dota2-aibattle` · ветка `phase-2-team-dials` · git-личность: `don / don@users.noreply.github.com`
 - **LIVE (что грузит Dota):** `…\dota 2 beta\game\dota\scripts\vscripts\bots\`
-- **Deploy:** `tools/deploy.bat` — copy dev → LIVE; важно копировать `aibattle_survive.lua` + `aibattle_utils.lua` (не старый `aibattle_heal.lua`)
-- **Конфиги:** `bots/Customize/playstyle_radiant.lua` / `playstyle_dire.lua`
+- **Deploy:** `tools/deploy.bat [code|playstyle|all|general|check]`; default `code`, `general.lua` только явным профилем.
+- **Конфиги:** live bindings = `bots/Customize/playstyle_radiant.lua` / `playstyle_dire.lua`; канон = `bots/Customize/canonical_*.lua`; старые тесты = `archive/dota/legacy_playstyles/`
 - **Логи:** `…\game\dota\console.<matchid>.log` (опция `-condebug`)
 - **Анализ:** `python tools/match_stats.py <id> [id2 …]` — KDA/LH/урон/предметы/диаги по слотам
 - **1v1 лобби:** Solo Mid, читы ON, хост зрителем, Local Dev Script, кикнуть слоты 1–4 и 6–9
@@ -23,8 +23,9 @@
 
 | Файл | Роль |
 |---|---|
-| `FunLib/aibattle_style.lua` | Загрузчик конфига: dials/rules/improvements/item_build; ScaleDesire; HeroAbilityConfig (15 героев); M.Diag/DiagRL/Imp |
-| `mode_laning_generic.lua` | Главный: last-hit/harass интерлив; defensive_heal; regen_lane; HandleRespawn; ability harass/execute |
+| `FunLib/aibattle_engine.lua` | Мини-движок стадий: stage возвращает handled/yield; новые top-level решения добавлять стадиями, не раздувать `Think()` |
+| `FunLib/aibattle_style.lua` | Загрузчик конфига: dials/rules/item_build; ScaleDesire; HeroAbilityConfig (15 героев); M.Diag/DiagRL/Imp |
+| `mode_laning_generic.lua` | Laning pipeline через `aibattle_engine`: pregame → dive → death-window → laning-core; внутри core пока сохранена старая боевая логика |
 | `mode_retreat_generic.lua` | desire ×= retreat_caution; tp-fountain diag |
 | `mode_rune_generic.lua` | desire ×= rune_control |
 | `mode_roam_generic.lua` | gank_desire; gankGapTime=25-37s; late-hunt; AIBAntiAFK |
@@ -36,7 +37,7 @@
 | `BotLib/hero_nevermore.lua` | SF: skill_build дефолт, item_build pos_2 (OHA) |
 | `Customize/general.lua` | Состав: pos1 обе стороны; имена ChatGPT_1-4/Gemini_1-4 |
 | `tools/match_stats.py` | Парсер логов: KDA/LH/items(decoded)/diags; dial-таблица R vs D; stationary spans из `AIB[...] t=... loc=...` |
-| `tools/deploy.bat` | xcopy dev → LIVE |
+| `tools/deploy.bat` | Профильный deploy dev → LIVE: default `code`, `playstyle` копирует canonical + live bindings, `general` только явно |
 
 ---
 
@@ -54,7 +55,7 @@
 - `healing_style=active` ✅ — heal-item/tango/bottle/regen работают; `heal-pullback` ✅ (8846034123). Изолировано: Radiant bottle-heal R#14 / tango-heal R#2, Dire — ничего (8848634192)
 - `ability_usage=aggressive` ✅ — SF raze изолирован на Dire: ability-harass D#10, у Radiant — 0 (8848634192). AbilityHarass теперь проверяет `ability_usage == "aggressive"` как первый gate.
 - `build_style` ✅ — brawler/spellcaster сборки выбираются из 3-стильного item_build (8848634192: R→brawler, D→spellcaster)
-- `anti_afk`, `tower_avoid` — не валидированы
+- `anti_afk`, `tower_avoid` — удалены из активного schema-пути как мёртвые флаги без потребителей
 
 **pregame_behavior** ✅ (10.06.2026) — pg-called D#267 R#273 стабильно; pregame-aggressive_mid/safe_tower в диагах. Бот идёт к правильной позиции до крипов.
 
@@ -88,8 +89,7 @@
 
 **Bettability (phase-16/17, 12.06.2026):** A Duelist (harass=0.85/abil=0.90) vs B Farmer (harass=0.10/farm=0.90) — A побеждает 3:1 (8 матчей, все по убийствам, 4–10 мин). Линия существует. ✅
 
-**Improvements** — только технические флаги (не LLM-стиль): `anti_afk`, `tower_avoid`. Off по умолчанию.
-`defensive_heal` и `ability_on_dials` → перенесены в rules. Старые конфиги с `improvements = {}` работают через backward compat в buildStyle().
+**Improvements** не расширять. `defensive_heal` и `ability_on_dials` перенесены в rules; backward compat оставлен только для этих двух старых имён. Неиспользуемые `anti_afk`/`tower_avoid` удалены из active schema, чтобы не плодить флаги без владельца.
 
 ---
 
@@ -188,6 +188,24 @@
 ---
 
 ---
+
+**phase-24 — CODEX LONG-TERM INFRA SKELETON (20.06.2026) — не продуктовый backlog**
+
+Цель: не реализовывать новые зрительские метрики/KDA/score — это закрывается стримом. В коде оставить маленький долгоживущий скелет, чтобы следующие фиксы добавлялись как понятные стадии, а не как ещё один fallback внутри огромного `Think()`.
+
+| # | Файл | Изменение | Почему |
+|---|---|---|---|
+| 29 | `FunLib/aibattle_engine.lua` | Добавлен tiny stage runner: `Stage(name, fn)` + `Run(stages, ctx)` | Единая форма для top-level решений; новый функционал должен входить отдельной стадией |
+| 30 | `mode_laning_generic.lua` | `Think()` стал диспетчером `pregame → dive → death-window → laning-core`; старая боевая логика сохранена в `ThinkLaningCore` | Меньше риска сломать поведение сейчас, но дальше можно дробить core без очередной лестницы fallback'ов |
+| 31 | `tools/deploy.bat` | Профили `code`, `playstyle`, `all`, `general`, `check`; default = `code`; `general.lua` не копируется без явного `general` | Случайный repo→LIVE overwrite лобби/состава больше не происходит |
+| 32 | `Customize/canonical_*.lua` + `CANONICAL.md` | Канон-конфиги отделены от live bindings `playstyle_radiant/dire` | Эксперименты не портят источник правды |
+| 33 | `.gitignore` | `archive/dota/local_automation/` исключён как локальная одноразовая автоматизация | Python-agent и UI-скрипты запуска не являются долгосрочной инфраструктурой Dota-проекта |
+| 34 | `FunLib/aibattle_style.lua` | Удалён active `improvements`-контейнер с мёртвыми `anti_afk`/`tower_avoid`; `low_hp_hold` стал нормальным clamped rule | Флаги без потребителя больше не выглядят как поддерживаемая функциональность |
+| 35 | `FunLib/aibattle_style.lua` | `buildStyle()` разгружен: dials/items/skills/item_rules вынесены в маленькие parse-функции | Парсер конфига проще расширять без разрастания одной функции |
+| 36 | `FunLib/aibattle_style.lua` | `AntiIdleGlobal()` разбит на локальные шаги `combat/assist/creep/lane/push` без изменения порядка | Последний fallback читается как pipeline, а не как простыня условий |
+| 37 | `archive/dota/legacy_playstyles/` | Старые неканонические playstyle-пресеты и observe-тесты вынесены из `Customize` | Активная папка конфигов больше не смешивает runtime, канон и одноразовые эксперименты |
+
+Правило на будущее: если новая логика top-level решает "кто ходит сейчас", добавлять её как stage в движок. Если логика является внутренней механикой уже выбранной стадии, держать её внутри соответствующего модуля и не расширять общий fallback-слой.
 
 **phase-23 — CODEX VISUAL-AFK WATCHDOG (19.06.2026) — закоммичено Codex ✅**
 
@@ -307,7 +325,8 @@
 
 ## 9. Ключевые правила
 
-- **НЕ КОММИТИТЬ** `playstyle_radiant/dire` тест-конфигами. Канон = ChatGPT_Pusher / ChatGPT_Ganker.
+- **НЕ КОММИТИТЬ** `playstyle_radiant/dire` тест-конфигами. Канон = `Customize/canonical_pusher.lua` / `canonical_ganker.lua`.
+- Python/UI-автоматизация запуска Dota лежит в `archive/dota/local_automation/` и не является частью долгосрочной инфраструктуры.
 - **Пушим пачкой по команде.** Перед пушем спросить.
 - `general.lua` — синк только LIVE→репо; repo→LIVE не копировать.
 - Метод A/B: 1 переменная = 1 матч + свап-подтверждение. Брать НЕкруглые значения (0.34/0.66).
@@ -322,8 +341,17 @@
 # Проверить незапушенное
 git log --oneline origin/phase-2-team-dials..HEAD
 
-# Deploy в LIVE перед игрой
-tools\deploy.bat
+# Проверить deploy-план без записи
+tools\deploy.bat check
+
+# Deploy кода в LIVE перед игрой (default)
+tools\deploy.bat code
+
+# Только если нужно развернуть live playstyle-файлы
+tools\deploy.bat playstyle
+
+# general.lua копировать только явной командой
+tools\deploy.bat general
 
 # Коммит (только когда явно попросили)
 git add <files>

@@ -1,0 +1,30 @@
+-- observe | 2026-06-18 | assassin
+return {
+    dials = {
+        harass_desire     = 0.80,
+        ability_aggro     = 0.80,
+        forwardness       = 0.60,
+        retreat_caution   = 0.45,
+        execute_threshold = 0.60,
+        farm_focus        = 0.35,
+        rune_control      = 0.50,
+        gank_desire       = 0.20,
+        push_desire       = 0.45,
+        defend_desire     = 0.35,
+        ward_desire       = 0.20,
+        roshan_desire     = 0.10,
+    },
+    rules = {
+        respawn_behavior    = "tp_to_lane",
+        dive_policy         = "never",
+        low_hp_behavior     = "regen_lane",
+        healing_style       = "active",
+        ability_usage       = "aggressive",
+        creep_wave_priority = "last_hit_only",
+        hero_priority       = "default",
+        deny_policy         = "default",
+        pregame_behavior    = "aggressive_mid",
+        visual_afk_seconds  = 6,
+    },
+    skill_build = { npc_dota_hero_nevermore = {1,5,1,5,1,6,1,5,5,4,6,4,4,4,6} },
+}

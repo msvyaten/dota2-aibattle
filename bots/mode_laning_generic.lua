@@ -37,15 +37,14 @@ end
 
 -- AIBattle Schema v2: shared loader (dials + rules), with safe defaults/clamping.
 local Style   = require(GetScriptDirectory()..'/FunLib/aibattle_style')
+local AIBEngine = require(GetScriptDirectory()..'/FunLib/aibattle_engine')
 local _healOk, _healResult = pcall(require, GetScriptDirectory()..'/FunLib/aibattle_survive')
 local AIBSurvive = _healOk and _healResult or { Think = function() return false end }
 if not _healOk then
     -- Emit once to all-chat so it shows in console.log during test matches
     local _b = GetBot(); if _b then _b:ActionImmediate_Chat("AIB HEAL LOAD ERR: " .. tostring(_healResult), true) end
 end
-local function GetDials() return Style.Get().dials end
 local function GetRules() return Style.Get().rules end
-local function GetImp(name) return Style.Imp(name) end
 
 -- AIBattle diag: count each branch firing silently, then emit ONE combined summary line at most
 -- once per minute (only when something fired) so a TEST GAME yields measurable numbers without
@@ -585,28 +584,17 @@ local function ThinkDeathWindow()
 	return false
 end
 
--- AIBattle: Think() defined unconditionally so the engine always has a callable function.
--- Vanilla only defined it inside a condition that's false for normal heroes in all-bot games,
--- causing EXC_GUARD when the engine tried to call nil.
-function Think()
-	if local_mode_laning_generic then local_mode_laning_generic.Think(); return end
-	if AIB_HandleRespawn() then return end
-	local dials = GetDials()
-	ThinkAnnounce(dials)
-	ThinkLocationReport()
-	if ThinkPregame(dials) then return end
-	if ThinkDivePolicy() then return end
-	if ThinkDeathWindow() then return end
-
-	local cwp = Style.Get().rules.creep_wave_priority or "last_hit_only"
-	local debugSkeleton = GetRules().debug_skeleton_laning == true
-	local debugNoForward = debugSkeleton or GetRules().debug_disable_forwardness_fallbacks == true
+-- Main laning policy. Think() below only schedules high-level stages.
+local function ThinkLaningCore(dials, rules)
+	local cwp = rules.creep_wave_priority or "last_hit_only"
+	local debugSkeleton = rules.debug_skeleton_laning == true
+	local debugNoForward = debugSkeleton or rules.debug_disable_forwardness_fallbacks == true
 	if debugSkeleton then
 		Style.DiagRL(bot, "dbg-skeleton", 10)
 	elseif debugNoForward then
 		Style.DiagRL(bot, "dbg-no-fwd", 10)
 	end
-	if AIB_VisualAFKStep(GetRules()) then return end
+	if AIB_VisualAFKStep(rules) then return end
 
 	local hitCreep = (GetBestLastHitCreep(nEnemyCreeps))
 
@@ -677,7 +665,7 @@ function Think()
 	-- Survival baseline: low HP near own tower → suppress forward movement but not farming.
 	local aib_lowHpHold = false
 	do
-		local holdThresh = GetRules().low_hp_hold or 0.45
+		local holdThresh = rules.low_hp_hold or 0.45
 		if not debugSkeleton and holdThresh > 0 and J.GetHP(bot) < holdThresh then
 			local ownT1 = GetTower(GetTeam(), TOWER_MID_1)
 			if ownT1 ~= nil and GetUnitToUnitDistance(bot, ownT1) < 900 then
@@ -709,7 +697,7 @@ function Think()
 	--    hero_priority=always → bypass farm_focus roll and hp-disadvantage gate.
 	--    hero_priority=default → attack immediately when in range; farm_focus+harass_desire
 	--                            gate only applies when enemy is out of range (seeking behaviour).
-	local heroPrio = Style.Get().rules.hero_priority or "default"
+	local heroPrio = rules.hero_priority or "default"
 	if heroPrio ~= "never" then
 		local atkHero = bot:GetNearbyHeroes(botAttackRange + 50, true, BOT_MODE_NONE)
 		if atkHero and #atkHero > 0 and atkHero[1]:IsAlive() then
@@ -744,7 +732,7 @@ function Think()
 			-- suppress chase when regen_lane should be retreating (HP below its threshold)
 			local rc = dials.retreat_caution or 0.5
 			local regenThresh = 0.40 + 0.15 * rc
-			local shouldRegen = Style.Get().rules.low_hp_behavior == "regen_lane"
+			local shouldRegen = rules.low_hp_behavior == "regen_lane"
 				and J.GetHP(bot) < regenThresh
 			if not shouldRegen then
 				local chase = bot:GetNearbyHeroes(1500, true, BOT_MODE_NONE)
@@ -805,7 +793,7 @@ function Think()
 	end
 
 	-- deny_policy: never = skip; always = wider window (HP<60%); default = kill-guarantee only.
-	local denyPol = Style.Get().rules.deny_policy or "default"
+	local denyPol = rules.deny_policy or "default"
 	if denyPol ~= "never" then
 		local denyCreep
 		if denyPol == "always" then
@@ -981,6 +969,35 @@ function Think()
 	-- Attack a visible enemy or move to assist an ally in combat.
 	Style.DiagRL(bot, "pre-aig", 3)
 	Style.AntiIdleGlobal(bot)
+end
+
+local LANING_STAGES = {
+	AIBEngine.Stage("pregame", function(ctx) return ThinkPregame(ctx.dials) end),
+	AIBEngine.Stage("dive", function() return ThinkDivePolicy() end),
+	AIBEngine.Stage("death-window", function() return ThinkDeathWindow() end),
+	AIBEngine.Stage("laning-core", function(ctx)
+		ThinkLaningCore(ctx.dials, ctx.rules)
+		return true
+	end),
+}
+
+-- AIBattle: Think() defined unconditionally so the engine always has a callable function.
+-- Vanilla only defined it inside a condition that's false for normal heroes in all-bot games,
+-- causing EXC_GUARD when the engine tried to call nil.
+function Think()
+	if local_mode_laning_generic then local_mode_laning_generic.Think(); return end
+	if AIB_HandleRespawn() then return end
+
+	local style = Style.Get()
+	local ctx = {
+		dials = style.dials,
+		rules = style.rules,
+		bot = bot,
+	}
+
+	ThinkAnnounce(ctx.dials)
+	ThinkLocationReport()
+	AIBEngine.Run(LANING_STAGES, ctx)
 end
 
 

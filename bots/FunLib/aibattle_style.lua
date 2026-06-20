@@ -122,6 +122,7 @@ local DEFAULT_HERO_PRIORITY = "default"
 -- never   = never deny allied creeps.
 local DENY_POLICY_VALUES = { always = true, default = true, never = true }
 local DEFAULT_DENY_POLICY = "default"
+local DEFAULT_LOW_HP_HOLD = 0.45
 
 local function clamp01(x)
     if type(x) ~= "number" then return nil end
@@ -130,13 +131,74 @@ local function clamp01(x)
     return x
 end
 
-local function buildStyle(raw)
+local function clampNumber(x, default, minValue, maxValue)
+    local v = tonumber(x)
+    if v == nil then return default end
+    if v < minValue then return minValue end
+    if v > maxValue then return maxValue end
+    return v
+end
+
+local function parseDials(rawDials)
     local dials = {}
-    local rawDials = (type(raw) == "table" and type(raw.dials) == "table") and raw.dials or {}
     for k, default in pairs(DEFAULT_DIALS) do
         local v = clamp01(rawDials[k])
         if v ~= nil then dials[k] = v else dials[k] = default end
     end
+    return dials
+end
+
+local BUILD_STYLES = { brawler = true, spellcaster = true, farmer = true }
+
+local function parseItems(rawItems, build_style)
+    local items = {}
+    for heroName, heroList in pairs(rawItems) do
+        if type(heroName) == "string" and type(heroList) == "table" then
+            if build_style and type(heroList[build_style]) == "table" then
+                heroList = heroList[build_style]
+            end
+            local filtered = {}
+            for _, name in ipairs(heroList) do
+                if type(name) == "string" and string.match(name, "^item_") then
+                    filtered[#filtered + 1] = name
+                end
+            end
+            if #filtered > 0 then items[heroName] = filtered end
+        end
+    end
+    return items
+end
+
+local function parseSkills(rawSkills)
+    local skills = {}
+    for heroName, heroList in pairs(rawSkills) do
+        if type(heroName) == "string" and type(heroList) == "table" then
+            local filtered = {}
+            for _, idx in ipairs(heroList) do
+                if type(idx) == "number" and idx >= 1 and math.floor(idx) == idx then
+                    filtered[#filtered + 1] = math.floor(idx)
+                end
+            end
+            if #filtered > 0 then skills[heroName] = filtered end
+        end
+    end
+    return skills
+end
+
+local function parseItemRules(rawItemRules)
+    local item_rules = {}
+    for _, r in ipairs(rawItemRules) do
+        if type(r) == "table" and type(r.when) == "string"
+            and type(r.item) == "string" and string.match(r.item, "^item_") then
+            item_rules[#item_rules + 1] = { when = r.when, item = r.item, first = (r.first ~= false) }
+        end
+    end
+    return item_rules
+end
+
+local function buildStyle(raw)
+    local rawDials = (type(raw) == "table" and type(raw.dials) == "table") and raw.dials or {}
+    local dials = parseDials(rawDials)
 
     local rawRules = (type(raw) == "table" and type(raw.rules) == "table") and raw.rules or {}
     local rb = rawRules.respawn_behavior
@@ -157,7 +219,6 @@ local function buildStyle(raw)
 
     -- build_style: selects which sub-table to use when item_build provides 3 named builds.
     -- Supported values: "brawler" / "spellcaster" / "farmer". Ignored for flat-array builds.
-    local BUILD_STYLES = { brawler = true, spellcaster = true, farmer = true }
     local bs = (type(raw) == "table") and raw.build_style or nil
     local build_style = (type(bs) == "string" and BUILD_STYLES[bs]) and bs or nil
 
@@ -167,25 +228,8 @@ local function buildStyle(raw)
     -- For Format B, build_style selects the sub-table. Falls back to flat-array if key missing.
     -- Only keeps "item_*" strings; bogus names from LLM are dropped silently.
     -- Consumed by jmz_func.lua SetUserHeroInit (reads items[botName] per hero).
-    local items = {}
     local rawItems = (type(raw) == "table" and type(raw.item_build) == "table") and raw.item_build or {}
-    for heroName, heroList in pairs(rawItems) do
-        if type(heroName) == "string" and type(heroList) == "table" then
-            -- Resolve styled build → flat array.
-            if build_style and type(heroList[build_style]) == "table" then
-                heroList = heroList[build_style]
-            end
-            local filtered = {}
-            for _, name in ipairs(heroList) do
-                if type(name) == "string" and string.match(name, "^item_") then
-                    filtered[#filtered + 1] = name
-                end
-            end
-            if #filtered > 0 then
-                items[heroName] = filtered
-            end
-        end
-    end
+    local items = parseItems(rawItems, build_style)
 
     -- Prompt-driven skill build: per-hero ability level-up order.
     -- Format: { npc_dota_hero_nevermore = {1,5,1,5,1,6,...} }
@@ -193,32 +237,13 @@ local function buildStyle(raw)
     -- OHA's default skill priority (e.g. rush ult at level 6 instead of level 9).
     -- Only keeps positive integers; bogus values dropped silently.
     -- Consumed by jmz_func.lua SetUserHeroInit (overrides nAbilityBuildList).
-    local skills = {}
     local rawSkills = (type(raw) == "table" and type(raw.skill_build) == "table") and raw.skill_build or {}
-    for heroName, heroList in pairs(rawSkills) do
-        if type(heroName) == "string" and type(heroList) == "table" then
-            local filtered = {}
-            for _, idx in ipairs(heroList) do
-                if type(idx) == "number" and idx >= 1 and math.floor(idx) == idx then
-                    filtered[#filtered + 1] = math.floor(idx)
-                end
-            end
-            if #filtered > 0 then
-                skills[heroName] = filtered
-            end
-        end
-    end
+    local skills = parseSkills(rawSkills)
 
     -- Situational purchase rules (optional): { when=<cond>, item=<name>, first=<bool> }.
     -- Lets a prompt say "if behind, buy survivability". Evaluated in-game by the purchaser.
-    local item_rules = {}
     local rawItemRules = (type(raw) == "table" and type(raw.item_rules) == "table") and raw.item_rules or {}
-    for _, r in ipairs(rawItemRules) do
-        if type(r) == "table" and type(r.when) == "string"
-            and type(r.item) == "string" and string.match(r.item, "^item_") then
-            item_rules[#item_rules + 1] = { when = r.when, item = r.item, first = (r.first ~= false) }
-        end
-    end
+    local item_rules = parseItemRules(rawItemRules)
 
     -- Legacy improvements table: source of truth for backward compat parsing below.
     local rawImp = (type(raw) == "table" and type(raw.improvements) == "table") and raw.improvements or {}
@@ -249,23 +274,14 @@ local function buildStyle(raw)
     local denp = rawRules.deny_policy
     local deny_policy = (type(denp) == "string" and DENY_POLICY_VALUES[denp]) and denp or DEFAULT_DENY_POLICY
 
+    local low_hp_hold = clampNumber(rawRules.low_hp_hold, DEFAULT_LOW_HP_HOLD, 0.25, 0.70)
+
     -- Debug-only switches for isolating AFK/jitter. These are deliberately not LLM-visible
     -- style rules; set them by hand in playstyle_*.lua for one diagnostic match.
     local debug_disable_forwardness_fallbacks = rawRules.debug_disable_forwardness_fallbacks == true
     local debug_skeleton_laning = rawRules.debug_skeleton_laning == true
-    local visual_afk_seconds = tonumber(rawRules.visual_afk_seconds) or 6.0
-    if visual_afk_seconds < 3.0 then visual_afk_seconds = 3.0 end
-    if visual_afk_seconds > 12.0 then visual_afk_seconds = 12.0 end
-    local visual_afk_distance = tonumber(rawRules.visual_afk_distance) or 90.0
-    if visual_afk_distance < 50.0 then visual_afk_distance = 50.0 end
-    if visual_afk_distance > 180.0 then visual_afk_distance = 180.0 end
-
-    -- Technical-only flags: not LLM-visible rules, always-off unless explicitly set.
-    -- anti_afk / tower_avoid are bug-fixes, not style choices — kept here for opt-in testing.
-    local improvements = {
-        anti_afk    = (rawImp.anti_afk == true),
-        tower_avoid = (rawImp.tower_avoid == true),
-    }
+    local visual_afk_seconds = clampNumber(rawRules.visual_afk_seconds, 6.0, 3.0, 12.0)
+    local visual_afk_distance = clampNumber(rawRules.visual_afk_distance, 90.0, 50.0, 180.0)
 
     return { dials = dials, rules = {
         respawn_behavior = respawn, dive_policy = dive, smoke_usage = smoke,
@@ -274,11 +290,12 @@ local function buildStyle(raw)
         healing_style = healing_style, ability_usage = ability_usage,
         creep_wave_priority = creep_wave_priority, ability_timing = ability_timing,
         hero_priority = hero_priority, deny_policy = deny_policy,
+        low_hp_hold = low_hp_hold,
         debug_disable_forwardness_fallbacks = debug_disable_forwardness_fallbacks,
         debug_skeleton_laning = debug_skeleton_laning,
         visual_afk_seconds = visual_afk_seconds,
         visual_afk_distance = visual_afk_distance,
-    }, item_build = items, skill_build = skills, item_rules = item_rules, improvements = improvements }
+    }, item_build = items, skill_build = skills, item_rules = item_rules }
 end
 
 -- Returns the {dials, rules} config for the calling bot's team (cached, with safe defaults).
@@ -305,15 +322,12 @@ function M.GetItemRules()
     return M.Get().item_rules
 end
 
--- Behaviour flags. healing_style / ability_usage now live in rules; others in improvements.
--- M.Imp(name) is a backward-compat shim so callers don't need to know where to look.
-function M.GetImprovements() return M.Get().improvements end
+-- Backward-compat shim for old callers; new code should read rules directly.
 function M.Imp(name)
     local r = M.Get().rules
     if name == "defensive_heal"   then return r.healing_style  == "active"     end
     if name == "ability_on_dials" then return r.ability_usage  == "aggressive"  end
-    local i = M.Get().improvements
-    return i ~= nil and i[name] == true
+    return false
 end
 
 -- Evaluate a named situational condition for the CALLING bot. Returns boolean.
@@ -505,87 +519,98 @@ function M.ShouldPickupAegis(bot)
     return true  -- carry dead → pos2/3 eligible
 end
 
--- Anti-idle global fallback: call at the END of any mode's Think() as a last resort.
--- Covers late-game AFK (IsInLaningPhase=false → roam/gank never activates) and empty-lane
--- idle (bot reached assigned position, no creeps, no enemies in attack range).
--- P1: attack a visible enemy hero within 1200 units (pro-active combat).
--- P2: move to a nearby ally who has an enemy within 600 (assist in fight).
--- No J.Utils.IsBotThinkingMeaningfulAction gate — caller must place this AFTER all mode logic
--- so it only fires when the mode itself has nothing to do.
--- Counters: anti-idle-combat / anti-idle-assist
-function M.AntiIdleGlobal(bot)
-    M.DiagRL(bot, "anti-idle-enter", 3)
-    local lowHp = J.GetHP(bot) < 0.25
-    if not lowHp then
-        local enemies = bot:GetNearbyHeroes(1600, true, BOT_MODE_NONE)
-        if enemies and #enemies > 0 and enemies[1]:IsAlive() then
-            if GetUnitToUnitDistance(bot, enemies[1]) <= bot:GetAttackRange() then
-                bot:Action_AttackUnit(enemies[1], true)
-            else
-                bot:Action_MoveToUnit(enemies[1])
-            end
-            M.Diag(bot, "anti-idle-combat")
-            return true
-        end
+local function antiIdleCombat(bot, lowHp)
+    if lowHp then return false end
+    local enemies = bot:GetNearbyHeroes(1600, true, BOT_MODE_NONE)
+    if not (enemies and #enemies > 0 and enemies[1]:IsAlive()) then return false end
+
+    if GetUnitToUnitDistance(bot, enemies[1]) <= bot:GetAttackRange() then
+        bot:Action_AttackUnit(enemies[1], true)
+    else
+        bot:Action_MoveToUnit(enemies[1])
     end
+    M.Diag(bot, "anti-idle-combat")
+    return true
+end
+
+local function antiIdleAssist(bot)
     local allies = bot:GetNearbyHeroes(1500, false, BOT_MODE_NONE)
-    if allies then
-        for _, a in ipairs(allies) do
-            if a:IsAlive() and a ~= bot then
-                local ae = a:GetNearbyHeroes(600, true, BOT_MODE_NONE)
-                if ae and #ae > 0 then
-                    -- AIBattle #6: RandomVector avoids creep-collision stalling
-                    bot:Action_MoveToLocation(a:GetLocation() + RandomVector(100))
-                    M.Diag(bot, "anti-idle-assist")
-                    return true
-                end
-            end
-        end
-    end
-    -- P3: no enemy hero → attack enemy creeps. Walk to them if outside attack range.
-    local creeps = bot:GetNearbyCreeps(1200, true)
-    if creeps and #creeps > 0 then
-        for _, c in ipairs(creeps) do
-            if c:IsAlive() then
-                if GetUnitToUnitDistance(bot, c) <= bot:GetAttackRange() then
-                    bot:Action_AttackUnit(c, true)
-                    M.Diag(bot, "anti-idle-creep")
-                else
-                    bot:Action_MoveToUnit(c)
-                    M.DiagRL(bot, "anti-idle-creep-walk", 5)
-                end
+    if allies == nil then return false end
+    for _, a in ipairs(allies) do
+        if a:IsAlive() and a ~= bot then
+            local ae = a:GetNearbyHeroes(600, true, BOT_MODE_NONE)
+            if ae and #ae > 0 then
+                -- AIBattle #6: RandomVector avoids creep-collision stalling.
+                bot:Action_MoveToLocation(a:GetLocation() + RandomVector(100))
+                M.Diag(bot, "anti-idle-assist")
                 return true
             end
         end
     end
-    -- P4: no creeps visible → walk to lane front (creeps will be there).
-    local lane = bot:GetAssignedLane()
+    return false
+end
+
+local function antiIdleCreep(bot)
+    local creeps = bot:GetNearbyCreeps(1200, true)
+    if not (creeps and #creeps > 0) then return false end
+    for _, c in ipairs(creeps) do
+        if c:IsAlive() then
+            if GetUnitToUnitDistance(bot, c) <= bot:GetAttackRange() then
+                bot:Action_AttackUnit(c, true)
+                M.Diag(bot, "anti-idle-creep")
+            else
+                bot:Action_MoveToUnit(c)
+                M.DiagRL(bot, "anti-idle-creep-walk", 5)
+            end
+            return true
+        end
+    end
+    return false
+end
+
+local function antiIdleLane(bot, lane)
     local dest = GetLaneFrontLocation(bot:GetTeam(), lane, 0)
     if dest ~= nil and GetUnitToLocationDistance(bot, dest) > 150 then
         bot:Action_MoveToLocation(dest)
         M.DiagRL(bot, "anti-idle-lane", 5)
         return true
     end
-    -- P5: already at lane front, no creeps visible → lane is pushed; attack or advance toward tower.
-    -- Use attack range as the stop threshold, not 150u — ranged hero doesn't need to walk up close.
-    -- Tower danger is re-checked each tick in main Think() — bot pulls back automatically if needed.
-    if not lowHp then
-        local enmT1 = GetTower(GetOpposingTeam(), TOWER_MID_1)
-        if enmT1 ~= nil and enmT1:IsAlive() then
-            local atkRange = bot:GetAttackRange()
-            if GetUnitToUnitDistance(bot, enmT1) <= atkRange then
-                bot:Action_AttackUnit(enmT1, true)
-                M.DiagRL(bot, "anti-idle-push", 5)
-                return true
-            end
-            local pushDest = GetLaneFrontLocation(bot:GetTeam(), lane, -400) or enmT1:GetLocation()
-            if GetUnitToLocationDistance(bot, pushDest) > atkRange then
-                bot:Action_MoveToLocation(pushDest)
-                M.DiagRL(bot, "anti-idle-push", 5)
-                return true
-            end
-        end
+    return false
+end
+
+local function antiIdlePush(bot, lane, lowHp)
+    if lowHp then return false end
+    local enmT1 = GetTower(GetOpposingTeam(), TOWER_MID_1)
+    if enmT1 == nil or not enmT1:IsAlive() then return false end
+
+    local atkRange = bot:GetAttackRange()
+    if GetUnitToUnitDistance(bot, enmT1) <= atkRange then
+        bot:Action_AttackUnit(enmT1, true)
+        M.DiagRL(bot, "anti-idle-push", 5)
+        return true
     end
+    local pushDest = GetLaneFrontLocation(bot:GetTeam(), lane, -400) or enmT1:GetLocation()
+    if GetUnitToLocationDistance(bot, pushDest) > atkRange then
+        bot:Action_MoveToLocation(pushDest)
+        M.DiagRL(bot, "anti-idle-push", 5)
+        return true
+    end
+    return false
+end
+
+-- Anti-idle global fallback: call at the END of any mode's Think() as a last resort.
+-- No meaningful-action gate: caller must place this after all normal mode logic.
+function M.AntiIdleGlobal(bot)
+    M.DiagRL(bot, "anti-idle-enter", 3)
+    local lowHp = J.GetHP(bot) < 0.25
+    local lane = bot:GetAssignedLane()
+
+    if antiIdleCombat(bot, lowHp) then return true end
+    if antiIdleAssist(bot) then return true end
+    if antiIdleCreep(bot) then return true end
+    if antiIdleLane(bot, lane) then return true end
+    if antiIdlePush(bot, lane, lowHp) then return true end
+
     M.DiagRL(bot, "idle", 3)
     return false
 end
