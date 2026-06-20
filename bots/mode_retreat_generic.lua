@@ -137,10 +137,16 @@ function GetDesire()
     end
     -- AIBattle: tp-fountain diag — fires when retreat desire is high under tp_fountain rule.
     -- Proxy for "bot wanted to TP to base". Rate-limited 5s to avoid spam.
+    local scaled = AIBStyle.ScaleDesire(res, AIBStyle.Get().dials.retreat_caution)
+    if res > 0 then
+        AIBStyle.Intent(bot, "retreat_desire", string.format(
+            "raw=%.2f scaled=%.2f hp=%d lhb=%s",
+            res, scaled, math.floor(J.GetHP(bot) * 100), tostring(lhb)), 5)
+    end
     if res >= 0.5 and lhb == "tp_fountain" then
         AIBStyle.DiagRL(bot, "tp-fountain", 5)
     end
-    return AIBStyle.ScaleDesire(res, AIBStyle.Get().dials.retreat_caution)
+    return scaled
 end
 
 function GetDesireHelper()
@@ -812,7 +818,9 @@ function Think()
         if tpSlot >= 0 then
             local tp = bot:GetItemInSlot(tpSlot)
             if tp and tp:IsFullyCastable() then
-                AIBStyle.Diag(bot, "retreat-tp")
+                AIBStyle.Intent(bot, "retreat_tp", string.format(
+                    "hp=%d lhb=%s", math.floor(J.GetHP(bot) * 100), tostring(lhb)), 3)
+                AIBStyle.DiagRL(bot, "retreat-tp", 3)
                 bot:Action_UseAbility(tp)
                 return
             end
@@ -820,7 +828,9 @@ function Think()
         -- No scroll: walk to fountain
         if DotaTime() - fRetreatMoveLast >= 4.0 then
             fRetreatMoveLast = DotaTime()
-            AIBStyle.Diag(bot, "retreat-walk")
+            AIBStyle.Intent(bot, "retreat_walk", string.format(
+                "hp=%d lhb=%s", math.floor(J.GetHP(bot) * 100), tostring(lhb)), 4)
+            AIBStyle.DiagRL(bot, "retreat-walk", 4)
             bot:Action_MoveToLocation(J.GetTeamFountain())
         end
         return

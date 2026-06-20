@@ -205,6 +205,7 @@
 | 36 | `FunLib/aibattle_style.lua` | `AntiIdleGlobal()` разбит на локальные шаги `combat/assist/creep/lane/push` без изменения порядка | Последний fallback читается как pipeline, а не как простыня условий |
 | 37 | `archive/dota/legacy_playstyles/` | Старые неканонические playstyle-пресеты и observe-тесты вынесены из `Customize` | Активная папка конфигов больше не смешивает runtime, канон и одноразовые эксперименты |
 | 38 | `mode_laning_generic.lua` + `canonical_*.lua` | Pregame больше не атакует врага до крипов; канон явно задаёт pregame/regen/heal/dive rules | Матч 8858957849: на `t=0` HP уже R=53% / D=46%, после чего первая волна становилась смертельной |
+| 39 | `aibattle_style.lua` + `mode_retreat_generic.lua` + `match_stats.py` | Добавлена rate-limited intent telemetry (`intent=retreat_desire`, `intent=retreat_tp`, `intent=retreat_walk`) | Отличаем желание/попытку от шумного per-tick счётчика; `retreat-tp=170` больше не маскирует реальные эпизоды |
 
 Правило на будущее: если новая логика top-level решает "кто ходит сейчас", добавлять её как stage в движок. Если логика является внутренней механикой уже выбранной стадии, держать её внутри соответствующего модуля и не расширять общий fallback-слой.
 

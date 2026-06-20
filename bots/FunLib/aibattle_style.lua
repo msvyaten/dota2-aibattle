@@ -399,6 +399,22 @@ function M.DiagRL(bot, key, sec)
     end
 end
 
+-- Rate-limited intent telemetry. Unlike Diag(), this describes what the bot wanted
+-- to do and why; match_stats.py prints it separately from branch counters.
+function M.Intent(bot, name, detail, sec)
+    if bot == nil or name == nil then return end
+    bot.aib_intentLast = bot.aib_intentLast or {}
+    local now = DotaTime()
+    local gap = sec or 5.0
+    if bot.aib_intentLast[name] ~= nil and now - bot.aib_intentLast[name] < gap then
+        return
+    end
+    bot.aib_intentLast[name] = now
+    local side = (bot:GetTeam() == TEAM_RADIANT) and "R" or "D"
+    local suffix = (detail ~= nil and detail ~= "") and (" " .. detail) or ""
+    bot:ActionImmediate_Chat("AIB[" .. side .. "] intent=" .. tostring(name) .. suffix, true)
+end
+
 -- Scale a "soft" mode desire by a 0-1 dial: 0.5 = baseline (x1), 0 = off, 1 = x2.
 -- Leaves NONE (<=0) and hard overrides (>= ABSOLUTE) untouched, so we never break
 -- the engine's forced behaviours.

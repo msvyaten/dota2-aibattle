@@ -138,10 +138,21 @@ def stationary_spans(samples, move_threshold=90.0, min_seconds=10.0):
         spans.append((start, last))
     return spans
 
+def extract_intents(text):
+    """Parse AIB intent lines: side/name count plus last key=value detail string."""
+    intents = {}
+    for side, name, body in re.findall(r"AIB\[([RD])\]\s+intent=([\w-]+)([^']*)", text):
+        side_map = intents.setdefault(name, {})
+        entry = side_map.setdefault(side, {"count": 0, "last": ""})
+        entry["count"] += 1
+        entry["last"] = body.strip()
+    return intents
+
 def parse(path):
     lines = open(path, encoding="utf-8", errors="ignore").read().splitlines()
     text = "\n".join(lines)
     telemetry = extract_telemetry(text)
+    intents = extract_intents(text)
     # Pick up both MSG1 (harass=) and MSG2 (defend=) config announce lines.
     cfg = [l.split("localize: ", 1)[1] for l in lines
            if ("AIB[" in l) and (" harass=" in l or " defend=" in l)]
@@ -170,6 +181,8 @@ def parse(path):
     _cfg_prefixes = ("harass=", "defend=")  # cfg announce start markers
     for side, body in re.findall(r"'AIB(\[[RD]\])?\s+([^']*)'", text):
         if any(body.startswith(p) for p in _cfg_prefixes):  # cfg line, not a diag
+            continue
+        if body.startswith("intent="):
             continue
         if body.startswith("t="):
             continue
@@ -207,7 +220,7 @@ def parse(path):
             cur["slot"] = m.group(1)
             players.append(cur)
             cur = {}
-    return cfg, diag, dur, win, items, players, dealt, received, pg_locs, telemetry
+    return cfg, diag, dur, win, items, players, dealt, received, pg_locs, telemetry, intents
 
 
 def main():
@@ -220,7 +233,7 @@ def main():
         if not os.path.exists(path):
             print(f"  (not found: {path})")
             continue
-        cfg, diag, dur, win, items, players, dealt, received, pg_locs, telemetry = parse(path)
+        cfg, diag, dur, win, items, players, dealt, received, pg_locs, telemetry, intents = parse(path)
         for c in cfg:
             print("  cfg:", c)
         dials = extract_dials(cfg)
@@ -252,6 +265,12 @@ def main():
         for key in sorted(diag):
             sides = " ".join(f"{s}#{n}" for s, n in sorted(diag[key].items()))
             print("  diag:", key, sides)
+        for name in sorted(intents):
+            chunks = []
+            for side, entry in sorted(intents[name].items()):
+                last = f" last({entry['last']})" if entry["last"] else ""
+                chunks.append(f"{side}#{entry['count']}{last}")
+            print("  intent:", name, " ".join(chunks))
         for side in ["R", "D"]:
             spans = stationary_spans(telemetry.get(side, []))
             if spans:
