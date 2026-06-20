@@ -17,6 +17,15 @@ return {
 		roshan_desire     = 0.85,
 	},
 	rules = {
-		respawn_behavior = "tp_to_lane",
+		respawn_behavior    = "tp_to_lane",
+		pregame_behavior    = "safe_tower",
+		dive_policy         = "never",
+		low_hp_behavior     = "regen_lane",
+		healing_style       = "active",
+		ability_usage       = "aggressive",
+		creep_wave_priority = "last_hit_only",
+		hero_priority       = "default",
+		deny_policy         = "default",
+		visual_afk_seconds  = 6,
 	},
 }

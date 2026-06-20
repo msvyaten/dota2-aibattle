@@ -449,14 +449,6 @@ end
 
 local function ThinkPregame(dials)
 	if DotaTime() >= 0 or GetGameMode() ~= GAMEMODE_1V1MID then return false end
-	local nearby = bot:GetNearbyHeroes(1500, true, BOT_MODE_NONE)
-	if nearby and #nearby > 0 and nearby[1]:IsAlive() then
-		Style.DiagRL(bot, "pg-atk", 5)
-		if bot:GetCurrentActionType() ~= BOT_ACTION_TYPE_ATTACK then
-			bot:Action_AttackUnit(nearby[1], false)
-		end
-		return true
-	end
 	if AIBSurvive.Think(bot, dials, nil) then return true end
 	Style.DiagRL(bot, "pg-pos", 5)
 	local pgb = GetRules().pregame_behavior
