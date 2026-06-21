@@ -1,5 +1,5 @@
 -- AIBattle survive system: defensive_heal / regen_lane / recovery.
--- Entry: AIBSurvive.Think(bot, dials, nEnemyCreeps) → true if action issued (caller returns).
+-- Entry: AIBSurvive.Think(bot, dials, nEnemyCreeps) returns true if action was issued.
 -- Extracted from mode_laning_generic.lua to keep that file manageable.
 
 local M = {}
@@ -149,9 +149,9 @@ local function tryTango(bot, hpThreshold, treeRadius, diagKey)
 	return true
 end
 
--- ────────────────────────────────────────────────────────────
+--
 -- defensiveHeal: consumables WITH safety gates (normal laning).
--- ────────────────────────────────────────────────────────────
+--
 local function defensiveHeal(bot, dials)
 	local hp        = J.GetHP(bot)
 	local hpMissing = bot:GetMaxHealth() - bot:GetHealth()
@@ -160,7 +160,7 @@ local function defensiveHeal(bot, dials)
 
 	-- Proactive: fires for ALL healing styles.
 	-- Returns true to protect the walk-to-tree (~1-2s). Releases as soon as modifier appears
-	-- (HasModifier check in tryTango returns false → defensiveHeal falls through normally).
+	-- (HasModifier check in tryTango returns false; defensiveHeal falls through normally).
 	if tryTango(bot, 0.70, 700, "tango-heal") then
 		bot.aib_healLast = DotaTime()
 		return true
@@ -284,7 +284,7 @@ local function defensiveHeal(bot, dials)
 end
 
 -- regen_lane: retreat to forward tower when HP is low AND enemy hero is nearby.
--- Returns true only while walking back — once at safe position returns false so normal
+-- Returns true only while walking back; once at safe position returns false so normal
 -- farming/healing runs. aib_lowHpHold in mode_laning_generic already blocks fwd at HP<0.45.
 local function regenLane(bot, dials, nEnemyCreeps)
 	if Style.Get().rules.low_hp_behavior ~= "regen_lane" then return false end
@@ -305,10 +305,10 @@ local function regenLane(bot, dials, nEnemyCreeps)
 	return true
 end
 
--- ────────────────────────────────────────────────────────────
+--
 -- recovery: post-fight heal WITHOUT safety gates.
 -- Enemy is dead/gone -- no need to wait for "safe" windows.
--- ────────────────────────────────────────────────────────────
+--
 local function recovery(bot, dials)
 	if Style.Get().rules.healing_style ~= "active" or not bot:IsAlive() then return false end
 
@@ -341,7 +341,7 @@ local function recovery(bot, dials)
 	-- 3. Flask: 8s CD guards against channel-interrupt re-spam (damage cancels channel -> item stays
 	--    castable -> next tick retries). aib_recFlaskLast is separate from aib_flaskLast so laning
 	--    (3s CD, enemy present) and recovery (8s CD, enemy gone) don't block each other.
-	--    Don't return true when on CD — laning should continue during the cooldown window.
+	--    Don't return true when on CD; laning should continue during the cooldown window.
 	if hp < 0.70 then
 		local flask = getItem(bot, "item_flask")
 		if flask then
@@ -439,7 +439,7 @@ local function recovery(bot, dials)
 	return false
 end
 
--- ────────────────────────────────────────────────────────────
+--
 
 function M.Think(bot, dials, nEnemyCreeps)
 	if defensiveHeal(bot, dials)           then return true end

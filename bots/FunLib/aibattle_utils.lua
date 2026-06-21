@@ -1,5 +1,5 @@
 -- AIBattle shared utilities: pure/near-pure functions used across laning, survive, style.
--- All functions take bot explicitly — no module-level state, safe to require from any file.
+-- All functions take bot explicitly; no module-level state, safe to require from any file.
 
 local M = {}
 
@@ -50,7 +50,7 @@ function M.EnemyCreepCentroid(enemyCreeps)
 	return n > 0 and Vector(cx / n, cy / n, 0) or nil
 end
 
--- True when bot (ranged) is on lower terrain than target by >30 units — 25% miss applies.
+-- True when bot (ranged) is on lower terrain than target by >30 units; 25% miss applies.
 function M.UphillMiss(bot, target)
 	if bot:GetAttackCapabilities() ~= ATTACK_CAPABILITY_RANGED_ATTACK then return false end
 	return GetGroundHeight(target:GetLocation(), target) > GetGroundHeight(bot:GetLocation(), bot) + 30

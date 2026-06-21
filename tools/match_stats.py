@@ -18,7 +18,7 @@ LOG_DIR = os.environ.get("DOTA_LOG_DIR", DEFAULT_DIR)
 FIELDS = ["kills", "deaths", "last_hits", "denies", "hero_damage",
           "tower_damage", "teleports_used", "level"]
 
-# Item ID → short name (parsed from itembuilds broadcaster CSV)
+# Item ID -> short name (parsed from itembuilds broadcaster CSV)
 ITEM_NAMES = {
     1:"blink",2:"blades_atk",3:"broadsword",4:"chainmail",5:"claymore",6:"helm_iron",
     7:"javelin",8:"mithril_hammer",9:"platemail",10:"quarterstaff",11:"quelling",
@@ -260,7 +260,7 @@ def parse(path):
             continue
         if body.startswith("t="):
             continue
-        if body.startswith("pg-loc"):  # position log — handled above
+        if body.startswith("pg-loc"):  # position log - handled above
             continue
         s = side.strip("[]") or "?"
         pairs = re.findall(r"([\w-]+)=(\d+)", body)  # combined format 'anti-afk=15 heal-item=7'
@@ -388,7 +388,7 @@ def main():
         # game_s: actual DotaTime at game end, from location-report diag 't=N'.
         # The diag parser stores max value, so diag['t'][side] = last DotaTime seen.
         # duration from the log includes pregame (DotaTime<0 period), game_s does not.
-        t_vals = diag.pop("t", {})  # remove from diag output — shown in duration line
+        t_vals = diag.pop("t", {})  # remove from diag output - shown in duration line
         game_s = max(t_vals.values()) if t_vals else None
         last_ts = [samples[-1]["t"] for samples in telemetry.values() if samples]
         if last_ts:

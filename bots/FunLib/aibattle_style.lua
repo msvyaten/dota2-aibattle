@@ -44,35 +44,35 @@ local SMOKE_VALUES = { default = true, for_ganks = true, never = true }
 local DEFAULT_SMOKE = "default"
 
 -- buyback_policy: never = suppress entirely; default = stock OHA logic (unchanged).
--- 'always' was removed — it never fired in testing (always-side tended to win and not need buyback).
+-- 'always' was removed; it never fired in testing (always-side tended to win and not need buyback).
 local BUYBACK_VALUES = { never = true, default = true }
 local DEFAULT_BUYBACK = "default"
 
 -- aegis_policy: who picks up Aegis of the Immortal after Roshan.
 -- carry_only = pos1 only; if dead nobody picks it up.
 -- core      = pos1 preferred, pos3/pos2 fallback if pos1 is dead (default).
--- any       = no restriction — whoever is closest takes it (OHA original).
+-- any       = no restriction; whoever is closest takes it (OHA original).
 local AEGIS_VALUES = { carry_only = true, core = true, any = true }
 local DEFAULT_AEGIS = "core"
 
 -- low_hp_behavior: what the bot does when health is critically low.
--- tp_fountain = current OHA: use TP scroll to go to base (fast but cancellable by damage — a Golem
+-- tp_fountain = current OHA: use TP scroll to go to base (fast but cancellable by damage; a Golem
 --               or chasing hero can cancel the channel and the bot dies standing still).
 -- run_to_tower = suppress TP escape, just run toward nearest friendly tower. Safer when
 --               there are nearby units that would cancel the channel anyway.
--- fight_back   = don't activate retreat mode at all — keep fighting to the end.
+-- fight_back   = don't activate retreat mode at all; keep fighting to the end.
 --               Pair with dive_policy=always for max-aggression builds.
--- regen_lane   = don't TP or run — step back ~400 units from danger and wait for natural regen.
+-- regen_lane   = don't TP or run; step back ~400 units from danger and wait for natural regen.
 --               Only fires when safe (no hero damage in last 2.5s + enemy not chasing).
 --               Stays near lane. Diag: 'regen-lane' (fired) / 'retreat-blocked' (wanted but unsafe).
--- walk_fountain = no TP escape — walk to own fountain on foot when critically low and no items.
+-- walk_fountain = no TP escape; walk to own fountain on foot when critically low and no items.
 --               Slower than tp_fountain but immune to damage-cancel. Costs XP/gold (long walk).
 --               Falls back to TP if a scroll is available. Diag: 'recovery-walk'.
 local LOW_HP_VALUES = { tp_fountain = true, run_to_tower = true, fight_back = true, regen_lane = true, walk_fountain = true }
 local DEFAULT_LOW_HP = "tp_fountain"
 
 -- pregame_behavior: what the bot does before creeps spawn (DotaTime < 0).
--- nil / unset  = OHA default (routes to bounty runes — useless in 1v1 where no runes spawn at 0:00).
+-- nil / unset  = OHA default (routes to bounty runes; useless in 1v1 where no runes spawn at 0:00).
 -- safe_tower   = stand ~350 units in front of own mid T1 tower (safe zone, good default for 1v1).
 -- aggressive_mid = hold the river crossing (~45% of the way from own T1 to enemy T1).
 --                 Puts pressure and denies vision of mid approach.
@@ -394,7 +394,7 @@ end
 -- chat line at most once per 60s (only when something fired) so a TEST GAME yields
 -- measurable numbers without spamming. Format 'AIB[R] ward-place=4 rune-grab=2'; the LAST
 -- such line in console.<id>.log carries the cumulative totals (match_stats.py parses it).
--- print() is invisible in console.log, so chat is the only logging channel — keep it sparse.
+-- print() is invisible in console.log, so chat is the only logging channel; keep it sparse.
 function M.Diag(bot, key)
     if bot == nil then return end
     bot.aib_diagCnt = bot.aib_diagCnt or {}
@@ -470,7 +470,7 @@ end
 -- Lead-aware "finish" detector. Returns true once an enemy hero is dead AND game is past
 -- the early phase (>10 min Turbo-time). FINISH_DEAD=1 so a single kill in mid/late game
 -- triggers the push window immediately rather than waiting for 2 kills.
--- Net-worth gate: must NOT be losing by >15% NW — prevents a losing team from pushing after
+-- Net-worth gate: must NOT be losing by >15% NW; prevents a losing team from pushing after
 -- a lucky kill while already down 30k gold (they should defend, not rush enemy base).
 -- DIAL-INDEPENDENT base competence: push_desire shapes mid-game sieging; this handles closeout.
 -- Edge-triggered diag 'finish-push' so logs show how often the override engaged.
@@ -514,7 +514,7 @@ end
 -- dive_policy gate: may this bot currently be inside enemy tower range (chase/farm under tower)?
 -- Gradient: never < finish_only < when_grouped < when_ahead < always (each level adds permission).
 -- Finishing a near-dead enemy is allowed at every level except 'never'. Used by the LANING guard
--- only — push/siege runs in a different mode, so sieging towers is never blocked by this.
+-- only; push/siege runs in a different mode, so sieging towers is never blocked by this.
 local DIVE_FINISH_HP = 0.35
 local function countNonSelfAllies(bot, radius)
     local list = bot:GetNearbyHeroes(radius, false, BOT_MODE_NONE)
@@ -550,7 +550,7 @@ end
 -- Aegis pickup eligibility, driven by aegis_policy rule.
 -- carry_only: pos1 only; if dead nobody takes it.
 -- core (default): pos1 preferred; pos2/pos3 fallback only if pos1 is dead; pos4/5 never.
--- any: no restriction — whoever is closest (OHA original behaviour).
+-- any: no restriction; whoever is closest (OHA original behaviour).
 -- Call from ItemOpsDesire/ItemOpsThink in mode_team_roam_generic.lua.
 function M.ShouldPickupAegis(bot)
     local policy = M.Get().rules.aegis_policy or DEFAULT_AEGIS
@@ -568,10 +568,10 @@ function M.ShouldPickupAegis(bot)
     for i = 1, 5 do
         local ally = GetTeamMember(i)
         if ally ~= nil and ally ~= bot and ally:IsAlive() and J.GetPosition(ally) == 1 then
-            return false  -- carry alive → let them take it
+            return false  -- carry alive; let them take it
         end
     end
-    return true  -- carry dead → pos2/3 eligible
+    return true  -- carry dead; pos2/3 eligible
 end
 
 local function antiIdleCombat(bot, lowHp)
@@ -670,23 +670,23 @@ function M.AntiIdleGlobal(bot)
     return false
 end
 
--- ─── Hero ability config ──────────────────────────────────────────────────────
+-- Hero ability config
 -- Declares which abilities each hero uses for harass (ability_aggro dial) and
 -- execute (execute_threshold dial). Four targeting types:
---   "unit"        → Action_UseAbilityOnEntity(ab, enemy)
---   "point"       → Action_UseAbilityOnLocation(ab, enemy:GetLocation())
---   "no_target"   → Action_UseAbility(ab)          (AoE around self / instant global)
---   "directional" → Action_UseAbility(ab) after positioning at range±aoe from enemy.
---                   Bot must be facing the enemy — use for fixed-direction abilities like
+--   "unit"        -> Action_UseAbilityOnEntity(ab, enemy)
+--   "point"       -> Action_UseAbilityOnLocation(ab, enemy:GetLocation())
+--   "no_target"   -> Action_UseAbility(ab)          (AoE around self / instant global)
+--   "directional" -> Action_UseAbility(ab) after positioning at range +/- aoe from enemy.
+--                   Bot must be facing the enemy; use for fixed-direction abilities like
 --                   SF Shadowraze (fires in front at a fixed distance, not at a unit/point).
--- harass entries are ordered highest→lowest range (try safest first).
+-- harass entries are ordered highest-to-lowest range (try safest first).
 -- execute.max_range: don't cast if enemy is farther than this.
 M.HeroAbilityConfig = {
     ["npc_dota_hero_nevermore"] = {
         -- Shadowraze is point-targeted (aim anywhere within range), not directional.
-        -- Using "point" casts Action_UseAbilityOnLocation(enemy:GetLocation()) — accurate aim.
+        -- Using "point" casts Action_UseAbilityOnLocation(enemy:GetLocation()); accurate aim.
         -- Old "directional" used Action_UseAbility() which fired wherever the bot was facing.
-        -- raze1 excluded — range 200 is melee distance, not worth rushing in for.
+        -- raze1 excluded; range 200 is melee distance, not worth rushing in for.
         harass = {
             { name = "nevermore_shadowraze3", type = "point", range = 700 },
             { name = "nevermore_shadowraze2", type = "point", range = 450 },
@@ -708,7 +708,7 @@ M.HeroAbilityConfig = {
             { name = "zeus_arc_lightning",  type = "unit", range = 700 },
             { name = "zeus_lightning_bolt", type = "unit", range = 600 },
         },
-        -- Thundergod's Wrath: global no-target — cast whenever enemy HP below threshold.
+        -- Thundergod's Wrath: global no-target; cast whenever enemy HP below threshold.
         execute = { name = "zeus_thundergods_wrath", type = "no_target", max_range = nil },
     },
     ["npc_dota_hero_lina"] = {
@@ -732,19 +732,19 @@ M.HeroAbilityConfig = {
         },
         execute = { name = "skywrath_mage_mystic_flare", type = "point", max_range = 1000 },
     },
-    -- Phantom Assassin: Stifling Dagger (unit, 825). No execute — Coup de Grace is passive.
+    -- Phantom Assassin: Stifling Dagger (unit, 825). No execute; Coup de Grace is passive.
     ["npc_dota_hero_phantom_assassin"] = {
         harass = {
             { name = "phantom_assassin_stifling_dagger", type = "unit", range = 825 },
         },
     },
-    -- Sven: Storm Bolt (unit stun, 600). No execute — God's Strength is a self-buff.
+    -- Sven: Storm Bolt (unit stun, 600). No execute; God's Strength is a self-buff.
     ["npc_dota_hero_sven"] = {
         harass = {
             { name = "sven_storm_bolt", type = "unit", range = 600 },
         },
     },
-    -- Drow Ranger: Wave of Silence (point, 900). No execute — Marksmanship is passive.
+    -- Drow Ranger: Wave of Silence (point, 900). No execute; Marksmanship is passive.
     ["npc_dota_hero_drow_ranger"] = {
         harass = {
             { name = "drow_ranger_wave_of_silence", type = "point", range = 900 },
@@ -758,21 +758,21 @@ M.HeroAbilityConfig = {
         },
         execute = { name = "lich_chain_frost", type = "unit", max_range = 750 },
     },
-    -- Axe: Battle Hunger (unit DoT, 750). Culling Blade (unit execute, 250 — must be melee range).
+    -- Axe: Battle Hunger (unit DoT, 750). Culling Blade (unit execute, 250; must be melee range).
     ["npc_dota_hero_axe"] = {
         harass = {
             { name = "axe_battle_hunger", type = "unit", range = 750 },
         },
         execute = { name = "axe_culling_blade", type = "unit", max_range = 250 },
     },
-    -- Tidehunter: Gush (unit slow+armor, 750). Ravage (no_target AoE, 1025 radius — panic execute).
+    -- Tidehunter: Gush (unit slow+armor, 750). Ravage (no_target AoE, 1025 radius; panic execute).
     ["npc_dota_hero_tidehunter"] = {
         harass = {
             { name = "tidehunter_gush", type = "unit", range = 750 },
         },
         execute = { name = "tidehunter_ravage", type = "no_target", max_range = 1025 },
     },
-    -- Warlock: Shadow Word (unit harass/DoT, 700). No targeted execute — Chaotic Offering summons a golem.
+    -- Warlock: Shadow Word (unit harass/DoT, 700). No targeted execute; Chaotic Offering summons a golem.
     ["npc_dota_hero_warlock"] = {
         harass = {
             { name = "warlock_shadow_word", type = "unit", range = 700 },
@@ -782,7 +782,7 @@ M.HeroAbilityConfig = {
     -- Auto-attack harass (harass_desire) handles TA naturally. No entry needed.
 
     -- Clockwerk: Rocket Flare (point, 1800) + Battery Assault (no_target AoE, 250 radius).
-    -- Hookshot (unit, 2500) as execute — closes gap and stuns low-HP targets.
+    -- Hookshot (unit, 2500) as execute; closes gap and stuns low-HP targets.
     ["npc_dota_hero_rattletrap"] = {
         harass = {
             { name = "rattletrap_rocket_flare",    type = "point",     range = 1800 },
@@ -793,11 +793,11 @@ M.HeroAbilityConfig = {
 }
 
 -- AbilityHarass: use a hero-specific ability on the enemy, gated by ability_aggro dial.
--- Walks through HeroAbilityConfig[hero].harass (highest→lowest range) and casts the
+-- Walks through HeroAbilityConfig[hero].harass (highest-to-lowest range) and casts the
 -- first ability that can reach the enemy:
---   unit/point   → cast immediately if in range
---   directional  → cast if enemy is in the hit zone (range±aoe); move to sweet spot if too far
---   no_target    → cast if enemy is within max_range (or always if max_range is nil)
+--   unit/point   -> cast immediately if in range
+--   directional  -> cast if enemy is in the hit zone (range +/- aoe); move to sweet spot if too far
+--   no_target    -> cast if enemy is within max_range (or always if max_range is nil)
 -- Returns true if an action was issued (cast or positioning move), false otherwise.
 function M.AbilityHarass(bot, enemy)
     if M.Get().rules.ability_usage ~= "aggressive" then return false end
@@ -833,7 +833,7 @@ function M.AbilityHarass(bot, enemy)
                     bot:Action_MoveToLocation(enemy:GetLocation() - dir * abCfg.range)
                     M.Diag(bot, "ability-harass-move"); return true
                 end
-                -- dist < hitMin → too close for this raze, fall through to shorter-range one
+                -- dist < hitMin: too close for this raze, fall through to shorter-range one
             elseif abCfg.type == "no_target" then
                 if not abCfg.max_range or dist <= abCfg.max_range then
                     bot:Action_UseAbility(ab)

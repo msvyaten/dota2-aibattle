@@ -7,9 +7,9 @@ local Localization = require(GetScriptDirectory()..'/FunLib/localization')
 
 local bot = GetBot()
 local botName = bot:GetUnitName()
--- IsInvulnerable убрано из guard: в прегейме бот invulnerable на фонтане, что ломало
--- загрузку модуля целиком (GetDesire/Think никогда не определялись).
--- Invulnerability проверяется в runtime внутри GetDesire() для нормальных случаев.
+-- IsInvulnerable is not part of the load guard: pregame fountain invulnerability
+-- used to prevent this module from defining GetDesire/Think at all.
+-- Runtime invulnerability checks live inside GetDesire().
 if bot == nil or not bot:IsHero() or not bot:IsAlive() or not string.find(botName, "hero") or bot:IsIllusion() then return end
 
 local local_mode_laning_generic = nil
@@ -54,7 +54,7 @@ local function GetRules() return Style.Get().rules end
 -- once per minute (only when something fired) so a TEST GAME yields measurable numbers without
 -- spamming chat. Format 'AIB[R] anti-afk=15 heal-item=7'; the LAST such line in console.<id>.log
 -- carries the cumulative totals. (print() is invisible in console.log, so chat is the only
--- logging channel — keep it sparse.)
+-- logging channel - keep it sparse.)
 local AIB_SIDE = (bot:GetTeam() == TEAM_RADIANT) and "R" or "D"
 -- Delegates to the shared counter (FunLib/aibattle_style M.Diag); kept as a thin local
 -- wrapper so existing call sites stay unchanged. Counters live on the bot handle, so
@@ -74,7 +74,7 @@ local function AIB_UphillMiss(target)          return AIBUtils.UphillMiss(bot, t
 -- AIBattle: tower aggro drop cooldown (per bot instance)
 local aib_lastAggroDrop = 0
 
--- AIBattle: tower aggro drop — attack an allied creep to redirect enemy tower fire onto it.
+-- AIBattle: tower aggro drop - attack an allied creep to redirect enemy tower fire onto it.
 -- Only fires when bot is in actual tower attack range (not just detection range).
 -- Throttled to 2.5s so it doesn't spam and interrupt last-hits every tick.
 -- Returns true if action was issued.
@@ -109,8 +109,8 @@ local function AIB_HandleRespawn()
 	if bot.aib_tping then
 		if bot:HasModifier("modifier_teleporting") then return true end          -- channelling: hold
 		if (DotaTime() - (bot.aib_tpCastTime or 0)) < 1.0 then return true end    -- grace: modifier not applied yet
-		-- Channel ended or interrupted. If scroll still in inventory the cast failed silently → retry.
-		-- If scroll is gone it was consumed → clear wasDead and let bot walk.
+		-- Channel ended or interrupted. If scroll still in inventory the cast failed silently; retry.
+		-- If scroll is gone it was consumed; clear wasDead and let bot walk.
 		bot.aib_tping = false
 		local tpStill = bot:GetItemInSlot(bot:FindItemSlot("item_tpscroll"))
 		if tpStill ~= nil then return false end   -- scroll intact: retry TP on next tick
@@ -172,9 +172,9 @@ function GetDesire()
 
 	-- AIBattle: mark death here so respawn handling fires (Think() doesn't run while dead).
 	if bot:IsHero() and not bot:IsIllusion() and not bot:IsAlive() then bot.aib_wasDead = true end
-	-- IsInvulnerable убрано: бот у фонтана invulnerable → DESIRE_NONE → Think() не вызывается →
-	-- AIB_ThinkPreGame() не срабатывает → бот никогда не уходит с фонтана (catch-22).
-	-- Invulnerability во время боя (BKB и т.п.) не мешает лейнинг-логике.
+	-- IsInvulnerable is intentionally ignored here: fountain invulnerability would produce
+	-- DESIRE_NONE, prevent Think(), and strand the bot at fountain during pregame.
+	-- Combat invulnerability such as BKB does not block laning logic.
 	if not bot:IsHero() or not bot:IsAlive() or not string.find(botName, "hero") or bot:IsIllusion() then return BOT_MODE_DESIRE_NONE end
 	if bot:IsAlive() and bot.aib_wasDead then return BOT_MODE_DESIRE_ABSOLUTE end
 	local botLV = bot:GetLevel()
@@ -214,7 +214,7 @@ function GetDesire()
 		local nLaneFrontLocation = GetLaneFrontLocation(GetTeam(), bot:GetAssignedLane(), 0)
 		local nDistFromLane = GetUnitToLocationDistance(bot, nLaneFrontLocation)
 		if not J.WeAreStronger(bot, 1200) or (nDistFromLane > 700 and J.GetHP(bot) < 0.7) then
-			-- AIBattle: regen_lane handles its own retreat logic in Think() — keep laning active
+			-- AIBattle: regen_lane handles its own retreat logic in Think(); keep laning active
 			-- so our regen-lane / retreat-blocked code can run even during fights.
 			if Style.Get().rules.low_hp_behavior ~= "regen_lane" then
 				return BOT_MODE_DESIRE_NONE
@@ -265,7 +265,7 @@ end
 
 function GetBestLastHitCreep(hCreepList)
 	if not hCreepList then return nil end
-	-- dmgDelta=1.5: wider window so bot pursues creeps at ~150 HP (was 0.7 → missed 100-130 HP range).
+	-- dmgDelta=1.5: wider window so bot pursues creeps at ~150 HP (0.7 missed 100-130 HP range).
 	local dmgDelta = attackDamage * 1.5
 
 	local moveToCreep = nil
@@ -303,10 +303,10 @@ function GetBestDenyCreep(hCreepList)
 	return nil
 end
 
--- ─── THINK SECTION FUNCTIONS ─────────────────────────────────────────────────
+-- THINK SECTION FUNCTIONS
 -- Each function handles one phase of the Think() loop. They close over module-level
 -- variables (bot, nEnemyCreeps, etc.) and take dials/ctx as explicit parameters.
--- Returning true signals "action taken — exit Think() for this tick."
+-- Returning true signals "action taken; exit Think() for this tick."
 
 -- Dumps config to all-chat once per game. Called before pregame check so it fires even
 -- when the game hasn't started. Splits into two messages (Dota silently drops >~160 chars).
@@ -314,7 +314,7 @@ local function ThinkAnnounce(dials)
 	if bot.aib_announced then return end
 	bot.aib_announced = true
 	bot:ActionImmediate_Chat("AIB[" .. AIB_SIDE .. "] build=" .. tostring(AIBBuild.sha or "unknown"), true)
-	bot:ActionImmediate_Chat("▶ " .. bot:GetName() .. " [" .. AIB_SIDE .. "]", false)
+	bot:ActionImmediate_Chat("> " .. bot:GetName() .. " [" .. AIB_SIDE .. "]", false)
 	bot:ActionImmediate_Chat(string.format(
 		"AIB[%s] harass=%.2f farm=%.2f fwd=%.2f abil=%.2f rune=%.2f retreat=%.2f exec=%.2f gank=%.2f push=%.2f",
 		AIB_SIDE,
@@ -356,7 +356,7 @@ local function ThinkLocationReport()
 	end
 end
 
--- Pre-game positioning (DotaTime < 0, GAMEMODE_1V1MID). Returns true → Think() exits.
+-- Pre-game positioning (DotaTime < 0, GAMEMODE_1V1MID). Returns true when Think() should exit.
 -- Positions based on pregame_behavior rule; attacks enemy hero on sight.
 local function AIB_Dist2D(a, b)
 	if a == nil or b == nil then return math.huge end
@@ -577,7 +577,7 @@ local function ThinkPregame(dials)
 end
 
 -- Enemy tower: pull back when dive policy forbids it; redirect tower aggro when diving.
--- Returns true → Think() exits.
+-- Returns true when Think() should exit.
 local function ThinkDivePolicy()
 	local twr = AIB_EnemyTowerDanger()
 	if twr == nil then return false end
@@ -590,10 +590,10 @@ local function ThinkDivePolicy()
 	return false
 end
 
--- Enemy is dead: heal up, farm aggressively, push the lane. Returns true → Think() exits.
+-- Enemy is dead: heal up, farm aggressively, push the lane. Returns true when Think() should exit.
 local function ThinkDeathWindow()
 	-- Cache enemy PID when first seen alive, then track deaths via GetHeroDeaths.
-	-- GetTeamMember returns nil for dead bots — IsAlive() approach unreliable.
+	-- GetTeamMember returns nil for dead bots; IsAlive() approach is unreliable.
 	if bot.aib_ePID == nil then
 		local allNear = bot:GetNearbyHeroes(2000, true, BOT_MODE_NONE)
 		if allNear then
@@ -698,9 +698,9 @@ local function ThinkLaningCore(dials, rules)
 
 	local hitCreep = (GetBestLastHitCreep(nEnemyCreeps))
 
-	-- Last-hit / harass interleave (AIBattle): secure an IN-RANGE last-hit BEFORE heal check —
+	-- Last-hit / harass interleave: secure an IN-RANGE last-hit before heal check.
 	-- attack is instant and safe even at low HP; heal can fire next tick if still needed.
-	-- needMove simplified: only move when TRULY out of attack range (was: 0.8× caused bot to
+	-- needMove simplified: only move when TRULY out of attack range (0.8x caused bot to
 	-- walk toward a creep already in range, wasting the last-hit window).
 	local csLaneCheck = J.GetPosition(bot) <= 2 or not J.IsThereNonSelfCoreNearby(700)
 	-- freeze: never use the push block, but still last-hit (wave stays frozen without proactive attacks)
@@ -717,7 +717,7 @@ local function ThinkLaningCore(dials, rules)
 
 	if AIBSurvive.Think(bot, dials, nEnemyCreeps) then return end
 
-	-- Global emergency retreat: critically low HP (<25%) and far from tower → go back now.
+	-- Global emergency retreat: critically low HP (<25%) and far from tower means go back now.
 	-- Only fires at true emergency level; regen_lane handles the normal 25-45% range.
 	do
 		local holdThresh = 0.25
@@ -748,9 +748,9 @@ local function ThinkLaningCore(dials, rules)
 	-- Second death = game over in 1v1 mid. Retreat instead of fighting.
 	local aib_deathSurvive = GetHeroDeaths(bot:GetPlayerID()) >= 1 and J.GetHP(bot) < 0.40
 
-	-- AIBattle: kill-priority — враг HP < execute_threshold → всегда атаковать, без броска кубика.
-	-- Перехватывает до harass (не тратить тик на крипа когда враг убиваем).
-	-- Opt-in: работает только если execute_threshold > 0.
+	-- AIBattle: kill-priority. Enemy HP below execute_threshold means always attack.
+	-- Runs before harass so a killable enemy is not ignored for a creep action.
+	-- Opt-in: active only when execute_threshold > 0.
 	if not aib_deathSurvive and (dials.execute_threshold or 0) > 0 then
 		local atkHero = bot:GetNearbyHeroes(botAttackRange + 50, true, BOT_MODE_NONE)
 		if atkHero and #atkHero > 0 then
@@ -762,7 +762,7 @@ local function ThinkLaningCore(dials, rules)
 		end
 	end
 
-	-- Survival baseline: low HP near own tower → suppress forward movement but not farming.
+	-- Survival baseline: low HP near own tower suppresses forward movement but not farming.
 	local aib_lowHpHold = false
 	do
 		local holdThresh = rules.low_hp_hold or 0.45
@@ -775,7 +775,7 @@ local function ThinkLaningCore(dials, rules)
 		end
 	end
 
-	-- Uphill repositioning: fires BEFORE harass — no trading from low ground.
+	-- Uphill repositioning: fires BEFORE harass; no trading from low ground.
 	-- Target = own T1 location (guaranteed high ground). 350u-ahead offset overshoots the ramp.
 	if not aib_lowHpHold then
 		local uphEnemy = bot:GetNearbyHeroes(1200, true, BOT_MODE_NONE)
@@ -792,10 +792,10 @@ local function ThinkLaningCore(dials, rules)
 		end
 	end
 
-	-- 2) Harass hero (uphill already handled above — bot is on own ramp or no terrain disadvantage).
-	--    hero_priority=never  → skip entirely (pure creep focus).
-	--    hero_priority=always → bypass farm_focus roll and hp-disadvantage gate.
-	--    hero_priority=default → attack immediately when in range; farm_focus+harass_desire
+	-- 2) Harass hero (uphill already handled above; bot is on own ramp or has no terrain disadvantage).
+	--    hero_priority=never skips entirely (pure creep focus).
+	--    hero_priority=always bypasses farm_focus roll and hp-disadvantage gate.
+	--    hero_priority=default attacks immediately when in range; farm_focus+harass_desire
 	--                            gate only applies when enemy is out of range (seeking behaviour).
 	local heroPrio = rules.hero_priority or "default"
 	if heroPrio ~= "never" then
@@ -809,7 +809,7 @@ local function ThinkLaningCore(dials, rules)
 				end
 			else
 				local inRange = GetUnitToUnitDistance(bot, atkHero[1]) <= botAttackRange
-				-- harass_desire controls rate: hd=1.0 → 0.5s CD, hd=0.0 → 2.5s CD.
+				-- harass_desire controls rate: hd=1.0 gives 0.5s CD, hd=0.0 gives 2.5s CD.
 				local harassCD = 0.5 + (1.0 - (dials.harass_desire or 0.5)) * 2.0
 				local harassReady = bot.aib_harassLast == nil
 					or DotaTime() - bot.aib_harassLast >= harassCD
@@ -905,7 +905,7 @@ local function ThinkLaningCore(dials, rules)
 		end
 		if J.IsValid(denyCreep) then
 			-- Skip deny if the target would pull the bot backward toward own tower.
-			-- Threshold: creep is 250+ units closer to own T1 than the bot → not worth going back.
+			-- Threshold: creep is 250+ units closer to own T1 than the bot, so it is not worth going back.
 			local skipDeny = false
 			local ownT1 = GetTower(GetTeam(), TOWER_MID_1)
 			if ownT1 ~= nil then
@@ -928,7 +928,7 @@ local function ThinkLaningCore(dials, rules)
 	local nLongestAttackRange = math.max(botAttackRange, 250, nFurthestEnemyAttackRange)
 	-- HP-aware safe offset: at full HP push closer to creep front (200u); at low HP stay further back (600u).
 	-- Stops bots from camping defensively near T1 when healthy with enemy not immediately threatening.
-	local hpScale    = math.max(0.0, math.min(1.0, (J.GetHP(bot) - 0.5) / 0.5))  -- 0 at HP≤50%, 1 at HP=100%
+	local hpScale    = math.max(0.0, math.min(1.0, (J.GetHP(bot) - 0.5) / 0.5))  -- 0 at HP<=50%, 1 at HP=100%
 	local safeOffset = math.floor(nLongestAttackRange * (1.0 - 0.65 * hpScale))   -- 600u at 50% HP, ~210u at 100%
 	local target_loc = GetLaneFrontLocation(GetTeam(), botAssignedLane, -safeOffset)
 	if fLaneFrontAmount_enemy < fLaneFrontAmount then
@@ -992,7 +992,7 @@ local function ThinkLaningCore(dials, rules)
 		end
 	end
 
-	-- AIBattle: anti-idle fallback — reached when forwardness had no dest OR bot is already at target.
+	-- AIBattle: anti-idle fallback - reached when forwardness had no dest OR bot is already at target.
 	-- Attack a visible enemy or move to assist an ally in combat.
 	Style.DiagRL(bot, "pre-aig", 3)
 	Style.AntiIdleGlobal(bot)
