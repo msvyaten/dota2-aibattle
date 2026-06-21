@@ -4,19 +4,46 @@ parsers every game (saves tokens).
 
 Usage:
     python tools/match_stats.py <matchid> [<matchid> ...]
+    python tools/match_stats.py --latest
+    python tools/match_stats.py --live --latest
 
 Looks for console.<id>.log under the Dota log dir (env DOTA_LOG_DIR overrides the default
 Windows Steam path). Prints: AIB config chat lines, duration/winner, and per player slot:
 KDA, last_hits/denies, hero_damage, tower_damage, teleports_used, damage dealt by type
 (phys/mag/pure pre-reduction), items, and any 'AIB ...' diagnostic chat lines.
 """
-import math, os, re, sys
+import argparse, math, os, re, sys
+from pathlib import Path
 
 DEFAULT_DIR = r"C:\Program Files (x86)\Steam\steamapps\common\dota 2 beta\game\dota"
 LOG_DIR = os.environ.get("DOTA_LOG_DIR", DEFAULT_DIR)
+DOTA_BOTS_DIR = Path(os.environ.get(
+    "DOTA_BOTS_DIR",
+    r"C:\Program Files (x86)\Steam\steamapps\common\dota 2 beta\game\dota\scripts\vscripts\bots",
+))
 
 FIELDS = ["kills", "deaths", "last_hits", "denies", "hero_damage",
           "tower_damage", "teleports_used", "level"]
+
+def live_build_sha():
+    path = DOTA_BOTS_DIR / "FunLib" / "aibattle_build.lua"
+    try:
+        text = path.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return None
+    m = re.search(r'sha\s*=\s*"([^"]+)"', text)
+    return m.group(1) if m else None
+
+def latest_match_id():
+    root = Path(LOG_DIR)
+    candidates = []
+    for path in root.glob("console.*.log"):
+        m = re.fullmatch(r"console\.(\d+)\.log", path.name)
+        if m:
+            candidates.append((path.stat().st_mtime, int(m.group(1))))
+    if not candidates:
+        return None
+    return str(max(candidates)[1])
 
 # Item ID -> short name (parsed from itembuilds broadcaster CSV)
 ITEM_NAMES = {
@@ -366,10 +393,30 @@ def verdicts(diag, telemetry):
 
 
 def main():
-    if len(sys.argv) < 2:
-        print(__doc__)
-        return
-    for mid in sys.argv[1:]:
+    parser = argparse.ArgumentParser(description="Read AIBattle Dota console logs.")
+    parser.add_argument("matchids", nargs="*", help="Match IDs to analyze")
+    parser.add_argument("--latest", action="store_true", help="Analyze the newest console.<id>.log")
+    parser.add_argument("--live", action="store_true", help="Print live deployed AIBattle build sha")
+    args = parser.parse_args()
+
+    matchids = list(args.matchids)
+    if args.latest:
+        latest = latest_match_id()
+        if latest is None:
+            print(f"(no console.<id>.log files found in {LOG_DIR})")
+            return 1
+        if latest not in matchids:
+            matchids.append(latest)
+
+    live_sha = live_build_sha() if args.live else None
+    if args.live:
+        print(f"live_build: {live_sha or 'unknown'}")
+
+    if not matchids:
+        parser.print_help()
+        return 0
+
+    for mid in matchids:
         path = os.path.join(LOG_DIR, f"console.{mid}.log")
         print(f"\n===== {mid} =====")
         if not os.path.exists(path):
@@ -378,6 +425,10 @@ def main():
         cfg, diag, dur, win, items, players, dealt, received, pg_locs, telemetry, intents, blocked, builds, timeline = parse(path)
         if builds:
             print("  build:", " ".join(f"{s}={sha}" for s, sha in sorted(builds.items())))
+            if live_sha:
+                old = [f"{s}={sha}" for s, sha in sorted(builds.items()) if sha != live_sha]
+                if old:
+                    print("  build_mismatch_vs_live:", " ".join(old), f"live={live_sha}")
         for c in cfg:
             print("  cfg:", c)
         dials = extract_dials(cfg)
@@ -475,4 +526,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
