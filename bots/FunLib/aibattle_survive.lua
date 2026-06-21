@@ -20,9 +20,37 @@ end
 
 local function forwardTowerLoc(bot) return AIBUtils.ForwardSurvivingTowerLoc(bot) end
 
-local function seekBottleRune(bot, hp, mana, diagKey, maxDist)
+local function hasLastHitWindow(bot)
+	local creeps = bot:GetNearbyLaneCreeps(bot:GetAttackRange() + 180, true)
+	if not creeps or #creeps == 0 then return false end
+	local damage = bot:GetAttackDamage()
+	for _, creep in ipairs(creeps) do
+		if J.IsValid(creep) and creep:IsAlive() and J.CanBeAttacked(creep)
+			and creep:GetHealth() <= damage * 1.25 then
+			return true
+		end
+	end
+	return false
+end
+
+local function laneFrontDistance(bot)
+	local lane = LANE_MID
+	if bot.GetAssignedLane ~= nil then lane = bot:GetAssignedLane() end
+	if GetGameMode() == GAMEMODE_1V1MID then lane = LANE_MID end
+	local front = GetLaneFrontLocation(bot:GetTeam(), lane, 0)
+	if front == nil then return 0 end
+	return GetUnitToLocationDistance(bot, front)
+end
+
+local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
+	opts = opts or {}
+	local rules = Style.Get().rules
+	local laneAware = opts.lane_aware ~= false
 	if hp >= 0.78 and mana >= 0.45 then return false end
-	if bot:WasRecentlyDamagedByAnyHero(1.5) then return false end
+	if bot:WasRecentlyDamagedByAnyHero(1.5) then
+		Style.Blocked(bot, diagKey, "hero_damage", string.format("hp=%.0f", hp*100), 6.0)
+		return false
+	end
 
 	local bSlot = bot:FindItemSlot("item_bottle")
 	if bSlot < 0 then return false end
@@ -30,7 +58,15 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist)
 	if bottle == nil or bottle:GetCurrentCharges() ~= 0 then return false end
 
 	local near = bot:GetNearbyHeroes(650, true, BOT_MODE_NONE)
-	if near and #near > 0 and near[1]:IsAlive() then return false end
+	if near and #near > 0 and near[1]:IsAlive() then
+		Style.Blocked(bot, diagKey, "enemy_near", string.format("dist=%.0f", GetUnitToUnitDistance(bot, near[1])), 6.0)
+		return false
+	end
+
+	if laneAware and hasLastHitWindow(bot) then
+		Style.Blocked(bot, diagKey, "last_hit_window", "", 6.0)
+		return false
+	end
 
 	local bestLoc, bestDist, bestScore = nil, math.huge, math.huge
 	for _, runeId in ipairs({ RUNE_POWERUP_1, RUNE_POWERUP_2 }) do
@@ -46,14 +82,40 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist)
 			end
 		end
 	end
-	if bestLoc == nil then return false end
+	if bestLoc == nil then
+		Style.Blocked(bot, diagKey, "no_close_rune", string.format("max=%.0f", maxDist or 2600), 8.0)
+		return false
+	end
 
 	local now = DotaTime()
+	if bot.aib_bottleRuneTarget ~= nil
+		and bot.aib_bottleRuneStarted ~= nil
+		and now - bot.aib_bottleRuneStarted < 8.0 then
+		local targetDist = GetUnitToLocationDistance(bot, bot.aib_bottleRuneTarget)
+		if targetDist > 180 then
+			bot:Action_MoveToLocation(bot.aib_bottleRuneTarget)
+			return true
+		end
+		bot.aib_bottleRuneTarget = nil
+		bot.aib_bottleRuneStarted = nil
+	end
+
+	if laneAware then
+		local laneDist = laneFrontDistance(bot)
+		local laneBudget = rules.bottle_rune_lane_budget or 1500
+		if laneDist > laneBudget then
+			Style.Blocked(bot, diagKey, "lane_budget", string.format("lane=%.0f max=%.0f rune=%.0f", laneDist, laneBudget, bestDist), 6.0)
+			return false
+		end
+	end
+
 	if bot.aib_bottleRuneLast ~= nil and now - bot.aib_bottleRuneLast < 3.0 then
 		return bestDist > 180
 	end
 
 	bot.aib_bottleRuneLast = now
+	bot.aib_bottleRuneStarted = now
+	bot.aib_bottleRuneTarget = bestLoc
 	Style.Diag(bot, diagKey)
 	bot:Action_MoveToLocation(bestLoc)
 	return true
@@ -116,7 +178,8 @@ local function defensiveHeal(bot, dials)
 		end
 	end
 
-	if seekBottleRune(bot, hp, mana, "bottle-rune", 2600) then return true end
+	local rules = Style.Get().rules
+	if seekBottleRune(bot, hp, mana, "bottle-rune", rules.bottle_rune_max_dist or 1900, { lane_aware = true }) then return true end
 
 	if Style.Get().rules.healing_style ~= "active" then return false end
 
@@ -268,7 +331,7 @@ local function recovery(bot, dials)
 				if bItem:GetCurrentCharges() > 0 and bItem:IsFullyCastable() then
 					Style.Diag(bot, "recovery-bottle"); bot:Action_UseAbility(bItem); return true
 				elseif bItem:GetCurrentCharges() == 0 then
-					if seekBottleRune(bot, hp, mana, "recovery-rune-bottle", 2600) then return true end
+					if seekBottleRune(bot, hp, mana, "recovery-rune-bottle", 2600, { lane_aware = false }) then return true end
 					-- No rune: fall through to threshold check (fountain only if HP critically low)
 				end
 			end

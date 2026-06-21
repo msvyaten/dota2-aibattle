@@ -207,6 +207,8 @@ def parse(path):
             continue
         if body.startswith("intent="):
             continue
+        if body.startswith("blocked="):
+            continue
         if body.startswith("t="):
             continue
         if body.startswith("pg-loc"):  # position log — handled above

@@ -126,6 +126,8 @@ local DEFAULT_DENY_POLICY = "default"
 local RULE_NUMBERS = {
     low_hp_hold = { default = 0.45, min = 0.25, max = 0.70 },
     creep_aggro_relief_hp = { default = 0.68, min = 0.45, max = 0.90 },
+    bottle_rune_max_dist = { default = 1900.0, min = 900.0, max = 2600.0 },
+    bottle_rune_lane_budget = { default = 1500.0, min = 700.0, max = 2400.0 },
     visual_afk_seconds = { default = 6.0, min = 3.0, max = 12.0 },
     visual_afk_distance = { default = 90.0, min = 50.0, max = 180.0 },
 }
@@ -287,6 +289,8 @@ local function buildStyle(raw)
 
     local low_hp_hold = ruleNumber(rawRules, "low_hp_hold")
     local creep_aggro_relief_hp = ruleNumber(rawRules, "creep_aggro_relief_hp")
+    local bottle_rune_max_dist = ruleNumber(rawRules, "bottle_rune_max_dist")
+    local bottle_rune_lane_budget = ruleNumber(rawRules, "bottle_rune_lane_budget")
 
     -- Debug-only switches for isolating AFK/jitter. These are deliberately not LLM-visible
     -- style rules; set them by hand in playstyle_*.lua for one diagnostic match.
@@ -304,6 +308,8 @@ local function buildStyle(raw)
         hero_priority = hero_priority, deny_policy = deny_policy,
         low_hp_hold = low_hp_hold,
         creep_aggro_relief_hp = creep_aggro_relief_hp,
+        bottle_rune_max_dist = bottle_rune_max_dist,
+        bottle_rune_lane_budget = bottle_rune_lane_budget,
         debug_disable_forwardness_fallbacks = debug_disable_forwardness_fallbacks,
         debug_skeleton_laning = debug_skeleton_laning,
         visual_afk_seconds = visual_afk_seconds,

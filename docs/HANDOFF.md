@@ -485,12 +485,15 @@ return {
 - `heal-interrupt-atk` / `heal-interrupt-chase`: враг с cancellable-heal модификаторами (`flask`, `bottle`, `clarity`) становится срочной целью, если бот не в критическом HP.
 - `hero-pass-atk` / `hero-pass-chase`: враг, проходящий рядом во время лейнинга, больше не проходит через случайный `farm_focus`-ролл; бот обязан дать удар или шагнуть к удару, если он не в опасном HP, не под вражеской башней и не атакует с низины.
 - `bottle-rune` / `recovery-rune-bottle`: пустая bottle теперь ищет ближайшую доступную water или power rune и может сработать из обычного defensive-heal, а не только из recovery.
+- `bottle-rune` теперь lane-aware: в лейнинге действует строгий `bottle_rune_max_dist` (дефолт `1900`) и `bottle_rune_lane_budget` (дефолт `1500`), не уходит в rune-trip во время last-hit окна и пишет `blocked=bottle-rune reason=...`.
+- `recovery-rune-bottle` остаётся шире (`2600`, без lane-budget), потому что это уже post-fight восстановление, а не бросание мида ради далёкой воды.
 
 Что смотреть в следующем матче:
 - Вместо одного `creep-dmg` должны появляться `creep-aggro-back`.
 - Когда герои расходятся рядом/за спину друг другу, должны появляться `hero-pass-*`, а не только редкие `harass-atk`.
 - При salve/bottle/clarity у врага должны появляться `heal-interrupt-*`.
 - При пустой bottle и низком HP/mana должны появляться `bottle-rune` или `recovery-rune-bottle`; в итоговой статистике не должно оставаться `water_runes=0 power_runes=0`, если безопасная руна была доступна.
+- Если бот не идёт к руне, смотреть `blocked=bottle-rune reason=no_close_rune/enemy_near/last_hit_window/lane_budget/hero_damage`.
 
 ---
 
