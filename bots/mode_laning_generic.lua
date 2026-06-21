@@ -510,6 +510,37 @@ local function AIB_InterruptEnemyHealing()
 	return false
 end
 
+local function AIB_PassingHeroTrade(dials, rules)
+	if (rules.hero_priority or "default") == "never" then return false end
+	if J.GetHP(bot) < 0.45 then return false end
+	if AIB_EnemyTowerDanger() ~= nil then return false end
+
+	local enemies = bot:GetNearbyHeroes(botAttackRange + 220, true, BOT_MODE_NONE)
+	if not (enemies and #enemies > 0 and enemies[1]:IsAlive()) then return false end
+
+	local enemy = enemies[1]
+	if AIB_UphillMiss(enemy) then return false end
+
+	local now = DotaTime()
+	local heroPrio = rules.hero_priority or "default"
+	local cd = (heroPrio == "always") and 0.6 or (1.8 - 0.8 * (dials.harass_desire or 0.5))
+	if bot.aib_passHeroLast ~= nil and now - bot.aib_passHeroLast < cd then return false end
+
+	local dist = GetUnitToUnitDistance(bot, enemy)
+	if dist <= botAttackRange + 50 then
+		bot.aib_passHeroLast = now
+		bot.aib_harassLast = now
+		bot:Action_AttackUnit(enemy, false)
+		AIB_Diag("hero-pass-atk")
+		return true
+	end
+
+	bot.aib_passHeroLast = now
+	bot:Action_MoveToUnit(enemy)
+	AIB_Diag("hero-pass-chase")
+	return true
+end
+
 local function ThinkPregame(dials)
 	if DotaTime() >= 0 or GetGameMode() ~= GAMEMODE_1V1MID then return false end
 	if AIBSurvive.Think(bot, dials, nil) then return true end
@@ -652,6 +683,7 @@ local function ThinkLaningCore(dials, rules)
 	if AIB_VisualAFKStep(rules) then return end
 	if AIB_CreepAggroRelief(rules) then return end
 	if AIB_InterruptEnemyHealing() then return end
+	if AIB_PassingHeroTrade(dials, rules) then return end
 
 	local hitCreep = (GetBestLastHitCreep(nEnemyCreeps))
 
