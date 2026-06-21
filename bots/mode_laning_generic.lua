@@ -480,6 +480,16 @@ local function AIB_NearestEnemyHero(maxDist)
 	return best, bestDist
 end
 
+local function AIB_HasAttackableEnemyCreep(range)
+	for _, creep in pairs(nEnemyCreeps or {}) do
+		if J.IsValid(creep) and J.CanBeAttacked(creep)
+			and GetUnitToUnitDistance(bot, creep) <= range then
+			return true
+		end
+	end
+	return false
+end
+
 local function AIB_ContactHeroStep(rules)
 	rules = rules or {}
 	if (rules.hero_priority or "default") == "never" then return false end
@@ -837,7 +847,7 @@ local function ThinkLaningCore(dials, rules)
 	-- 3) walk toward last-hit creep, but stop at attack-range edge (not inside pack).
 	-- For ranged heroes: calculate a safe point at (attackRange-50) from the creep in our direction.
 	-- Melee heroes: walk directly (Action_MoveToUnit), engine handles range.
-	-- Cap: don't chase killable creep beyond 1.5× attack range — prevents blocking fwd/fwd-fallback
+	-- Cap: don't chase killable creep beyond 1.5x attack range so positioning can still recover.
 	-- when bot is returning from death and a pushed creep wave sits just out of range.
 	local csDist = csAllowed and needMove and GetUnitToUnitDistance(bot, hitCreep)
 	if csAllowed and needMove and csDist <= botAttackRange * 1.5 then
@@ -940,28 +950,14 @@ local function ThinkLaningCore(dials, rules)
 		end
 	end
 
-	-- AIBattle dead-time walk: step toward enemy when truly idle (no creep wave to manage,
-	-- no ability target, no tower danger). Skipped when enemy creeps are present so the bot
-	-- doesn't abandon a CS wave to chase. Radius 1000u: close enough to actually close gap,
-	-- not so far that the bot leaves lane entirely.
-	if heroPrio == "default" and AIB_EnemyTowerDanger() == nil
-		and not (nEnemyCreeps and #nEnemyCreeps > 0) then
-		local dtEnemy = bot:GetNearbyHeroes(1400, true, BOT_MODE_NONE)
-		if dtEnemy and #dtEnemy > 0 and dtEnemy[1]:IsAlive() then
-			if GetUnitToUnitDistance(bot, dtEnemy[1]) > botAttackRange + 50 then
-				Style.DiagRL(bot, "dt-walk", 5)
-				bot:Action_MoveToUnit(dtEnemy[1])
-				return
-			end
-		end
-	end
-
-
-	-- forwardness: controls desired depth in lane (offset from creep front).
-	-- For ranged heroes with enemy creeps present: clamp dest so the bot never ends up
-	-- inside the enemy pack — stay at (attackRange-60) from the wave centroid at minimum.
+	-- Forwardness is only a final lane-positioning preference. It yields to combat,
+	-- attackable creeps, low-HP hold, and tower safety.
 	local pressureEnemy = AIB_NearestEnemyHero(math.max(botAttackRange + 180, 700))
+	local attackableCreep = AIB_HasAttackableEnemyCreep(botAttackRange + 30)
 	local suppressForward = pressureEnemy ~= nil
+		or attackableCreep
+		or aib_lowHpHold
+		or (AIB_EnemyTowerDanger() ~= nil and not Style.MayDive(bot))
 	if not debugNoForward and not suppressForward then
 		local fwd = dials.forwardness or 0.5
 		local dest = target_loc
@@ -976,86 +972,23 @@ local function ThinkLaningCore(dials, rules)
 				dest = Vector(a.x + (b.x - a.x) * fwd, a.y + (b.y - a.y) * fwd, a.z)
 			end
 		end
-		-- Ranged hero: always stand at attack-range edge of the enemy pack, not inside it.
-		-- At full HP the offset is small (~540u from centroid); at low HP it's attack range.
-		local packSafeDest = nil
-		if botAttackRange > 300 and nEnemyCreeps and #nEnemyCreeps > 0 then
-			local cen = AIB_EnemyCreepCentroid(nEnemyCreeps)
-			if cen ~= nil then
-				local safe = botAttackRange - 60
-				local ownT1safe = GetTower(GetTeam(), TOWER_MID_1)
-				local anch = (ownT1safe ~= nil) and ownT1safe:GetLocation() or bot:GetLocation()
-				local dx, dy = anch.x - cen.x, anch.y - cen.y
-				local d = math.sqrt(dx*dx + dy*dy)
-				if d > 1 then
-					packSafeDest = Vector(cen.x + (dx/d)*safe, cen.y + (dy/d)*safe, cen.z)
-					dest = packSafeDest
-				end
-			end
-		end
 		if dest ~= nil and GetUnitToLocationDistance(bot, dest) > 150 then
-			local botAhead = false
-			local ownT1fwd = GetTower(GetTeam(), TOWER_MID_1)
-			if ownT1fwd ~= nil then
-				local dBotT1  = GetUnitToUnitDistance(bot, ownT1fwd)
-				local dDestT1 = GetUnitToLocationDistance(ownT1fwd, dest)
-				botAhead = dBotT1 > dDestT1 + 100
-			end
-			if not botAhead and not aib_lowHpHold then
-				bot:Action_MoveToLocation(dest + RandomVector(50))
-				AIB_Diag("fwd")
-				return
-			end
-			AIB_Diag("fwd-ahead")
+			bot:Action_MoveToLocation(dest + RandomVector(35))
+			AIB_Diag("fwd-position")
+			return
 		end
-		-- botAhead OR dest nil/close: fall back to tower interpolation as a forward
-		-- target so the bot advances when its own creep front is behind it.
-		local ownT1fb = GetTower(GetTeam(), TOWER_MID_1)
-		local enmT1fb = GetTower(GetOpposingTeam(), TOWER_MID_1)
-		if ownT1fb ~= nil and enmT1fb ~= nil then
-			local a, b = ownT1fb:GetLocation(), enmT1fb:GetLocation()
-			local fbDest = packSafeDest or Vector(a.x+(b.x-a.x)*fwd, a.y+(b.y-a.y)*fwd, a.z)
-			local dBotT1fb = GetUnitToUnitDistance(bot, ownT1fb)
-			local dFbT1    = GetUnitToLocationDistance(ownT1fb, fbDest)
-			if dBotT1fb <= dFbT1 + 100 and GetUnitToLocationDistance(bot, fbDest) > 150
-				and not aib_lowHpHold then
-				bot:Action_MoveToLocation(fbDest + RandomVector(50))
-				AIB_Diag("fwd-fallback")
-				return
-			end
-			-- Past fbDest: advance with the creep wave rather than standing still.
-			local pushDest = GetLaneFrontLocation(GetTeam(), botAssignedLane, -200)
-			if pushDest and GetUnitToLocationDistance(bot, pushDest) > 150
-				and AIB_EnemyTowerDanger() == nil and not aib_lowHpHold then
-				bot:Action_MoveToLocation(pushDest + RandomVector(50))
-				AIB_Diag("fwd-push")
-				return
-			end
-			AIB_Diag("fb-skip")
-		end
+		Style.DiagRL(bot, "fwd-at-position", 5)
 	else
 		if debugNoForward then
 			Style.DiagRL(bot, "dbg-skip-fwd", 5)
-		elseif suppressForward then
+		elseif aib_lowHpHold then
+			Style.DiagRL(bot, "fwd-suppressed-lowhp", 5)
+		elseif pressureEnemy ~= nil then
 			Style.DiagRL(bot, "fwd-suppressed-hero", 5)
-		end
-	end
-
-	-- AIBattle: idle-creep attack — if enemy creeps are in attack range and nothing else fired,
-	-- swing at the nearest one. Prevents the bot from standing motionless next to creeps when
-	-- last_hit_only mode has nothing to execute yet. Rate-limited to avoid spamming.
-	if not debugNoForward then
-		local ec = bot:GetNearbyCreeps(botAttackRange, true)
-		if ec and #ec > 0 and J.GetHP(bot) > 0.15 then
-			local tgt = ec[1]
-			for _, c in ipairs(ec) do
-				if J.IsValid(c) and c:IsAlive() then tgt = c; break end
-			end
-			if J.IsValid(tgt) and tgt:IsAlive() then
-				bot:Action_AttackUnit(tgt, true)
-				AIB_Diag("idle-creep-atk")
-				return
-			end
+		elseif attackableCreep then
+			Style.DiagRL(bot, "fwd-suppressed-creep", 5)
+		else
+			Style.DiagRL(bot, "fwd-suppressed-tower", 5)
 		end
 	end
 

@@ -169,6 +169,52 @@ def extract_builds(text):
         builds[side] = sha
     return builds
 
+def classify_event(body):
+    if body.startswith("intent="):
+        name = body.split(None, 1)[0].split("=", 1)[1]
+        return f"intent:{name}"
+    if body.startswith("blocked="):
+        name = body.split(None, 1)[0].split("=", 1)[1]
+        reason = re.search(r"\breason=([\w-]+)", body)
+        return f"blocked:{name}/{reason.group(1) if reason else 'unknown'}"
+    mt = re.search(r"\bt=([\d.]+)s\b.*\benemy-dist=([\d.]+)", body)
+    if mt and float(mt.group(2)) < 700:
+        return f"near-hero:{float(mt.group(2)):.0f}"
+    pairs = re.findall(r"([\w-]+)=(\d+)", body)
+    interesting = []
+    for key, val in pairs:
+        if key.startswith(("fwd", "anti-afk", "anti-idle", "hero", "creep", "cs-", "low-hp")):
+            interesting.append(f"{key}={val}")
+    if interesting:
+        return ",".join(interesting[:4])
+    return None
+
+def extract_event_timeline(text, limit=22):
+    timeline = {"R": [], "D": []}
+    last_t = {"R": None, "D": None}
+    for line in text.splitlines():
+        m = re.search(r"'AIB\[([RD])\]\s+([^']*)'", line)
+        if not m:
+            continue
+        side, body = m.group(1), m.group(2)
+        mt = re.search(r"\bt=([\d.]+)s\b", body)
+        if mt:
+            last_t[side] = float(mt.group(1))
+        label = classify_event(body)
+        if label is None:
+            continue
+        t = last_t[side]
+        stamp = f"{t:.0f}s" if t is not None else "?s"
+        entry = f"{stamp}:{label}"
+        if not timeline[side] or timeline[side][-1] != entry:
+            timeline[side].append(entry)
+    for side in timeline:
+        if len(timeline[side]) > limit:
+            head = timeline[side][:limit // 2]
+            tail = timeline[side][-(limit // 2):]
+            timeline[side] = head + [f"...+{len(timeline[side]) - len(head) - len(tail)}"] + tail
+    return timeline
+
 def parse(path):
     lines = open(path, encoding="utf-8", errors="ignore").read().splitlines()
     text = "\n".join(lines)
@@ -176,6 +222,7 @@ def parse(path):
     intents = extract_intents(text)
     blocked = extract_blocked(text)
     builds = extract_builds(text)
+    timeline = extract_event_timeline(text)
     # Pick up both MSG1 (harass=) and MSG2 (defend=) config announce lines.
     cfg = [l.split("localize: ", 1)[1] for l in lines
            if ("AIB[" in l) and (" harass=" in l or " defend=" in l)]
@@ -247,7 +294,7 @@ def parse(path):
             cur["slot"] = m.group(1)
             players.append(cur)
             cur = {}
-    return cfg, diag, dur, win, items, players, dealt, received, pg_locs, telemetry, intents, blocked, builds
+    return cfg, diag, dur, win, items, players, dealt, received, pg_locs, telemetry, intents, blocked, builds, timeline
 
 def side_count(diag, key, side):
     return int(diag.get(key, {}).get(side, 0) or 0)
@@ -295,6 +342,28 @@ def alert_symptoms(diag, telemetry, intents, blocked, items):
 
     return alerts
 
+def verdicts(diag, telemetry):
+    out = []
+    old_fwd = sum(sum(side.values()) for key, side in diag.items()
+                  if key in ("fwd-ahead", "fwd-fallback", "fwd-push", "fb-skip"))
+    new_fwd = sum(sum(side.values()) for key, side in diag.items()
+                  if key in ("fwd-position", "fwd-suppressed-hero", "fwd-suppressed-creep",
+                             "fwd-suppressed-lowhp", "fwd-suppressed-tower"))
+    if old_fwd > 100:
+        out.append(f"legacy-forwardness-noise old_fwd={old_fwd}")
+    if new_fwd > 0:
+        out.append(f"new-forwardness-shape fwd_events={new_fwd}")
+    for side in ["R", "D"]:
+        close = sum(1 for s in telemetry.get(side, [])
+                    if s.get("enemy_dist") is not None and s["enemy_dist"] < 700)
+        hero = sum(side_count(diag, k, side) for k in [
+            "hero-contact-atk", "hero-contact-chase", "hero-pass-atk", "hero-pass-chase",
+            "harass-atk", "harass-seek", "anti-idle-combat",
+        ])
+        if close >= 3 and hero == 0:
+            out.append(f"{side}: close-enemy-without-hero-action close_samples={close}")
+    return out
+
 
 def main():
     if len(sys.argv) < 2:
@@ -306,7 +375,7 @@ def main():
         if not os.path.exists(path):
             print(f"  (not found: {path})")
             continue
-        cfg, diag, dur, win, items, players, dealt, received, pg_locs, telemetry, intents, blocked, builds = parse(path)
+        cfg, diag, dur, win, items, players, dealt, received, pg_locs, telemetry, intents, blocked, builds, timeline = parse(path)
         if builds:
             print("  build:", " ".join(f"{s}={sha}" for s, sha in sorted(builds.items())))
         for c in cfg:
@@ -358,6 +427,11 @@ def main():
         alerts = alert_symptoms(diag, telemetry, intents, blocked, items)
         for alert in alerts:
             print("  alert:", alert)
+        for verdict in verdicts(diag, telemetry):
+            print("  verdict:", verdict)
+        for side in ["R", "D"]:
+            if timeline.get(side):
+                print(f"  timeline[{side}]: " + " | ".join(timeline[side]))
         for side in ["R", "D"]:
             spans = stationary_spans(telemetry.get(side, []))
             if spans:
