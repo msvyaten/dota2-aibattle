@@ -55,6 +55,8 @@ Combat / hero:
 - `channel-interrupt-atk`
 - `channel-interrupt-chase`
 - `damage-unstuck`
+- `creep-hit-react-atk`
+- `creep-hit-react-kite`
 - `harass-atk`
 - `kill-priority`
 
@@ -70,6 +72,8 @@ Creeps / lane:
 - `siege-creep`
 - `siege-tower`
 - `siege-step`
+- `siege-commit-tower`
+- `siege-commit-step`
 
 Positioning:
 - `fwd-position`
@@ -109,6 +113,7 @@ Bad signs in a fresh match:
 - Many old keys in match logs from a new build: `fwd-fallback`, `fwd-push`, `fwd-ahead`, `fb-skip`, `dt-walk`, `idle-creep-atk`.
 - `build_mismatch_vs_live` on a match that was supposed to use current code.
 - `fwd-position` firing while an enemy hero or attackable creep is nearby.
+- `creep-dmg` without `creep-hit-react-*`, `creep-aggro-*`, or `damage-unstuck`.
 
 Expected on old matches:
 - Old matches can still show removed keys because their logs were produced by older builds.

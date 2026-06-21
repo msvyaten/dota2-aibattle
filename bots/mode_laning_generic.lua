@@ -500,26 +500,92 @@ local function AIB_HasAttackableEnemyCreep(range)
 	return false
 end
 
+local AIB_MoveToAttackEdgeOf
+
 local function AIB_MoveToAttackEdge(target, diagKey)
-	if target == nil then return false end
+	return AIB_MoveToAttackEdgeOf(target, diagKey, 0)
+end
+
+local function AIB_AttackEdgeLocation(target, extraBack)
+	if target == nil then return nil end
 	local range = botAttackRange or bot:GetAttackRange()
-	if range <= 300 then
-		bot:Action_MoveToUnit(target)
-		if diagKey then AIB_Diag(diagKey) end
-		return true
-	end
+	if range <= 300 then return target:GetLocation() end
 	local tl = target:GetLocation()
 	local bl = bot:GetLocation()
 	local dx, dy = bl.x - tl.x, bl.y - tl.y
 	local d = math.sqrt(dx*dx + dy*dy)
-	if d < 1 then
-		bot:Action_MoveToLocation(bl + RandomVector(160))
+	if d < 1 then return bl + RandomVector(160) end
+	local safe = math.max(320, range - 70 + (extraBack or 0))
+	return Vector(tl.x + (dx/d)*safe, tl.y + (dy/d)*safe, tl.z)
+end
+
+AIB_MoveToAttackEdgeOf = function(target, diagKey, extraBack)
+	local loc = AIB_AttackEdgeLocation(target, extraBack)
+	if loc == nil then return false end
+	if (botAttackRange or bot:GetAttackRange()) <= 300 then
+		bot:Action_MoveToUnit(target)
 	else
-		local safe = math.max(260, range - 80)
-		bot:Action_MoveToLocation(Vector(tl.x + (dx/d)*safe, tl.y + (dy/d)*safe, tl.z))
+		bot:Action_MoveToLocation(loc)
 	end
 	if diagKey then AIB_Diag(diagKey) end
 	return true
+end
+
+local function AIB_NearestAttackableEnemyCreep(range)
+	local best = nil
+	local bestDist = range or math.huge
+	for _, creep in pairs(nEnemyCreeps or {}) do
+		if J.IsValid(creep) and J.CanBeAttacked(creep) then
+			local dist = GetUnitToUnitDistance(bot, creep)
+			if dist <= bestDist then
+				best = creep
+				bestDist = dist
+			end
+		end
+	end
+	return best, bestDist
+end
+
+local function AIB_WantBlocked(name, reason, detail, sec)
+	Style.Blocked(bot, name, reason, detail, sec or 3.0)
+end
+
+local function AIB_CreepHitReactStep()
+	local now = DotaTime()
+	if now <= 0 or bot:HasModifier("modifier_teleporting") then return false end
+	if not bot:WasRecentlyDamagedByCreep(1.2) then return false end
+	if bot.aib_creepReactLast ~= nil and now - bot.aib_creepReactLast < 0.75 then return false end
+
+	local hp = J.GetHP(bot)
+	local range = botAttackRange or bot:GetAttackRange()
+	local creep, dist = AIB_NearestAttackableEnemyCreep(range + 160)
+	if creep == nil then
+		AIB_WantBlocked("creep-hit-react", "no_creep", string.format("hp=%.0f", hp * 100), 3.0)
+		return false
+	end
+
+	bot.aib_creepReactLast = now
+	if hp >= 0.38 and dist <= range + 40 and AIB_EnemyTowerDanger() == nil then
+		Style.Intent(bot, "creep-hit-react", string.format("dist=%.0f hp=%.0f reason=attack", dist, hp * 100), 1.5)
+		bot:Action_AttackUnit(creep, true)
+		AIB_Diag("creep-hit-react-atk")
+		return true
+	end
+
+	local safe = AIBUtils.SafeRetreatTowerLoc(bot)
+	if safe == nil then
+		local cen = AIB_EnemyCreepCentroid(nEnemyCreeps)
+		if cen ~= nil then safe = AIB_MoveAwayFrom(bot:GetLocation(), cen, 360) end
+	end
+	if safe ~= nil then
+		Style.Intent(bot, "creep-hit-react", string.format("dist=%.0f hp=%.0f reason=kite", dist, hp * 100), 1.5)
+		bot:Action_MoveToLocation(safe)
+		AIB_Diag("creep-hit-react-kite")
+		return true
+	end
+
+	AIB_WantBlocked("creep-hit-react", "no_safe_dest", string.format("dist=%.0f hp=%.0f", dist, hp * 100), 3.0)
+	return false
 end
 
 local function AIB_DamageUnstuckStep()
@@ -605,7 +671,10 @@ local function AIB_SiegeIntent(dials, rules)
 	if twr == nil or AIB_TowerActuallyThreatening(twr) then return false end
 	local cwp = rules.creep_wave_priority or "last_hit_only"
 	local wantsSiege = cwp == "push" or (dials.push_desire or 0.5) >= 0.65
-	if not wantsSiege or J.GetHP(bot) < 0.35 then return false end
+	if not wantsSiege or J.GetHP(bot) < 0.35 then
+		AIB_WantBlocked("siege", "desire_or_hp", string.format("hp=%.0f", J.GetHP(bot) * 100), 5.0)
+		return false
+	end
 
 	local alliedTank = false
 	local target = twr:GetAttackTarget()
@@ -617,24 +686,40 @@ local function AIB_SiegeIntent(dials, rules)
 			end
 		end
 	end
-	if not alliedTank then return false end
+	if not alliedTank then
+		AIB_WantBlocked("siege", "no_allied_tank", string.format("tower=%.0f", GetUnitToUnitDistance(bot, twr)), 5.0)
+		return false
+	end
+
+	local now = DotaTime()
+	if bot.aib_siegeCommitUntil ~= nil and now <= bot.aib_siegeCommitUntil then
+		if GetUnitToUnitDistance(bot, twr) <= (botAttackRange or bot:GetAttackRange()) + 60 then
+			bot:Action_AttackUnit(twr, true)
+			AIB_Diag("siege-commit-tower")
+			return true
+		end
+		return AIB_MoveToAttackEdgeOf(twr, "siege-commit-step", 30)
+	end
 
 	for _, creep in pairs(nEnemyCreeps or {}) do
 		if J.IsValid(creep) and J.CanBeAttacked(creep)
 			and GetUnitToUnitDistance(bot, creep) <= (botAttackRange or bot:GetAttackRange()) + 40 then
+			bot.aib_siegeCommitUntil = now + 1.6
 			bot:Action_AttackUnit(creep, true)
 			AIB_Diag("siege-creep")
 			return true
 		end
 	end
 	if GetUnitToUnitDistance(bot, twr) <= (botAttackRange or bot:GetAttackRange()) + 60 then
+		bot.aib_siegeCommitUntil = now + 1.6
 		bot:Action_AttackUnit(twr, true)
 		AIB_Diag("siege-tower")
 		return true
 	end
-	if bot.aib_siegeLast == nil or DotaTime() - bot.aib_siegeLast >= 1.0 then
-		bot.aib_siegeLast = DotaTime()
-		AIB_MoveToAttackEdge(twr, "siege-step")
+	if bot.aib_siegeLast == nil or now - bot.aib_siegeLast >= 1.0 then
+		bot.aib_siegeLast = now
+		bot.aib_siegeCommitUntil = now + 1.6
+		AIB_MoveToAttackEdgeOf(twr, "siege-step", 30)
 	else
 		Style.DiagRL(bot, "siege-hold", 5)
 	end
@@ -664,11 +749,15 @@ local function AIB_ContactHeroStep(rules)
 			AIB_Diag("hero-contact-kite")
 			return true
 		end
+		AIB_WantBlocked("hero-contact", "low_hp_no_safe", string.format("dist=%.0f hp=%.0f", dist, hp * 100), 3.0)
 		return false
 	end
 
 	if dist <= range + 80 then
-		if dist > range and AIB_UphillMiss(enemy) then return false end
+		if dist > range and AIB_UphillMiss(enemy) then
+			AIB_WantBlocked("hero-contact", "uphill", string.format("dist=%.0f hp=%.0f", dist, hp * 100), 3.0)
+			return false
+		end
 		bot.aib_contactHeroLast = now
 		bot.aib_harassLast = now
 		Style.Intent(bot, "hero-contact", string.format("dist=%.0f hp=%.0f reason=attackable_enemy", dist, hp * 100))
@@ -680,9 +769,10 @@ local function AIB_ContactHeroStep(rules)
 	if hp >= 0.45 and AIB_EnemyTowerDanger() == nil and not AIB_UphillMiss(enemy) then
 		bot.aib_contactHeroLast = now
 		Style.Intent(bot, "hero-contact", string.format("dist=%.0f hp=%.0f reason=close_enemy", dist, hp * 100))
-		return AIB_MoveToAttackEdge(enemy, "hero-contact-chase")
+		return AIB_MoveToAttackEdgeOf(enemy, "hero-contact-chase", 0)
 	end
 
+	AIB_WantBlocked("hero-contact", "unsafe", string.format("dist=%.0f hp=%.0f tower=%s", dist, hp * 100, tostring(AIB_EnemyTowerDanger() ~= nil)), 3.0)
 	return false
 end
 
@@ -840,9 +930,10 @@ local function ThinkLaningCore(dials, rules)
 	if urgentInterrupt ~= nil then urgentIntents[#urgentIntents + 1] = urgentInterrupt end
 	if AIBEngine.Resolve(urgentIntents, intentCtx) then return end
 
+	if AIB_ContactHeroStep(rules) then return end
+	if AIB_CreepHitReactStep() then return end
 	if AIB_DamageUnstuckStep() then return end
 	if J.GetHP(bot) < 0.55 and AIBSurvive.Think(bot, dials, nEnemyCreeps) then return end
-	if AIB_ContactHeroStep(rules) then return end
 	local intents = {}
 	local killIntent = AIBLaneTrade.KillLock(intentCtx)
 	if killIntent ~= nil then intents[#intents + 1] = killIntent end
@@ -1010,20 +1101,7 @@ local function ThinkLaningCore(dials, rules)
 	local csDist = csAllowed and needMove and GetUnitToUnitDistance(bot, hitCreep)
 	if csAllowed and needMove and csDist <= botAttackRange * 1.5 then
 		AIB_Diag("cs-walk")
-		if botAttackRange > 300 then
-			local cl = hitCreep:GetLocation()
-			local bl = bot:GetLocation()
-			local d  = math.sqrt((bl.x-cl.x)^2 + (bl.y-cl.y)^2)
-			if d > 1 then
-				local safe = botAttackRange - 50
-				local dx, dy = (bl.x-cl.x)/d, (bl.y-cl.y)/d
-				bot:Action_MoveToLocation(Vector(cl.x + dx*safe, cl.y + dy*safe, cl.z))
-			else
-				bot:Action_MoveToUnit(hitCreep)
-			end
-		else
-			bot:Action_MoveToUnit(hitCreep)
-		end
+		AIB_MoveToAttackEdgeOf(hitCreep, nil, 20)
 		return
 	end
 
@@ -1076,7 +1154,11 @@ local function ThinkLaningCore(dials, rules)
 			end
 			if not skipDeny then
 				bot:SetTarget(denyCreep)
-				bot:Action_AttackUnit(denyCreep, true)
+				if GetUnitToUnitDistance(bot, denyCreep) <= botAttackRange + 40 then
+					bot:Action_AttackUnit(denyCreep, true)
+				else
+					AIB_MoveToAttackEdgeOf(denyCreep, nil, 20)
+				end
 				AIB_Diag("deny-act"); return
 			end
 		end

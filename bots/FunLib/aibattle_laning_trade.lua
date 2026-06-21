@@ -162,7 +162,7 @@ function M.PassingHeroTrade(ctx)
 
 	return Engine.Intent("hero-pass", 90, "nearby_enemy", function()
 		bot.aib_passHeroLast = DotaTime()
-		bot:Action_MoveToUnit(enemy)
+		moveToAttackEdge(bot, enemy, range)
 		Style.Diag(bot, "hero-pass-chase")
 	end, string.format("dist=%.0f hp=%.0f", dist, hp*100))
 end
