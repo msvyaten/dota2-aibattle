@@ -260,6 +260,7 @@ def alert_symptoms(diag, telemetry, intents, blocked, items):
             close_samples = sum(1 for s in samples if s.get("enemy_dist") is not None and s["enemy_dist"] < 700)
             hero_actions = sum(side_count(diag, k, side) for k in [
                 "harass-atk", "harass-seek", "hero-pass-atk", "hero-pass-chase",
+                "hero-contact-atk", "hero-contact-chase",
                 "hero-prio-always", "hero-prio-chase", "kill-priority",
             ])
             if close_samples >= 3 and hero_actions == 0:

@@ -22,7 +22,7 @@ function M.CreepAggroRelief(ctx)
 	local rules = ctx.rules or {}
 	local enemyCreeps = ctx.enemyCreeps or {}
 	local hp = J.GetHP(bot)
-	local hpGate = rules.creep_aggro_relief_hp or 0.68
+	local hpGate = rules.creep_aggro_relief_hp or 0.55
 	if hp >= hpGate then
 		return Engine.Blocked("creep-aggro", 90, "hp_ok", string.format("hp=%.0f creeps=%d", hp*100, #enemyCreeps))
 	end

@@ -409,6 +409,9 @@ local function AIB_VisualAFKStep(rules)
 			local enemy = enemies[1]
 			local enemyLoc = enemy:GetLocation()
 			local dist = GetUnitToUnitDistance(bot, enemy)
+			if dist <= botAttackRange + 80 then
+				return false
+			end
 			if dist > botAttackRange + 120 then
 				bot:Action_MoveToUnit(enemy)
 				bot.aib_afkLast = now
@@ -450,6 +453,78 @@ local function AIB_VisualAFKStep(rules)
 	AIB_ResetVisualAFK(now, loc)
 	AIB_Diag(key)
 	return true
+end
+
+local function AIB_NearestEnemyHero(maxDist)
+	local best = nil
+	local bestDist = maxDist or math.huge
+	local function scan(list)
+		if list == nil then return end
+		for _, enemy in ipairs(list) do
+			if J.IsValidHero(enemy) and enemy:IsAlive() and not J.IsSuspiciousIllusion(enemy) then
+				local dist = GetUnitToUnitDistance(bot, enemy)
+				if dist <= bestDist then
+					best = enemy
+					bestDist = dist
+				end
+			end
+		end
+	end
+	scan(nInRangeEnemy)
+	if best == nil then
+		local ok, enemies = pcall(function()
+			return bot:GetNearbyHeroes(maxDist or 1600, true, BOT_MODE_NONE)
+		end)
+		if ok then scan(enemies) end
+	end
+	return best, bestDist
+end
+
+local function AIB_ContactHeroStep(rules)
+	rules = rules or {}
+	if (rules.hero_priority or "default") == "never" then return false end
+
+	local range = botAttackRange or bot:GetAttackRange()
+	local enemy, dist = AIB_NearestEnemyHero(math.max(range + 140, 650))
+	if enemy == nil then return false end
+
+	local now = DotaTime()
+	if bot.aib_contactHeroLast ~= nil and now - bot.aib_contactHeroLast < 0.65 then
+		return false
+	end
+
+	local hp = J.GetHP(bot)
+	if hp < 0.32 then
+		local safe = AIB_ForwardSurvivingTowerLoc()
+		if safe ~= nil and GetUnitToLocationDistance(bot, safe) > 120 then
+			bot.aib_contactHeroLast = now
+			Style.Intent(bot, "hero-contact", string.format("dist=%.0f hp=%.0f reason=low_hp_kite", dist, hp * 100))
+			bot:Action_MoveToLocation(safe)
+			AIB_Diag("hero-contact-kite")
+			return true
+		end
+		return false
+	end
+
+	if dist <= range + 80 then
+		if dist > range and AIB_UphillMiss(enemy) then return false end
+		bot.aib_contactHeroLast = now
+		bot.aib_harassLast = now
+		Style.Intent(bot, "hero-contact", string.format("dist=%.0f hp=%.0f reason=attackable_enemy", dist, hp * 100))
+		bot:Action_AttackUnit(enemy, false)
+		AIB_Diag("hero-contact-atk")
+		return true
+	end
+
+	if hp >= 0.45 and AIB_EnemyTowerDanger() == nil and not AIB_UphillMiss(enemy) then
+		bot.aib_contactHeroLast = now
+		Style.Intent(bot, "hero-contact", string.format("dist=%.0f hp=%.0f reason=close_enemy", dist, hp * 100))
+		bot:Action_MoveToUnit(enemy)
+		AIB_Diag("hero-contact-chase")
+		return true
+	end
+
+	return false
 end
 
 local function ThinkPregame(dials)
@@ -592,6 +667,7 @@ local function ThinkLaningCore(dials, rules)
 		Style.DiagRL(bot, "dbg-no-fwd", 10)
 	end
 	if J.GetHP(bot) < 0.55 and AIBSurvive.Think(bot, dials, nEnemyCreeps) then return end
+	if AIB_ContactHeroStep(rules) then return end
 	if AIB_VisualAFKStep(rules) then return end
 	local intentCtx = {
 		bot = bot,
@@ -884,7 +960,9 @@ local function ThinkLaningCore(dials, rules)
 	-- forwardness: controls desired depth in lane (offset from creep front).
 	-- For ranged heroes with enemy creeps present: clamp dest so the bot never ends up
 	-- inside the enemy pack — stay at (attackRange-60) from the wave centroid at minimum.
-	if not debugNoForward then
+	local pressureEnemy = AIB_NearestEnemyHero(math.max(botAttackRange + 180, 700))
+	local suppressForward = pressureEnemy ~= nil
+	if not debugNoForward and not suppressForward then
 		local fwd = dials.forwardness or 0.5
 		local dest = target_loc
 		if dest == nil then
@@ -956,7 +1034,11 @@ local function ThinkLaningCore(dials, rules)
 			AIB_Diag("fb-skip")
 		end
 	else
-		Style.DiagRL(bot, "dbg-skip-fwd", 5)
+		if debugNoForward then
+			Style.DiagRL(bot, "dbg-skip-fwd", 5)
+		elseif suppressForward then
+			Style.DiagRL(bot, "fwd-suppressed-hero", 5)
+		end
 	end
 
 	-- AIBattle: idle-creep attack — if enemy creeps are in attack range and nothing else fired,

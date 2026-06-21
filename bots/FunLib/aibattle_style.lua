@@ -125,7 +125,7 @@ local DEFAULT_DENY_POLICY = "default"
 
 local RULE_NUMBERS = {
     low_hp_hold = { default = 0.45, min = 0.25, max = 0.70 },
-    creep_aggro_relief_hp = { default = 0.68, min = 0.45, max = 0.90 },
+    creep_aggro_relief_hp = { default = 0.55, min = 0.45, max = 0.90 },
     bottle_rune_max_dist = { default = 1900.0, min = 900.0, max = 2600.0 },
     bottle_rune_lane_budget = { default = 1500.0, min = 700.0, max = 2400.0 },
     visual_afk_seconds = { default = 6.0, min = 3.0, max = 12.0 },
