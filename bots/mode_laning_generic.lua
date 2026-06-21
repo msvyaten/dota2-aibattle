@@ -578,6 +578,8 @@ local function AIB_CreepHitReactStep()
 		if cen ~= nil then safe = AIB_MoveAwayFrom(bot:GetLocation(), cen, 360) end
 	end
 	if safe ~= nil then
+		bot.aib_creepReliefLast = now
+		bot.aib_creepReliefDest = safe
 		Style.Intent(bot, "creep-hit-react", string.format("dist=%.0f hp=%.0f reason=kite", dist, hp * 100), 1.5)
 		bot:Action_MoveToLocation(safe)
 		AIB_Diag("creep-hit-react-kite")

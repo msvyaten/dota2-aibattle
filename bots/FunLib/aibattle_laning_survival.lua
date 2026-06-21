@@ -24,6 +24,12 @@ function M.CreepAggroRelief(ctx)
 	local hp = J.GetHP(bot)
 	local range = ctx.attackRange or bot:GetAttackRange()
 	local now = DotaTime()
+	if bot.aib_creepReliefLast ~= nil and now - bot.aib_creepReliefLast < 1.2
+		and bot.aib_creepReliefDest ~= nil then
+		return Engine.Intent("creep-aggro", 72, "react_followup", function()
+			bot:Action_MoveToLocation(bot.aib_creepReliefDest)
+		end, string.format("hp=%.0f", hp*100))
+	end
 	if bot.aib_creepDmgSeen == nil or now - bot.aib_creepDmgSeen > 3.0 then
 		bot.aib_creepDmgCount = 0
 	end
