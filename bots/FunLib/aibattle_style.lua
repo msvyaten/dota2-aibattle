@@ -122,8 +122,13 @@ local DEFAULT_HERO_PRIORITY = "default"
 -- never   = never deny allied creeps.
 local DENY_POLICY_VALUES = { always = true, default = true, never = true }
 local DEFAULT_DENY_POLICY = "default"
-local DEFAULT_LOW_HP_HOLD = 0.45
-local DEFAULT_CREEP_AGGRO_RELIEF_HP = 0.68
+
+local RULE_NUMBERS = {
+    low_hp_hold = { default = 0.45, min = 0.25, max = 0.70 },
+    creep_aggro_relief_hp = { default = 0.68, min = 0.45, max = 0.90 },
+    visual_afk_seconds = { default = 6.0, min = 3.0, max = 12.0 },
+    visual_afk_distance = { default = 90.0, min = 50.0, max = 180.0 },
+}
 
 local function clamp01(x)
     if type(x) ~= "number" then return nil end
@@ -138,6 +143,11 @@ local function clampNumber(x, default, minValue, maxValue)
     if v < minValue then return minValue end
     if v > maxValue then return maxValue end
     return v
+end
+
+local function ruleNumber(rawRules, name)
+    local spec = RULE_NUMBERS[name]
+    return clampNumber(rawRules[name], spec.default, spec.min, spec.max)
 end
 
 local function parseDials(rawDials)
@@ -275,15 +285,15 @@ local function buildStyle(raw)
     local denp = rawRules.deny_policy
     local deny_policy = (type(denp) == "string" and DENY_POLICY_VALUES[denp]) and denp or DEFAULT_DENY_POLICY
 
-    local low_hp_hold = clampNumber(rawRules.low_hp_hold, DEFAULT_LOW_HP_HOLD, 0.25, 0.70)
-    local creep_aggro_relief_hp = clampNumber(rawRules.creep_aggro_relief_hp, DEFAULT_CREEP_AGGRO_RELIEF_HP, 0.45, 0.90)
+    local low_hp_hold = ruleNumber(rawRules, "low_hp_hold")
+    local creep_aggro_relief_hp = ruleNumber(rawRules, "creep_aggro_relief_hp")
 
     -- Debug-only switches for isolating AFK/jitter. These are deliberately not LLM-visible
     -- style rules; set them by hand in playstyle_*.lua for one diagnostic match.
     local debug_disable_forwardness_fallbacks = rawRules.debug_disable_forwardness_fallbacks == true
     local debug_skeleton_laning = rawRules.debug_skeleton_laning == true
-    local visual_afk_seconds = clampNumber(rawRules.visual_afk_seconds, 6.0, 3.0, 12.0)
-    local visual_afk_distance = clampNumber(rawRules.visual_afk_distance, 90.0, 50.0, 180.0)
+    local visual_afk_seconds = ruleNumber(rawRules, "visual_afk_seconds")
+    local visual_afk_distance = ruleNumber(rawRules, "visual_afk_distance")
 
     return { dials = dials, rules = {
         respawn_behavior = respawn, dive_policy = dive, smoke_usage = smoke,
@@ -323,6 +333,10 @@ end
 -- Returns the situational purchase rules for the calling bot's team (may be empty).
 function M.GetItemRules()
     return M.Get().item_rules
+end
+
+function M.RuleNumberSchema()
+    return RULE_NUMBERS
 end
 
 -- Backward-compat shim for old callers; new code should read rules directly.
@@ -416,6 +430,22 @@ function M.Intent(bot, name, detail, sec)
     local side = (bot:GetTeam() == TEAM_RADIANT) and "R" or "D"
     local suffix = (detail ~= nil and detail ~= "") and (" " .. detail) or ""
     bot:ActionImmediate_Chat("AIB[" .. side .. "] intent=" .. tostring(name) .. suffix, true)
+end
+
+function M.Blocked(bot, name, reason, detail, sec)
+    if bot == nil or name == nil then return end
+    bot.aib_blockedLast = bot.aib_blockedLast or {}
+    local key = tostring(name) .. ":" .. tostring(reason or "unknown")
+    local now = DotaTime()
+    local gap = sec or 5.0
+    if bot.aib_blockedLast[key] ~= nil and now - bot.aib_blockedLast[key] < gap then
+        return
+    end
+    bot.aib_blockedLast[key] = now
+    local side = (bot:GetTeam() == TEAM_RADIANT) and "R" or "D"
+    local suffix = " reason=" .. tostring(reason or "unknown")
+    if detail ~= nil and detail ~= "" then suffix = suffix .. " " .. detail end
+    bot:ActionImmediate_Chat("AIB[" .. side .. "] blocked=" .. tostring(name) .. suffix, true)
 end
 
 -- Scale a "soft" mode desire by a 0-1 dial: 0.5 = baseline (x1), 0 = off, 1 = x2.

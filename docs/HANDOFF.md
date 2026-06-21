@@ -491,3 +491,25 @@ return {
 - Когда герои расходятся рядом/за спину друг другу, должны появляться `hero-pass-*`, а не только редкие `harass-atk`.
 - При salve/bottle/clarity у врага должны появляться `heal-interrupt-*`.
 - При пустой bottle и низком HP/mana должны появляться `bottle-rune` или `recovery-rune-bottle`; в итоговой статистике не должно оставаться `water_runes=0 power_runes=0`, если безопасная руна была доступна.
+
+---
+
+## Codex infra pass: intents, blocked reasons, live build
+
+Что изменено в инфраструктуре:
+- `FunLib/aibattle_engine.lua` теперь умеет не только запускать стадии, но и арбитрировать intent-кандидаты с `priority`, `reason`, `detail` и `action`.
+- `FunLib/aibattle_style.lua` получил `Blocked(...)` telemetry: теперь можно видеть не только "что сделал бот", но и "чего хотел, но не сделал" (`blocked=hero-pass reason=low_hp`, `blocked=creep-aggro reason=hp_ok`).
+- Лейнинг-логика trade/survival вынесена из `mode_laning_generic.lua` в маленькие модули:
+  - `FunLib/aibattle_laning_survival.lua`
+  - `FunLib/aibattle_laning_trade.lua`
+- `tools/deploy.bat` генерирует live `FunLib/aibattle_build.lua` с текущим git sha; `ThinkAnnounce` пишет `AIB[R] build=<sha>` / `AIB[D] build=<sha>` в начале матча.
+- `tools/match_stats.py` теперь парсит `build=...`, `intent=...`, `blocked=...` и печатает `alert:` симптомы:
+  - `ignored-nearby-hero`
+  - `stationary-while-damaged`
+  - `creep-dmg-without-relief`
+  - `enemy-healed-without-interrupt`
+  - `bottle-no-rune-intent`
+
+Правило на будущее:
+- Новая логика, которая выбирает действие текущего тика, должна возвращать intent через `AIBEngine.Intent(...)` или `AIBEngine.Blocked(...)`.
+- Низкоуровневую механику держать в модуле своей области (`laning_trade`, `laning_survival`, `survive`, `utils`), а не расширять `mode_laning_generic.lua`.

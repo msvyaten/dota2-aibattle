@@ -148,11 +148,34 @@ def extract_intents(text):
         entry["last"] = body.strip()
     return intents
 
+def extract_blocked(text):
+    """Parse AIB blocked-intent lines: side/name/reason counts plus last detail."""
+    blocked = {}
+    for side, name, body in re.findall(r"AIB\[([RD])\]\s+blocked=([\w-]+)([^']*)", text):
+        reason = "unknown"
+        m_reason = re.search(r"\breason=([\w-]+)", body)
+        if m_reason:
+            reason = m_reason.group(1)
+        side_map = blocked.setdefault(name, {})
+        reason_map = side_map.setdefault(side, {})
+        entry = reason_map.setdefault(reason, {"count": 0, "last": ""})
+        entry["count"] += 1
+        entry["last"] = body.strip()
+    return blocked
+
+def extract_builds(text):
+    builds = {}
+    for side, sha in re.findall(r"AIB\[([RD])\]\s+build=([\w.-]+)", text):
+        builds[side] = sha
+    return builds
+
 def parse(path):
     lines = open(path, encoding="utf-8", errors="ignore").read().splitlines()
     text = "\n".join(lines)
     telemetry = extract_telemetry(text)
     intents = extract_intents(text)
+    blocked = extract_blocked(text)
+    builds = extract_builds(text)
     # Pick up both MSG1 (harass=) and MSG2 (defend=) config announce lines.
     cfg = [l.split("localize: ", 1)[1] for l in lines
            if ("AIB[" in l) and (" harass=" in l or " defend=" in l)]
@@ -220,7 +243,52 @@ def parse(path):
             cur["slot"] = m.group(1)
             players.append(cur)
             cur = {}
-    return cfg, diag, dur, win, items, players, dealt, received, pg_locs, telemetry, intents
+    return cfg, diag, dur, win, items, players, dealt, received, pg_locs, telemetry, intents, blocked, builds
+
+def side_count(diag, key, side):
+    return int(diag.get(key, {}).get(side, 0) or 0)
+
+def alert_symptoms(diag, telemetry, intents, blocked, items):
+    alerts = []
+    for side in ["R", "D"]:
+        samples = telemetry.get(side, [])
+        if samples:
+            close_samples = sum(1 for s in samples if s.get("enemy_dist") is not None and s["enemy_dist"] < 700)
+            hero_actions = sum(side_count(diag, k, side) for k in [
+                "harass-atk", "harass-seek", "hero-pass-atk", "hero-pass-chase",
+                "hero-prio-always", "hero-prio-chase", "kill-priority",
+            ])
+            if close_samples >= 3 and hero_actions == 0:
+                alerts.append(f"{side}: ignored-nearby-hero close_samples={close_samples} hero_actions=0")
+
+            for start, end in stationary_spans(samples):
+                hp_drop = start["hp"] - end["hp"]
+                if hp_drop >= 8:
+                    alerts.append(f"{side}: stationary-while-damaged {start['t']:.0f}-{end['t']:.0f}s hp_drop={hp_drop:.0f}%")
+                    break
+
+        creep_dmg = side_count(diag, "creep-dmg", side)
+        creep_back = side_count(diag, "creep-aggro-back", side)
+        if creep_dmg > 0 and creep_back == 0:
+            alerts.append(f"{side}: creep-dmg-without-relief creep-dmg={creep_dmg}")
+
+        enemy = "D" if side == "R" else "R"
+        enemy_heals = sum(side_count(diag, k, enemy) for k in [
+            "heal-item", "bottle-heal", "mana-clarity", "recovery-bottle",
+        ])
+        interrupts = side_count(diag, "heal-interrupt-atk", side) + side_count(diag, "heal-interrupt-chase", side)
+        if enemy_heals > 0 and interrupts == 0:
+            alerts.append(f"{side}: enemy-healed-without-interrupt enemy_heals={enemy_heals}")
+
+    for idx, item_ids in enumerate(items):
+        side = "R" if idx == 0 else ("D" if idx == 1 else f"slot{idx}")
+        names = decode_items(item_ids)
+        if "bottle" in names:
+            rune_moves = side_count(diag, "bottle-rune", side) + side_count(diag, "recovery-rune-bottle", side)
+            if rune_moves == 0:
+                alerts.append(f"{side}: bottle-no-rune-intent")
+
+    return alerts
 
 
 def main():
@@ -233,7 +301,9 @@ def main():
         if not os.path.exists(path):
             print(f"  (not found: {path})")
             continue
-        cfg, diag, dur, win, items, players, dealt, received, pg_locs, telemetry, intents = parse(path)
+        cfg, diag, dur, win, items, players, dealt, received, pg_locs, telemetry, intents, blocked, builds = parse(path)
+        if builds:
+            print("  build:", " ".join(f"{s}={sha}" for s, sha in sorted(builds.items())))
         for c in cfg:
             print("  cfg:", c)
         dials = extract_dials(cfg)
@@ -271,6 +341,18 @@ def main():
                 last = f" last({entry['last']})" if entry["last"] else ""
                 chunks.append(f"{side}#{entry['count']}{last}")
             print("  intent:", name, " ".join(chunks))
+        for name in sorted(blocked):
+            chunks = []
+            for side, reasons in sorted(blocked[name].items()):
+                reason_bits = []
+                for reason, entry in sorted(reasons.items()):
+                    last = f" last({entry['last']})" if entry["last"] else ""
+                    reason_bits.append(f"{reason}#{entry['count']}{last}")
+                chunks.append(f"{side}[" + ", ".join(reason_bits) + "]")
+            print("  blocked:", name, " ".join(chunks))
+        alerts = alert_symptoms(diag, telemetry, intents, blocked, items)
+        for alert in alerts:
+            print("  alert:", alert)
         for side in ["R", "D"]:
             spans = stationary_spans(telemetry.get(side, []))
             if spans:

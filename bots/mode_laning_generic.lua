@@ -38,8 +38,12 @@ end
 -- AIBattle Schema v2: shared loader (dials + rules), with safe defaults/clamping.
 local Style   = require(GetScriptDirectory()..'/FunLib/aibattle_style')
 local AIBEngine = require(GetScriptDirectory()..'/FunLib/aibattle_engine')
+local _buildOk, AIBBuild = pcall(require, GetScriptDirectory()..'/FunLib/aibattle_build')
+if not _buildOk then AIBBuild = { sha = "unknown" } end
 local _healOk, _healResult = pcall(require, GetScriptDirectory()..'/FunLib/aibattle_survive')
 local AIBSurvive = _healOk and _healResult or { Think = function() return false end }
+local AIBLaneSurvival = require(GetScriptDirectory()..'/FunLib/aibattle_laning_survival')
+local AIBLaneTrade = require(GetScriptDirectory()..'/FunLib/aibattle_laning_trade')
 if not _healOk then
     -- Emit once to all-chat so it shows in console.log during test matches
     local _b = GetBot(); if _b then _b:ActionImmediate_Chat("AIB HEAL LOAD ERR: " .. tostring(_healResult), true) end
@@ -309,6 +313,7 @@ end
 local function ThinkAnnounce(dials)
 	if bot.aib_announced then return end
 	bot.aib_announced = true
+	bot:ActionImmediate_Chat("AIB[" .. AIB_SIDE .. "] build=" .. tostring(AIBBuild.sha or "unknown"), true)
 	bot:ActionImmediate_Chat("▶ " .. bot:GetName() .. " [" .. AIB_SIDE .. "]", false)
 	bot:ActionImmediate_Chat(string.format(
 		"AIB[%s] harass=%.2f farm=%.2f fwd=%.2f abil=%.2f rune=%.2f retreat=%.2f exec=%.2f gank=%.2f push=%.2f",
@@ -444,100 +449,6 @@ local function AIB_VisualAFKStep(rules)
 	bot.aib_afkLast = now
 	AIB_ResetVisualAFK(now, loc)
 	AIB_Diag(key)
-	return true
-end
-
-local function AIB_HasCancelableHealModifier(unit)
-	if unit == nil then return false end
-	return unit:HasModifier("modifier_flask_healing")
-		or unit:HasModifier("modifier_bottle_regeneration")
-		or unit:HasModifier("modifier_clarity_potion")
-end
-
-local function AIB_CreepAggroRelief(rules)
-	if not bot:WasRecentlyDamagedByCreep(1.0) then return false end
-	Style.DiagRL(bot, "creep-dmg", 3)
-
-	local hp = J.GetHP(bot)
-	local enemyCreepCount = (nEnemyCreeps ~= nil) and #nEnemyCreeps or 0
-	local hpGate = rules.creep_aggro_relief_hp or 0.68
-	if hp >= hpGate and enemyCreepCount < 3 then return false end
-
-	local now = DotaTime()
-	if bot.aib_creepReliefLast ~= nil and now - bot.aib_creepReliefLast < 1.2 then
-		return true
-	end
-
-	local dest = AIB_ForwardSurvivingTowerLoc()
-	local cen = AIB_EnemyCreepCentroid(nEnemyCreeps)
-	if dest == nil and cen ~= nil then
-		dest = AIB_MoveAwayFrom(bot:GetLocation(), cen, 420)
-	end
-	if dest == nil then dest = GetLaneFrontLocation(GetTeam(), botAssignedLane, -350) end
-	if dest == nil then return false end
-
-	if GetUnitToLocationDistance(bot, dest) < 220 and cen ~= nil then
-		dest = AIB_MoveAwayFrom(bot:GetLocation(), cen, 360)
-	end
-
-	bot.aib_creepReliefLast = now
-	bot:Action_MoveToLocation(dest)
-	AIB_Diag("creep-aggro-back")
-	return true
-end
-
-local function AIB_InterruptEnemyHealing()
-	if J.GetHP(bot) < 0.35 then return false end
-	local enemies = bot:GetNearbyHeroes(900, true, BOT_MODE_NONE)
-	if not (enemies and #enemies > 0) then return false end
-	for _, enemy in ipairs(enemies) do
-		if enemy:IsAlive() and AIB_HasCancelableHealModifier(enemy) then
-			local dist = GetUnitToUnitDistance(bot, enemy)
-			if dist <= botAttackRange + 50 and AIB_EnemyTowerDanger() == nil then
-				bot:Action_AttackUnit(enemy, true)
-				AIB_Diag("heal-interrupt-atk")
-				return true
-			end
-			if dist <= math.max(700, botAttackRange + 260)
-				and not AIB_UphillMiss(enemy)
-				and not bot:WasRecentlyDamagedByAnyHero(1.0) then
-				bot:Action_MoveToUnit(enemy)
-				AIB_Diag("heal-interrupt-chase")
-				return true
-			end
-		end
-	end
-	return false
-end
-
-local function AIB_PassingHeroTrade(dials, rules)
-	if (rules.hero_priority or "default") == "never" then return false end
-	if J.GetHP(bot) < 0.45 then return false end
-	if AIB_EnemyTowerDanger() ~= nil then return false end
-
-	local enemies = bot:GetNearbyHeroes(botAttackRange + 220, true, BOT_MODE_NONE)
-	if not (enemies and #enemies > 0 and enemies[1]:IsAlive()) then return false end
-
-	local enemy = enemies[1]
-	if AIB_UphillMiss(enemy) then return false end
-
-	local now = DotaTime()
-	local heroPrio = rules.hero_priority or "default"
-	local cd = (heroPrio == "always") and 0.6 or (1.8 - 0.8 * (dials.harass_desire or 0.5))
-	if bot.aib_passHeroLast ~= nil and now - bot.aib_passHeroLast < cd then return false end
-
-	local dist = GetUnitToUnitDistance(bot, enemy)
-	if dist <= botAttackRange + 50 then
-		bot.aib_passHeroLast = now
-		bot.aib_harassLast = now
-		bot:Action_AttackUnit(enemy, false)
-		AIB_Diag("hero-pass-atk")
-		return true
-	end
-
-	bot.aib_passHeroLast = now
-	bot:Action_MoveToUnit(enemy)
-	AIB_Diag("hero-pass-chase")
 	return true
 end
 
@@ -681,9 +592,22 @@ local function ThinkLaningCore(dials, rules)
 		Style.DiagRL(bot, "dbg-no-fwd", 10)
 	end
 	if AIB_VisualAFKStep(rules) then return end
-	if AIB_CreepAggroRelief(rules) then return end
-	if AIB_InterruptEnemyHealing() then return end
-	if AIB_PassingHeroTrade(dials, rules) then return end
+	local intentCtx = {
+		bot = bot,
+		dials = dials,
+		rules = rules,
+		enemyCreeps = nEnemyCreeps,
+		assignedLane = botAssignedLane,
+		attackRange = botAttackRange,
+	}
+	local intents = {}
+	local creepIntent = AIBLaneSurvival.CreepAggroRelief(intentCtx)
+	if creepIntent ~= nil then intents[#intents + 1] = creepIntent end
+	local healInterruptIntent = AIBLaneTrade.HealInterrupt(intentCtx)
+	if healInterruptIntent ~= nil then intents[#intents + 1] = healInterruptIntent end
+	local passingHeroIntent = AIBLaneTrade.PassingHeroTrade(intentCtx)
+	if passingHeroIntent ~= nil then intents[#intents + 1] = passingHeroIntent end
+	if AIBEngine.Resolve(intents, intentCtx) then return end
 
 	local hitCreep = (GetBestLastHitCreep(nEnemyCreeps))
 
