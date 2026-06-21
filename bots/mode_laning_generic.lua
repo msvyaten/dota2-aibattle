@@ -335,6 +335,10 @@ local function ThinkAnnounce(dials)
 		r.visual_afk_seconds or 6.0), true)
 end
 
+local function AIB_TowerActuallyThreatening(twr)
+	return AIBUtils.IsTowerActuallyThreatening(bot, twr)
+end
+
 -- Periodic location report every 5s (in-game only, DotaTime > 0).
 local function ThinkLocationReport()
 	local now = DotaTime()
@@ -393,6 +397,12 @@ local function AIB_VisualAFKStep(rules)
 	end
 	if now - bot.aib_afkAnchorTime < limit then return false end
 	if bot.aib_afkLast ~= nil and now - bot.aib_afkLast < 2.5 then return false end
+	for _, creep in pairs(nEnemyCreeps or {}) do
+		if J.IsValid(creep) and J.CanBeAttacked(creep)
+			and GetUnitToUnitDistance(bot, creep) <= botAttackRange + 40 then
+			return false
+		end
+	end
 
 	local dest = nil
 	local key = "anti-afk-step"
@@ -581,7 +591,7 @@ end
 local function ThinkDivePolicy()
 	local twr = AIB_EnemyTowerDanger()
 	if twr == nil then return false end
-	if not Style.MayDive(bot) then
+	if not Style.MayDive(bot) and AIB_TowerActuallyThreatening(twr) then
 		AIB_Diag("no-dive")
 		bot:Action_MoveToLocation(J.VectorAway(bot:GetLocation(), twr:GetLocation(), 350))
 		return true
@@ -678,7 +688,6 @@ local function ThinkLaningCore(dials, rules)
 	end
 	if J.GetHP(bot) < 0.55 and AIBSurvive.Think(bot, dials, nEnemyCreeps) then return end
 	if AIB_ContactHeroStep(rules) then return end
-	if AIB_VisualAFKStep(rules) then return end
 	local intentCtx = {
 		bot = bot,
 		dials = dials,
@@ -957,7 +966,7 @@ local function ThinkLaningCore(dials, rules)
 	local suppressForward = pressureEnemy ~= nil
 		or attackableCreep
 		or aib_lowHpHold
-		or (AIB_EnemyTowerDanger() ~= nil and not Style.MayDive(bot))
+		or (AIB_EnemyTowerDanger() ~= nil and AIB_TowerActuallyThreatening(AIB_EnemyTowerDanger()) and not Style.MayDive(bot))
 	if not debugNoForward and not suppressForward then
 		local fwd = dials.forwardness or 0.5
 		local dest = target_loc
@@ -972,9 +981,16 @@ local function ThinkLaningCore(dials, rules)
 				dest = Vector(a.x + (b.x - a.x) * fwd, a.y + (b.y - a.y) * fwd, a.z)
 			end
 		end
-		if dest ~= nil and GetUnitToLocationDistance(bot, dest) > 150 then
-			bot:Action_MoveToLocation(dest + RandomVector(35))
-			AIB_Diag("fwd-position")
+		if dest ~= nil and GetUnitToLocationDistance(bot, dest) > 220 then
+			local now = DotaTime()
+			if bot.aib_fwdLast == nil or now - bot.aib_fwdLast >= 1.0
+				or GetUnitToLocationDistance(bot, dest) > 700 then
+				bot.aib_fwdLast = now
+				bot:Action_MoveToLocation(dest)
+				AIB_Diag("fwd-position")
+			else
+				Style.DiagRL(bot, "fwd-hold", 5)
+			end
 			return
 		end
 		Style.DiagRL(bot, "fwd-at-position", 5)
@@ -994,6 +1010,7 @@ local function ThinkLaningCore(dials, rules)
 
 	-- AIBattle: anti-idle fallback - reached when forwardness had no dest OR bot is already at target.
 	-- Attack a visible enemy or move to assist an ally in combat.
+	if AIB_VisualAFKStep(rules) then return end
 	Style.DiagRL(bot, "pre-aig", 3)
 	Style.AntiIdleGlobal(bot)
 end

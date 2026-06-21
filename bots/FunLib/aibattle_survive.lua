@@ -47,23 +47,39 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 	local rules = Style.Get().rules
 	local laneAware = opts.lane_aware ~= false
 	if hp >= 0.78 and mana >= 0.45 then return false end
-	if bot:WasRecentlyDamagedByAnyHero(1.5) then
-		Style.Blocked(bot, diagKey, "hero_damage", string.format("hp=%.0f", hp*100), 6.0)
-		return false
-	end
 
 	local bSlot = bot:FindItemSlot("item_bottle")
 	if bSlot < 0 then return false end
 	local bottle = bot:GetItemInSlot(bSlot)
 	if bottle == nil or bottle:GetCurrentCharges() ~= 0 then return false end
 
+	local now = DotaTime()
+	if bot.aib_bottleRuneTarget ~= nil
+		and bot.aib_bottleRuneStarted ~= nil
+		and now - bot.aib_bottleRuneStarted < 8.0 then
+		local targetDist = GetUnitToLocationDistance(bot, bot.aib_bottleRuneTarget)
+		if targetDist > 180 then
+			bot:Action_MoveToLocation(bot.aib_bottleRuneTarget)
+			return true
+		end
+		bot.aib_bottleRuneTarget = nil
+		bot.aib_bottleRuneStarted = nil
+	end
+
 	local near = bot:GetNearbyHeroes(650, true, BOT_MODE_NONE)
-	if near and #near > 0 and near[1]:IsAlive() then
+	local enemyTooClose = near and #near > 0 and near[1]:IsAlive()
+		and GetUnitToUnitDistance(bot, near[1]) <= bot:GetAttackRange() + 120
+	if enemyTooClose and (hp < 0.55 or bot:WasRecentlyDamagedByAnyHero(1.0)) then
 		Style.Blocked(bot, diagKey, "enemy_near", string.format("dist=%.0f", GetUnitToUnitDistance(bot, near[1])), 6.0)
 		return false
 	end
 
-	if laneAware and hasLastHitWindow(bot) then
+	if bot:WasRecentlyDamagedByAnyHero(1.0) and hp < 0.45 then
+		Style.Blocked(bot, diagKey, "hero_damage", string.format("hp=%.0f", hp*100), 6.0)
+		return false
+	end
+
+	if laneAware and hp > 0.62 and hasLastHitWindow(bot) then
 		Style.Blocked(bot, diagKey, "last_hit_window", "", 6.0)
 		return false
 	end
@@ -87,23 +103,10 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 		return false
 	end
 
-	local now = DotaTime()
-	if bot.aib_bottleRuneTarget ~= nil
-		and bot.aib_bottleRuneStarted ~= nil
-		and now - bot.aib_bottleRuneStarted < 8.0 then
-		local targetDist = GetUnitToLocationDistance(bot, bot.aib_bottleRuneTarget)
-		if targetDist > 180 then
-			bot:Action_MoveToLocation(bot.aib_bottleRuneTarget)
-			return true
-		end
-		bot.aib_bottleRuneTarget = nil
-		bot.aib_bottleRuneStarted = nil
-	end
-
 	if laneAware then
 		local laneDist = laneFrontDistance(bot)
 		local laneBudget = rules.bottle_rune_lane_budget or 1500
-		if laneDist > laneBudget then
+		if laneDist > laneBudget and bestDist > 450 then
 			Style.Blocked(bot, diagKey, "lane_budget", string.format("lane=%.0f max=%.0f rune=%.0f", laneDist, laneBudget, bestDist), 6.0)
 			return false
 		end
@@ -377,8 +380,8 @@ local function recovery(bot, dials)
 	end
 
 	-- Fallback chain: only when critically low and items exhausted
-	local threshold = 0.25 + 0.30 * (dials.retreat_caution or 0.5)
-	                + (GetHeroDeaths(bot:GetPlayerID()) >= 1 and 0.15 or 0.0)
+	local threshold = 0.20 + 0.20 * (dials.retreat_caution or 0.5)
+	                + (GetHeroDeaths(bot:GetPlayerID()) >= 1 and 0.08 or 0.0)
 	if hp >= threshold then bot.aib_recWaitStart = nil; return false end
 
 	local behavior = Style.Get().rules.low_hp_behavior or "tp_fountain"
@@ -424,7 +427,7 @@ local function recovery(bot, dials)
 	local back = forwardTowerLoc(bot)
 	if back then
 		if bot.aib_recWaitStart == nil then bot.aib_recWaitStart = DotaTime() end
-		if DotaTime() - bot.aib_recWaitStart < 30.0 then
+		if DotaTime() - bot.aib_recWaitStart < 10.0 then
 			if bot.aib_recMoveLast == nil or DotaTime() - bot.aib_recMoveLast >= 5.0 then
 				bot.aib_recMoveLast = DotaTime(); Style.Diag(bot, "recovery-wait")
 				bot:Action_MoveToLocation(back)

@@ -5,17 +5,28 @@ local M = {}
 
 local J = require(GetScriptDirectory()..'/FunLib/jmz_func')
 
--- Nearest alive enemy tower within danger range of bot. Returns handle or nil.
+-- Nearest alive enemy tower within real danger range of bot. Returns handle or nil.
 function M.EnemyTowerDanger(bot)
 	local opp = GetOpposingTeam()
 	local ids = { TOWER_MID_1, TOWER_MID_2, TOWER_TOP_1, TOWER_BOT_1, TOWER_MID_3, TOWER_BASE_1, TOWER_BASE_2 }
 	for _, id in ipairs(ids) do
 		local t = GetTower(opp, id)
-		if t ~= nil and t:IsAlive() and GetUnitToUnitDistance(bot, t) < 900 then
+		if t ~= nil and t:IsAlive()
+			and GetUnitToUnitDistance(bot, t) < t:GetAttackRange() + 120 then
 			return t
 		end
 	end
 	return nil
+end
+
+function M.IsTowerActuallyThreatening(bot, tower)
+	if tower == nil or not tower:IsAlive() then return false end
+	if GetUnitToUnitDistance(bot, tower) > tower:GetAttackRange() + 80 then return false end
+	local target = tower:GetAttackTarget()
+	if target ~= nil and target ~= bot and target:GetTeam() == bot:GetTeam() then
+		return false
+	end
+	return true
 end
 
 -- 350 units in front of the nearest surviving friendly tower toward the enemy T1.

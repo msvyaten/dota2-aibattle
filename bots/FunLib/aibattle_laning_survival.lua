@@ -23,8 +23,18 @@ function M.CreepAggroRelief(ctx)
 	local enemyCreeps = ctx.enemyCreeps or {}
 	local hp = J.GetHP(bot)
 	local hpGate = rules.creep_aggro_relief_hp or 0.55
-	if hp >= hpGate then
-		return Engine.Blocked("creep-aggro", 90, "hp_ok", string.format("hp=%.0f creeps=%d", hp*100, #enemyCreeps))
+	local range = ctx.attackRange or bot:GetAttackRange()
+	for _, creep in pairs(enemyCreeps or {}) do
+		if J.IsValid(creep) and J.CanBeAttacked(creep)
+			and GetUnitToUnitDistance(bot, creep) <= range + 40 then
+			return Engine.Intent("creep-aggro", 112, "creep_hitting", function()
+				bot:Action_AttackUnit(creep, true)
+				Style.Diag(bot, "creep-aggro-hit")
+			end, string.format("hp=%.0f", hp*100))
+		end
+	end
+	if hp >= 0.82 then
+		return Engine.Blocked("creep-aggro", 75, "no_attackable_creep", string.format("hp=%.0f creeps=%d", hp*100, #enemyCreeps))
 	end
 
 	local now = DotaTime()

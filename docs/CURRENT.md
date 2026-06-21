@@ -1,6 +1,6 @@
 # AIBattle Current State
 
-Last updated by Codex after `2ec4436`.
+Last updated by Codex after match `8861167287`.
 
 ## Goal
 
@@ -16,14 +16,14 @@ The active laning loop is intentionally small:
 1. Respawn / pregame / tower-dive guards.
 2. Low-HP survival if health is dangerous.
 3. `hero-contact`: point-blank enemy hero response before visual-AFK and normal intents.
-4. Visual-AFK watchdog, but it yields when an enemy hero is already attackable.
-5. Intent arbitration:
+4. Intent arbitration:
    - `creep-aggro`
    - `heal-interrupt`
    - `hero-pass`
-6. Last-hit, survival, emergency retreat, kill-priority, harass, CS-walk, push/deny.
-7. Ability execute/harass.
-8. Final positioning via one forwardness action: `fwd-position`.
+5. Last-hit, survival, emergency retreat, kill-priority, harass, CS-walk, push/deny.
+6. Ability execute/harass.
+7. Final positioning via one forwardness action: `fwd-position`, rate-limited by `fwd-hold`.
+8. Visual-AFK watchdog only after normal combat/creep/positioning had a chance to act.
 9. Last-resort `AntiIdleGlobal`.
 
 ## Removed From Active Laning
@@ -57,6 +57,7 @@ Creeps / lane:
 - `cs-walk`
 - `deny-act`
 - `creep-dmg`
+- `creep-aggro-hit`
 - `creep-aggro-back`
 - `cw-push`
 
