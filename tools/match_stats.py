@@ -242,6 +242,34 @@ def extract_event_timeline(text, limit=22):
             timeline[side] = head + [f"...+{len(timeline[side]) - len(head) - len(tail)}"] + tail
     return timeline
 
+def extract_action_events(text):
+    events = {"R": [], "D": []}
+    last_t = {"R": None, "D": None}
+    for line in text.splitlines():
+        m = re.search(r"'AIB\[([RD])\]\s+([^']*)'", line)
+        if not m:
+            continue
+        side, body = m.group(1), m.group(2)
+        mt = re.search(r"\bt=([\d.]+)s\b", body)
+        if mt:
+            last_t[side] = float(mt.group(1))
+        label = classify_event(body)
+        if label is None or last_t[side] is None:
+            continue
+        events[side].append({"t": last_t[side], "label": label})
+    return events
+
+def span_actions(events, side, start_t, end_t):
+    labels = []
+    seen = set()
+    for ev in events.get(side, []):
+        if start_t <= ev["t"] <= end_t:
+            label = ev["label"]
+            if label not in seen:
+                seen.add(label)
+                labels.append(label)
+    return labels[:5]
+
 def parse(path):
     lines = open(path, encoding="utf-8", errors="ignore").read().splitlines()
     text = "\n".join(lines)
@@ -250,6 +278,7 @@ def parse(path):
     blocked = extract_blocked(text)
     builds = extract_builds(text)
     timeline = extract_event_timeline(text)
+    action_events = extract_action_events(text)
     # Pick up both MSG1 (harass=) and MSG2 (defend=) config announce lines.
     cfg = [l.split("localize: ", 1)[1] for l in lines
            if ("AIB[" in l) and (" harass=" in l or " defend=" in l)]
@@ -321,12 +350,12 @@ def parse(path):
             cur["slot"] = m.group(1)
             players.append(cur)
             cur = {}
-    return cfg, diag, dur, win, items, players, dealt, received, pg_locs, telemetry, intents, blocked, builds, timeline
+    return cfg, diag, dur, win, items, players, dealt, received, pg_locs, telemetry, intents, blocked, builds, timeline, action_events
 
 def side_count(diag, key, side):
     return int(diag.get(key, {}).get(side, 0) or 0)
 
-def alert_symptoms(diag, telemetry, intents, blocked, items):
+def alert_symptoms(diag, telemetry, intents, blocked, items, action_events):
     alerts = []
     for side in ["R", "D"]:
         samples = telemetry.get(side, [])
@@ -343,7 +372,11 @@ def alert_symptoms(diag, telemetry, intents, blocked, items):
             for start, end in stationary_spans(samples):
                 hp_drop = start["hp"] - end["hp"]
                 if hp_drop >= 8:
-                    alerts.append(f"{side}: stationary-while-damaged {start['t']:.0f}-{end['t']:.0f}s hp_drop={hp_drop:.0f}%")
+                    actions = span_actions(action_events, side, start["t"], end["t"])
+                    if actions:
+                        alerts.append(f"{side}: stationary-while-damaged-with-actions {start['t']:.0f}-{end['t']:.0f}s hp_drop={hp_drop:.0f}% actions=" + ",".join(actions))
+                    else:
+                        alerts.append(f"{side}: stationary-while-damaged-no-action {start['t']:.0f}-{end['t']:.0f}s hp_drop={hp_drop:.0f}%")
                     break
 
         creep_dmg = side_count(diag, "creep-dmg", side)
@@ -362,6 +395,8 @@ def alert_symptoms(diag, telemetry, intents, blocked, items):
             "heal-interrupt-atk", "heal-interrupt-chase",
             "channel-interrupt-atk", "channel-interrupt-chase",
         ])
+        interrupts += intents.get("channel-interrupt", {}).get(side, {}).get("count", 0)
+        interrupts += intents.get("heal-interrupt", {}).get(side, {}).get("count", 0)
         if enemy_heals > 0 and interrupts == 0:
             alerts.append(f"{side}: enemy-healed-without-interrupt enemy_heals={enemy_heals}")
 
@@ -428,7 +463,7 @@ def main():
         if not os.path.exists(path):
             print(f"  (not found: {path})")
             continue
-        cfg, diag, dur, win, items, players, dealt, received, pg_locs, telemetry, intents, blocked, builds, timeline = parse(path)
+        cfg, diag, dur, win, items, players, dealt, received, pg_locs, telemetry, intents, blocked, builds, timeline, action_events = parse(path)
         if builds:
             print("  build:", " ".join(f"{s}={sha}" for s, sha in sorted(builds.items())))
             if live_sha:
@@ -481,7 +516,7 @@ def main():
                     reason_bits.append(f"{reason}#{entry['count']}{last}")
                 chunks.append(f"{side}[" + ", ".join(reason_bits) + "]")
             print("  blocked:", name, " ".join(chunks))
-        alerts = alert_symptoms(diag, telemetry, intents, blocked, items)
+        alerts = alert_symptoms(diag, telemetry, intents, blocked, items, action_events)
         for alert in alerts:
             print("  alert:", alert)
         for verdict in verdicts(diag, telemetry):

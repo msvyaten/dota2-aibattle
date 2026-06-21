@@ -54,6 +54,7 @@ Combat / hero:
 - `kill-lock-chase`
 - `channel-interrupt-atk`
 - `channel-interrupt-chase`
+- `damage-unstuck`
 - `harass-atk`
 - `kill-priority`
 

@@ -110,9 +110,11 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 		and now - bot.aib_bottleRuneStarted < 14.0 then
 		local targetDist = GetUnitToLocationDistance(bot, bot.aib_bottleRuneTarget)
 		if targetDist > 180 then
+			Style.Intent(bot, diagKey, string.format("dist=%.0f age=%.0f reason=commit", targetDist, now - bot.aib_bottleRuneStarted), 2.0)
 			bot:Action_MoveToLocation(bot.aib_bottleRuneTarget)
 			return true
 		end
+		Style.Intent(bot, diagKey, string.format("dist=%.0f reason=arrived", targetDist), 2.0)
 		bot.aib_bottleRuneTarget = nil
 		bot.aib_bottleRuneStarted = nil
 	end
@@ -140,17 +142,17 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 	local enemyTooClose = near and #near > 0 and near[1]:IsAlive()
 		and GetUnitToUnitDistance(bot, near[1]) <= bot:GetAttackRange() + 120
 	if bestDist > 700 and enemyTooClose and (hp < 0.55 or bot:WasRecentlyDamagedByAnyHero(1.0)) then
-		Style.Blocked(bot, diagKey, "enemy_near", string.format("dist=%.0f", GetUnitToUnitDistance(bot, near[1])), 6.0)
+		Style.Blocked(bot, diagKey, "enemy_near", string.format("enemy=%.0f rune=%.0f hp=%.0f", GetUnitToUnitDistance(bot, near[1]), bestDist, hp*100), 6.0)
 		return false
 	end
 
 	if bestDist > 700 and bot:WasRecentlyDamagedByAnyHero(1.0) and hp < 0.45 then
-		Style.Blocked(bot, diagKey, "hero_damage", string.format("hp=%.0f", hp*100), 6.0)
+		Style.Blocked(bot, diagKey, "hero_damage", string.format("hp=%.0f rune=%.0f", hp*100, bestDist), 6.0)
 		return false
 	end
 
 	if laneAware and bestDist > 700 and hp > 0.62 and hasLastHitWindow(bot) then
-		Style.Blocked(bot, diagKey, "last_hit_window", "", 6.0)
+		Style.Blocked(bot, diagKey, "last_hit_window", string.format("rune=%.0f hp=%.0f", bestDist, hp*100), 6.0)
 		return false
 	end
 
@@ -164,12 +166,14 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 	end
 
 	if bot.aib_bottleRuneLast ~= nil and now - bot.aib_bottleRuneLast < 3.0 then
+		Style.Intent(bot, diagKey, string.format("dist=%.0f reason=cooldown_hold", bestDist), 2.0)
 		return bestDist > 180
 	end
 
 	bot.aib_bottleRuneLast = now
 	bot.aib_bottleRuneStarted = now
 	bot.aib_bottleRuneTarget = bestLoc
+	Style.Intent(bot, diagKey, string.format("dist=%.0f hp=%.0f mana=%.0f reason=start", bestDist, hp*100, mana*100), 2.0)
 	Style.Diag(bot, diagKey)
 	bot:Action_MoveToLocation(bestLoc)
 	return true

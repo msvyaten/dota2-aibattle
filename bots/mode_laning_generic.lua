@@ -522,6 +522,48 @@ local function AIB_MoveToAttackEdge(target, diagKey)
 	return true
 end
 
+local function AIB_DamageUnstuckStep()
+	local now = DotaTime()
+	if now <= 0 or bot:HasModifier("modifier_teleporting") then return false end
+	local loc = bot:GetLocation()
+	local hpPct = J.GetHP(bot) * 100
+	if bot.aib_damageAnchorLoc == nil or bot.aib_damageAnchorTime == nil then
+		bot.aib_damageAnchorLoc = loc
+		bot.aib_damageAnchorTime = now
+		bot.aib_damageAnchorHp = hpPct
+		return false
+	end
+	if AIB_Dist2D(loc, bot.aib_damageAnchorLoc) > 100 then
+		bot.aib_damageAnchorLoc = loc
+		bot.aib_damageAnchorTime = now
+		bot.aib_damageAnchorHp = hpPct
+		return false
+	end
+	local elapsed = now - bot.aib_damageAnchorTime
+	local hpDrop = (bot.aib_damageAnchorHp or hpPct) - hpPct
+	if elapsed < 4.0 or hpDrop < 6.0 then return false end
+	if bot.aib_damageUnstuckLast ~= nil and now - bot.aib_damageUnstuckLast < 3.0 then return false end
+
+	local dest = nil
+	local cen = AIB_EnemyCreepCentroid(nEnemyCreeps)
+	if cen ~= nil then
+		dest = AIB_MoveAwayFrom(loc, cen, 420)
+	end
+	if dest == nil or J.GetHP(bot) < 0.35 then
+		dest = AIBUtils.SafeRetreatTowerLoc(bot)
+	end
+	if dest == nil then return false end
+
+	bot.aib_damageUnstuckLast = now
+	bot.aib_damageAnchorLoc = loc
+	bot.aib_damageAnchorTime = now
+	bot.aib_damageAnchorHp = hpPct
+	Style.Intent(bot, "damage-unstuck", string.format("drop=%.0f elapsed=%.0f", hpDrop, elapsed), 2.0)
+	bot:Action_MoveToLocation(dest)
+	AIB_Diag("damage-unstuck")
+	return true
+end
+
 local function AIB_ActiveLowHpStep()
 	local hp = J.GetHP(bot)
 	if hp >= (GetRules().low_hp_hold or 0.45) then return false end
@@ -536,7 +578,7 @@ local function AIB_ActiveLowHpStep()
 	for _, creep in pairs(nEnemyCreeps or {}) do
 		if J.IsValid(creep) and J.CanBeAttacked(creep)
 			and GetUnitToUnitDistance(bot, creep) <= range + 40 then
-			if hp >= 0.25 then
+			if hp >= 0.35 then
 				bot:Action_AttackUnit(creep, true)
 				AIB_Diag("low-hp-creep")
 				return true
@@ -798,6 +840,7 @@ local function ThinkLaningCore(dials, rules)
 	if urgentInterrupt ~= nil then urgentIntents[#urgentIntents + 1] = urgentInterrupt end
 	if AIBEngine.Resolve(urgentIntents, intentCtx) then return end
 
+	if AIB_DamageUnstuckStep() then return end
 	if J.GetHP(bot) < 0.55 and AIBSurvive.Think(bot, dials, nEnemyCreeps) then return end
 	if AIB_ContactHeroStep(rules) then return end
 	local intents = {}
