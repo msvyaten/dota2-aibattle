@@ -63,6 +63,7 @@ Creeps / lane:
 - `deny-act`
 - `creep-dmg`
 - `creep-aggro-hit`
+- `creep-aggro-kite`
 - `creep-aggro-back`
 - `cw-push`
 - `siege-creep`
@@ -95,6 +96,8 @@ Recovery / runes:
 - `recovery-regen`
 - `recovery-walk`
 - `recovery-wait`
+- `fountain-wait`
+- `fountain-tp-lane`
 
 ## Regression Signals
 

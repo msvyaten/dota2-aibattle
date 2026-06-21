@@ -500,6 +500,28 @@ local function AIB_HasAttackableEnemyCreep(range)
 	return false
 end
 
+local function AIB_MoveToAttackEdge(target, diagKey)
+	if target == nil then return false end
+	local range = botAttackRange or bot:GetAttackRange()
+	if range <= 300 then
+		bot:Action_MoveToUnit(target)
+		if diagKey then AIB_Diag(diagKey) end
+		return true
+	end
+	local tl = target:GetLocation()
+	local bl = bot:GetLocation()
+	local dx, dy = bl.x - tl.x, bl.y - tl.y
+	local d = math.sqrt(dx*dx + dy*dy)
+	if d < 1 then
+		bot:Action_MoveToLocation(bl + RandomVector(160))
+	else
+		local safe = math.max(260, range - 80)
+		bot:Action_MoveToLocation(Vector(tl.x + (dx/d)*safe, tl.y + (dy/d)*safe, tl.z))
+	end
+	if diagKey then AIB_Diag(diagKey) end
+	return true
+end
+
 local function AIB_ActiveLowHpStep()
 	local hp = J.GetHP(bot)
 	if hp >= (GetRules().low_hp_hold or 0.45) then return false end
@@ -522,7 +544,7 @@ local function AIB_ActiveLowHpStep()
 			break
 		end
 	end
-	local back = AIB_ForwardSurvivingTowerLoc()
+	local back = AIBUtils.SafeRetreatTowerLoc(bot)
 	if back ~= nil and GetUnitToLocationDistance(bot, back) > 140 then
 		if bot.aib_lowHpActiveLast == nil or DotaTime() - bot.aib_lowHpActiveLast >= 1.2 then
 			bot.aib_lowHpActiveLast = DotaTime()
@@ -570,8 +592,7 @@ local function AIB_SiegeIntent(dials, rules)
 	end
 	if bot.aib_siegeLast == nil or DotaTime() - bot.aib_siegeLast >= 1.0 then
 		bot.aib_siegeLast = DotaTime()
-		bot:Action_MoveToUnit(twr)
-		AIB_Diag("siege-step")
+		AIB_MoveToAttackEdge(twr, "siege-step")
 	else
 		Style.DiagRL(bot, "siege-hold", 5)
 	end
@@ -617,9 +638,7 @@ local function AIB_ContactHeroStep(rules)
 	if hp >= 0.45 and AIB_EnemyTowerDanger() == nil and not AIB_UphillMiss(enemy) then
 		bot.aib_contactHeroLast = now
 		Style.Intent(bot, "hero-contact", string.format("dist=%.0f hp=%.0f reason=close_enemy", dist, hp * 100))
-		bot:Action_MoveToUnit(enemy)
-		AIB_Diag("hero-contact-chase")
-		return true
+		return AIB_MoveToAttackEdge(enemy, "hero-contact-chase")
 	end
 
 	return false
@@ -934,8 +953,7 @@ local function ThinkLaningCore(dials, rules)
 			if not shouldRegen then
 				local chase = bot:GetNearbyHeroes(1500, true, BOT_MODE_NONE)
 				if chase and #chase > 0 and chase[1]:IsAlive() then
-					bot:Action_MoveToUnit(chase[1])
-					AIB_Diag("hero-prio-chase"); return
+					AIB_MoveToAttackEdge(chase[1], "hero-prio-chase"); return
 				end
 			end
 		end

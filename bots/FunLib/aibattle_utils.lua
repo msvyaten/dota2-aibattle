@@ -50,6 +50,25 @@ function M.ForwardSurvivingTowerLoc(bot)
 	return nil
 end
 
+function M.SafeRetreatTowerLoc(bot)
+	local ids = { TOWER_MID_1, TOWER_MID_2, TOWER_MID_3, TOWER_BASE_1, TOWER_BASE_2 }
+	for _, id in ipairs(ids) do
+		local t = GetTower(bot:GetTeam(), id)
+		if t ~= nil and t:IsAlive() then
+			local tl = t:GetLocation()
+			local fl = J.GetTeamFountain()
+			if fl ~= nil then
+				local d = math.sqrt((fl.x-tl.x)^2 + (fl.y-tl.y)^2)
+				if d > 1 then
+					return Vector(tl.x + (fl.x-tl.x)/d * 520, tl.y + (fl.y-tl.y)/d * 520, tl.z)
+				end
+			end
+			return t:GetLocation()
+		end
+	end
+	return J.GetTeamFountain()
+end
+
 -- Centroid of nearby enemy lane creeps. Returns Vector or nil.
 function M.EnemyCreepCentroid(enemyCreeps)
 	local cx, cy, n = 0, 0, 0

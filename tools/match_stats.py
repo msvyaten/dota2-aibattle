@@ -347,15 +347,21 @@ def alert_symptoms(diag, telemetry, intents, blocked, items):
                     break
 
         creep_dmg = side_count(diag, "creep-dmg", side)
-        creep_back = side_count(diag, "creep-aggro-back", side)
-        if creep_dmg > 0 and creep_back == 0:
+        creep_relief = sum(side_count(diag, k, side) for k in [
+            "creep-aggro-back", "creep-aggro-hit", "creep-aggro-kite",
+            "low-hp-creep",
+        ])
+        if creep_dmg > 0 and creep_relief == 0:
             alerts.append(f"{side}: creep-dmg-without-relief creep-dmg={creep_dmg}")
 
         enemy = "D" if side == "R" else "R"
         enemy_heals = sum(side_count(diag, k, enemy) for k in [
             "heal-item", "bottle-heal", "mana-clarity", "recovery-bottle",
         ])
-        interrupts = side_count(diag, "heal-interrupt-atk", side) + side_count(diag, "heal-interrupt-chase", side)
+        interrupts = sum(side_count(diag, k, side) for k in [
+            "heal-interrupt-atk", "heal-interrupt-chase",
+            "channel-interrupt-atk", "channel-interrupt-chase",
+        ])
         if enemy_heals > 0 and interrupts == 0:
             alerts.append(f"{side}: enemy-healed-without-interrupt enemy_heals={enemy_heals}")
 

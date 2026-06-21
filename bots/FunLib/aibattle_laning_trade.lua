@@ -36,6 +36,25 @@ local function isKillable(bot, enemy, dials)
 	return enemy:GetHealth() <= bot:GetAttackDamage() * 2.2
 end
 
+local function moveToAttackEdge(bot, target, range)
+	if target == nil then return end
+	range = range or bot:GetAttackRange()
+	if range <= 300 then
+		bot:Action_MoveToUnit(target)
+		return
+	end
+	local tl = target:GetLocation()
+	local bl = bot:GetLocation()
+	local dx, dy = bl.x - tl.x, bl.y - tl.y
+	local d = math.sqrt(dx*dx + dy*dy)
+	if d < 1 then
+		bot:Action_MoveToLocation(bl + RandomVector(160))
+		return
+	end
+	local safe = math.max(260, range - 80)
+	bot:Action_MoveToLocation(Vector(tl.x + (dx/d)*safe, tl.y + (dy/d)*safe, tl.z))
+end
+
 function M.KillLock(ctx)
 	local bot = ctx.bot
 	local dials = ctx.dials or {}
@@ -60,7 +79,7 @@ function M.KillLock(ctx)
 			if dist <= range + 520 and not towerThreat(ctx) and not AIBUtils.UphillMiss(bot, enemy) then
 				return Engine.Intent("kill-lock", 125, "killable_enemy", function()
 					if Style.AbilityExecute(bot, enemy) then return end
-					bot:Action_MoveToUnit(enemy)
+					moveToAttackEdge(bot, enemy, range)
 					Style.Diag(bot, "kill-lock-chase")
 				end, string.format("dist=%.0f ehp=%.0f hp=%.0f", dist, J.GetHP(enemy)*100, hp*100))
 			end
@@ -93,7 +112,7 @@ function M.HealInterrupt(ctx)
 				and not AIBUtils.UphillMiss(bot, enemy)
 				and (hp >= 0.45 or not bot:WasRecentlyDamagedByAnyHero(1.0)) then
 				return Engine.Intent("channel-interrupt", 118, "enemy_" .. channelKey, function()
-					bot:Action_MoveToUnit(enemy)
+					moveToAttackEdge(bot, enemy, range)
 					Style.Diag(bot, "channel-interrupt-chase")
 				end, string.format("dist=%.0f hp=%.0f kind=%s", dist, hp*100, channelKey))
 			end

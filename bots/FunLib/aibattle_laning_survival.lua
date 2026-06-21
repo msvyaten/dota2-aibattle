@@ -22,11 +22,30 @@ function M.CreepAggroRelief(ctx)
 	local rules = ctx.rules or {}
 	local enemyCreeps = ctx.enemyCreeps or {}
 	local hp = J.GetHP(bot)
-	local hpGate = rules.creep_aggro_relief_hp or 0.55
 	local range = ctx.attackRange or bot:GetAttackRange()
+	local now = DotaTime()
+	if bot.aib_creepDmgSeen == nil or now - bot.aib_creepDmgSeen > 3.0 then
+		bot.aib_creepDmgCount = 0
+	end
+	if bot.aib_creepDmgTick == nil or now - bot.aib_creepDmgTick >= 0.6 then
+		bot.aib_creepDmgTick = now
+		bot.aib_creepDmgSeen = now
+		bot.aib_creepDmgCount = (bot.aib_creepDmgCount or 0) + 1
+	end
+
+	local cen = AIBUtils.EnemyCreepCentroid(enemyCreeps)
+	if cen ~= nil and ((bot.aib_creepDmgCount or 0) >= 2 or hp < 0.90) then
+		local dest = moveAwayFrom(bot:GetLocation(), cen, 320)
+		return Engine.Intent("creep-aggro", 116, "creep_pressure", function()
+			bot:Action_MoveToLocation(dest)
+			Style.Diag(bot, "creep-aggro-kite")
+		end, string.format("hp=%.0f hits=%d", hp*100, bot.aib_creepDmgCount or 0))
+	end
+
 	for _, creep in pairs(enemyCreeps or {}) do
+		local dist = J.IsValid(creep) and GetUnitToUnitDistance(bot, creep) or math.huge
 		if J.IsValid(creep) and J.CanBeAttacked(creep)
-			and GetUnitToUnitDistance(bot, creep) <= range + 40 then
+			and (dist <= range - 60 or bot:GetAttackRange() <= 300) then
 			return Engine.Intent("creep-aggro", 112, "creep_hitting", function()
 				bot:Action_AttackUnit(creep, true)
 				Style.Diag(bot, "creep-aggro-hit")
@@ -37,7 +56,6 @@ function M.CreepAggroRelief(ctx)
 		return Engine.Blocked("creep-aggro", 75, "no_attackable_creep", string.format("hp=%.0f creeps=%d", hp*100, #enemyCreeps))
 	end
 
-	local now = DotaTime()
 	if bot.aib_creepReliefLast ~= nil and now - bot.aib_creepReliefLast < 1.2 then
 		if bot.aib_creepReliefDest ~= nil then
 			return Engine.Intent("creep-aggro", 70, "cooldown_hold", function()
@@ -48,7 +66,6 @@ function M.CreepAggroRelief(ctx)
 	end
 
 	local dest = AIBUtils.ForwardSurvivingTowerLoc(bot)
-	local cen = AIBUtils.EnemyCreepCentroid(enemyCreeps)
 	if dest == nil and cen ~= nil then
 		dest = moveAwayFrom(bot:GetLocation(), cen, 420)
 	end

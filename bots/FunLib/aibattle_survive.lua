@@ -18,7 +18,58 @@ local function getItem(bot, name)
 	return (it ~= nil and it:IsFullyCastable()) and it or nil
 end
 
-local function forwardTowerLoc(bot) return AIBUtils.ForwardSurvivingTowerLoc(bot) end
+local function forwardTowerLoc(bot) return AIBUtils.SafeRetreatTowerLoc(bot) end
+
+local function hasFountainAura(bot)
+	return bot:HasModifier("modifier_fountain_aura")
+		or bot:HasModifier("modifier_fountain_aura_buff")
+end
+
+local function bottleCharges(bot)
+	local bSlot = bot:FindItemSlot("item_bottle")
+	if bSlot < 0 then return nil end
+	local bottle = bot:GetItemInSlot(bSlot)
+	if bottle == nil then return nil end
+	return bottle:GetCurrentCharges()
+end
+
+local function fountainRecovery(bot)
+	if DotaTime() <= 0 then return false end
+	if bot.aib_fountainTping then
+		if bot:HasModifier("modifier_teleporting") then return true end
+		if DotaTime() - (bot.aib_fountainTpCast or 0) < 1.0 then return true end
+		bot.aib_fountainTping = false
+	end
+	local hp = J.GetHP(bot)
+	local maxMana = bot:GetMaxMana()
+	local mana = maxMana > 0 and (bot:GetMana() / maxMana) or 1.0
+	local charges = bottleCharges(bot)
+	local bottleNotFull = charges ~= nil and charges < 3
+	local nearBase = bot:DistanceFromFountain() < 2600
+	local inFountain = hasFountainAura(bot)
+	if not inFountain and not nearBase and not bot.aib_fountainTrip then return false end
+	if hp < 0.98 or mana < 0.90 or bottleNotFull then
+		if bot.aib_fountainWaitLast == nil or DotaTime() - bot.aib_fountainWaitLast >= 1.0 then
+			bot.aib_fountainWaitLast = DotaTime()
+			bot.aib_fountainTrip = true
+			Style.DiagRL(bot, "fountain-wait", 3)
+			bot:Action_MoveToLocation(J.GetTeamFountain())
+		end
+		return true
+	end
+	bot.aib_fountainTrip = false
+
+	local tp = getItem(bot, "item_tpscroll")
+	local t1 = GetTower(bot:GetTeam(), TOWER_MID_1)
+	if tp ~= nil and t1 ~= nil and t1:IsAlive() and nearBase then
+		Style.Diag(bot, "fountain-tp-lane")
+		bot:Action_UseAbilityOnLocation(tp, t1:GetLocation())
+		bot.aib_fountainTping = true
+		bot.aib_fountainTpCast = DotaTime()
+		return true
+	end
+	return false
+end
 
 local function hasLastHitWindow(bot)
 	local creeps = bot:GetNearbyLaneCreeps(bot:GetAttackRange() + 180, true)
@@ -56,7 +107,7 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 	local now = DotaTime()
 	if bot.aib_bottleRuneTarget ~= nil
 		and bot.aib_bottleRuneStarted ~= nil
-		and now - bot.aib_bottleRuneStarted < 8.0 then
+		and now - bot.aib_bottleRuneStarted < 14.0 then
 		local targetDist = GetUnitToLocationDistance(bot, bot.aib_bottleRuneTarget)
 		if targetDist > 180 then
 			bot:Action_MoveToLocation(bot.aib_bottleRuneTarget)
@@ -64,24 +115,6 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 		end
 		bot.aib_bottleRuneTarget = nil
 		bot.aib_bottleRuneStarted = nil
-	end
-
-	local near = bot:GetNearbyHeroes(650, true, BOT_MODE_NONE)
-	local enemyTooClose = near and #near > 0 and near[1]:IsAlive()
-		and GetUnitToUnitDistance(bot, near[1]) <= bot:GetAttackRange() + 120
-	if enemyTooClose and (hp < 0.55 or bot:WasRecentlyDamagedByAnyHero(1.0)) then
-		Style.Blocked(bot, diagKey, "enemy_near", string.format("dist=%.0f", GetUnitToUnitDistance(bot, near[1])), 6.0)
-		return false
-	end
-
-	if bot:WasRecentlyDamagedByAnyHero(1.0) and hp < 0.45 then
-		Style.Blocked(bot, diagKey, "hero_damage", string.format("hp=%.0f", hp*100), 6.0)
-		return false
-	end
-
-	if laneAware and hp > 0.62 and hasLastHitWindow(bot) then
-		Style.Blocked(bot, diagKey, "last_hit_window", "", 6.0)
-		return false
 	end
 
 	local bestLoc, bestDist, bestScore = nil, math.huge, math.huge
@@ -103,10 +136,28 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 		return false
 	end
 
+	local near = bot:GetNearbyHeroes(650, true, BOT_MODE_NONE)
+	local enemyTooClose = near and #near > 0 and near[1]:IsAlive()
+		and GetUnitToUnitDistance(bot, near[1]) <= bot:GetAttackRange() + 120
+	if bestDist > 700 and enemyTooClose and (hp < 0.55 or bot:WasRecentlyDamagedByAnyHero(1.0)) then
+		Style.Blocked(bot, diagKey, "enemy_near", string.format("dist=%.0f", GetUnitToUnitDistance(bot, near[1])), 6.0)
+		return false
+	end
+
+	if bestDist > 700 and bot:WasRecentlyDamagedByAnyHero(1.0) and hp < 0.45 then
+		Style.Blocked(bot, diagKey, "hero_damage", string.format("hp=%.0f", hp*100), 6.0)
+		return false
+	end
+
+	if laneAware and bestDist > 700 and hp > 0.62 and hasLastHitWindow(bot) then
+		Style.Blocked(bot, diagKey, "last_hit_window", "", 6.0)
+		return false
+	end
+
 	if laneAware then
 		local laneDist = laneFrontDistance(bot)
 		local laneBudget = rules.bottle_rune_lane_budget or 1500
-		if laneDist > laneBudget and bestDist > 450 then
+		if laneDist > laneBudget and bestDist > 700 then
 			Style.Blocked(bot, diagKey, "lane_budget", string.format("lane=%.0f max=%.0f rune=%.0f", laneDist, laneBudget, bestDist), 6.0)
 			return false
 		end
@@ -198,7 +249,9 @@ local function defensiveHeal(bot, dials)
 	end
 
 	-- 2. Bottle: channel-safe; hero damage cancels it
-	if (hp < 0.70 or mana < 0.40) and healReady and not bot:WasRecentlyDamagedByAnyHero(1.5) then
+	if (hp < 0.70 or mana < 0.40) and healReady
+		and not bot:HasModifier("modifier_bottle_regeneration")
+		and not bot:WasRecentlyDamagedByAnyHero(1.5) then
 		local bottle = getItem(bot, "item_bottle")
 		if bottle and bottle:GetCurrentCharges() > 0 then
 			bot.aib_healLast = DotaTime(); Style.Diag(bot, "bottle-heal")
@@ -331,7 +384,11 @@ local function recovery(bot, dials)
 		if bSlot >= 0 then
 			local bItem = bot:GetItemInSlot(bSlot)
 			if bItem ~= nil then
-				if bItem:GetCurrentCharges() > 0 and bItem:IsFullyCastable() then
+				if bot:HasModifier("modifier_bottle_regeneration") then
+					return true
+				elseif bItem:GetCurrentCharges() > 0 and bItem:IsFullyCastable()
+					and (bot.aib_recBottleLast == nil or DotaTime() - bot.aib_recBottleLast >= 3.0) then
+					bot.aib_recBottleLast = DotaTime()
 					Style.Diag(bot, "recovery-bottle"); bot:Action_UseAbility(bItem); return true
 				elseif bItem:GetCurrentCharges() == 0 then
 					if seekBottleRune(bot, hp, mana, "recovery-rune-bottle", 2600, { lane_aware = false }) then return true end
@@ -398,12 +455,14 @@ local function recovery(bot, dials)
 	-- b. TP to fountain
 	local tp = getItem(bot, "item_tpscroll")
 	if tp and (behavior == "tp_fountain" or behavior == "walk_fountain") then
+		bot.aib_fountainTrip = true
 		Style.Diag(bot, "recovery-tp"); bot:Action_UseAbility(tp); return true
 	end
 
 	-- c. Walk to fountain (walk_fountain, or tp_fountain with no scroll)
 	if behavior == "walk_fountain" or (behavior == "tp_fountain" and not tp) then
 		if bot.aib_recMoveLast == nil or DotaTime() - bot.aib_recMoveLast >= 5.0 then
+			bot.aib_fountainTrip = true
 			bot.aib_recMoveLast = DotaTime(); Style.Diag(bot, "recovery-walk")
 			bot:Action_MoveToLocation(J.GetTeamFountain())
 		end
@@ -445,6 +504,7 @@ end
 --
 
 function M.Think(bot, dials, nEnemyCreeps)
+	if fountainRecovery(bot)              then return true end
 	if defensiveHeal(bot, dials)           then return true end
 	if regenLane(bot, dials, nEnemyCreeps) then return true end
 	if recovery(bot, dials)                then return true end
