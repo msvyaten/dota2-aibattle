@@ -500,6 +500,84 @@ local function AIB_HasAttackableEnemyCreep(range)
 	return false
 end
 
+local function AIB_ActiveLowHpStep()
+	local hp = J.GetHP(bot)
+	if hp >= (GetRules().low_hp_hold or 0.45) then return false end
+	local range = botAttackRange or bot:GetAttackRange()
+	local enemies = bot:GetNearbyHeroes(range + 60, true, BOT_MODE_NONE)
+	if hp >= 0.32 and enemies and #enemies > 0 and enemies[1]:IsAlive()
+		and not AIB_TowerActuallyThreatening(AIB_EnemyTowerDanger()) then
+		bot:Action_AttackUnit(enemies[1], false)
+		AIB_Diag("low-hp-fight")
+		return true
+	end
+	for _, creep in pairs(nEnemyCreeps or {}) do
+		if J.IsValid(creep) and J.CanBeAttacked(creep)
+			and GetUnitToUnitDistance(bot, creep) <= range + 40 then
+			if hp >= 0.25 then
+				bot:Action_AttackUnit(creep, true)
+				AIB_Diag("low-hp-creep")
+				return true
+			end
+			break
+		end
+	end
+	local back = AIB_ForwardSurvivingTowerLoc()
+	if back ~= nil and GetUnitToLocationDistance(bot, back) > 140 then
+		if bot.aib_lowHpActiveLast == nil or DotaTime() - bot.aib_lowHpActiveLast >= 1.2 then
+			bot.aib_lowHpActiveLast = DotaTime()
+			bot:Action_MoveToLocation(back)
+			AIB_Diag("low-hp-back")
+		else
+			Style.DiagRL(bot, "low-hp-active-hold", 5)
+		end
+		return true
+	end
+	return false
+end
+
+local function AIB_SiegeIntent(dials, rules)
+	local twr = AIB_EnemyTowerDanger()
+	if twr == nil or AIB_TowerActuallyThreatening(twr) then return false end
+	local cwp = rules.creep_wave_priority or "last_hit_only"
+	local wantsSiege = cwp == "push" or (dials.push_desire or 0.5) >= 0.65
+	if not wantsSiege or J.GetHP(bot) < 0.35 then return false end
+
+	local alliedTank = false
+	local target = twr:GetAttackTarget()
+	if target ~= nil and target:GetTeam() == GetTeam() then alliedTank = true end
+	if not alliedTank then
+		for _, creep in pairs(nAllyCreeps or {}) do
+			if J.IsValid(creep) and GetUnitToUnitDistance(creep, twr) <= twr:GetAttackRange() + 120 then
+				alliedTank = true; break
+			end
+		end
+	end
+	if not alliedTank then return false end
+
+	for _, creep in pairs(nEnemyCreeps or {}) do
+		if J.IsValid(creep) and J.CanBeAttacked(creep)
+			and GetUnitToUnitDistance(bot, creep) <= (botAttackRange or bot:GetAttackRange()) + 40 then
+			bot:Action_AttackUnit(creep, true)
+			AIB_Diag("siege-creep")
+			return true
+		end
+	end
+	if GetUnitToUnitDistance(bot, twr) <= (botAttackRange or bot:GetAttackRange()) + 60 then
+		bot:Action_AttackUnit(twr, true)
+		AIB_Diag("siege-tower")
+		return true
+	end
+	if bot.aib_siegeLast == nil or DotaTime() - bot.aib_siegeLast >= 1.0 then
+		bot.aib_siegeLast = DotaTime()
+		bot:Action_MoveToUnit(twr)
+		AIB_Diag("siege-step")
+	else
+		Style.DiagRL(bot, "siege-hold", 5)
+	end
+	return true
+end
+
 local function AIB_ContactHeroStep(rules)
 	rules = rules or {}
 	if (rules.hero_priority or "default") == "never" then return false end
@@ -686,8 +764,6 @@ local function ThinkLaningCore(dials, rules)
 	elseif debugNoForward then
 		Style.DiagRL(bot, "dbg-no-fwd", 10)
 	end
-	if J.GetHP(bot) < 0.55 and AIBSurvive.Think(bot, dials, nEnemyCreeps) then return end
-	if AIB_ContactHeroStep(rules) then return end
 	local intentCtx = {
 		bot = bot,
 		dials = dials,
@@ -696,7 +772,18 @@ local function ThinkLaningCore(dials, rules)
 		assignedLane = botAssignedLane,
 		attackRange = botAttackRange,
 	}
+	local urgentIntents = {}
+	local urgentKill = AIBLaneTrade.KillLock(intentCtx)
+	if urgentKill ~= nil then urgentIntents[#urgentIntents + 1] = urgentKill end
+	local urgentInterrupt = AIBLaneTrade.HealInterrupt(intentCtx)
+	if urgentInterrupt ~= nil then urgentIntents[#urgentIntents + 1] = urgentInterrupt end
+	if AIBEngine.Resolve(urgentIntents, intentCtx) then return end
+
+	if J.GetHP(bot) < 0.55 and AIBSurvive.Think(bot, dials, nEnemyCreeps) then return end
+	if AIB_ContactHeroStep(rules) then return end
 	local intents = {}
+	local killIntent = AIBLaneTrade.KillLock(intentCtx)
+	if killIntent ~= nil then intents[#intents + 1] = killIntent end
 	local creepIntent = AIBLaneSurvival.CreepAggroRelief(intentCtx)
 	if creepIntent ~= nil then intents[#intents + 1] = creepIntent end
 	local healInterruptIntent = AIBLaneTrade.HealInterrupt(intentCtx)
@@ -783,6 +870,7 @@ local function ThinkLaningCore(dials, rules)
 			end
 		end
 	end
+	if aib_lowHpHold and AIB_ActiveLowHpStep() then return end
 
 	-- Uphill repositioning: fires BEFORE harass; no trading from low ground.
 	-- Target = own T1 location (guaranteed high ground). 350u-ahead offset overshoots the ramp.
@@ -898,6 +986,7 @@ local function ThinkLaningCore(dials, rules)
 			end
 		end
 	end
+	if AIB_SiegeIntent(dials, rules) then return end
 
 	-- deny_policy: never = skip; always = wider window (HP<60%); default = kill-guarantee only.
 	local denyPol = rules.deny_policy or "default"

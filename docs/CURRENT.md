@@ -1,6 +1,6 @@
 # AIBattle Current State
 
-Last updated by Codex after match `8861167287`.
+Last updated by Codex after match `8861167287` plus urgent laning fixes.
 
 ## Goal
 
@@ -14,17 +14,20 @@ Make the 1v1 mid bot watchable and debuggable:
 The active laning loop is intentionally small:
 
 1. Respawn / pregame / tower-dive guards.
-2. Low-HP survival if health is dangerous.
-3. `hero-contact`: point-blank enemy hero response before visual-AFK and normal intents.
-4. Intent arbitration:
+2. Urgent intent arbitration before survival:
+   - `kill-lock`
+   - `channel-interrupt`
+3. Low-HP survival if health is dangerous.
+4. `hero-contact`: point-blank enemy hero response before visual-AFK and normal intents.
+5. Normal intent arbitration:
    - `creep-aggro`
-   - `heal-interrupt`
+   - `channel-interrupt`
    - `hero-pass`
-5. Last-hit, survival, emergency retreat, kill-priority, harass, CS-walk, push/deny.
-6. Ability execute/harass.
-7. Final positioning via one forwardness action: `fwd-position`, rate-limited by `fwd-hold`.
-8. Visual-AFK watchdog only after normal combat/creep/positioning had a chance to act.
-9. Last-resort `AntiIdleGlobal`.
+6. Last-hit, survival, emergency retreat, kill-priority, harass, CS-walk, push/deny/siege.
+7. Ability execute/harass.
+8. Final positioning via one forwardness action: `fwd-position`, rate-limited by `fwd-hold`.
+9. Visual-AFK watchdog only after normal combat/creep/positioning had a chance to act.
+10. Last-resort `AntiIdleGlobal`.
 
 ## Removed From Active Laning
 
@@ -47,8 +50,10 @@ Combat / hero:
 - `hero-contact-kite`
 - `hero-pass-atk`
 - `hero-pass-chase`
-- `heal-interrupt-atk`
-- `heal-interrupt-chase`
+- `kill-lock-atk`
+- `kill-lock-chase`
+- `channel-interrupt-atk`
+- `channel-interrupt-chase`
 - `harass-atk`
 - `kill-priority`
 
@@ -60,6 +65,9 @@ Creeps / lane:
 - `creep-aggro-hit`
 - `creep-aggro-back`
 - `cw-push`
+- `siege-creep`
+- `siege-tower`
+- `siege-step`
 
 Positioning:
 - `fwd-position`
@@ -68,6 +76,9 @@ Positioning:
 - `fwd-suppressed-creep`
 - `fwd-suppressed-lowhp`
 - `fwd-suppressed-tower`
+- `low-hp-fight`
+- `low-hp-creep`
+- `low-hp-back`
 
 Last resort:
 - `pre-aig`

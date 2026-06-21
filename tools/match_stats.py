@@ -210,7 +210,7 @@ def classify_event(body):
     pairs = re.findall(r"([\w-]+)=(\d+)", body)
     interesting = []
     for key, val in pairs:
-        if key.startswith(("fwd", "anti-afk", "anti-idle", "hero", "creep", "cs-", "low-hp")):
+        if key.startswith(("fwd", "anti-afk", "anti-idle", "hero", "creep", "cs-", "low-hp", "kill", "channel", "siege")):
             interesting.append(f"{key}={val}")
     if interesting:
         return ",".join(interesting[:4])
