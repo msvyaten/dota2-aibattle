@@ -516,3 +516,21 @@ return {
 Правило на будущее:
 - Новая логика, которая выбирает действие текущего тика, должна возвращать intent через `AIBEngine.Intent(...)` или `AIBEngine.Blocked(...)`.
 - Низкоуровневую механику держать в модуле своей области (`laning_trade`, `laning_survival`, `survive`, `utils`), а не расширять `mode_laning_generic.lua`.
+
+### Regression audit: 8860283516
+
+Матч шёл на `build=4a1377d`, то есть без lane-aware bottle rune фикса `9a81295`.
+
+Что подтвердилось:
+- Визуальная тупость была реальной: `alert ignored-nearby-hero`, `stationary-while-damaged`.
+- `creep-aggro` был слишком сильным: мог уводить бота даже на высоком HP (`79-98%`) только из-за факта recent creep damage.
+- Самый неприятный баг: `creep-aggro cooldown_hold` возвращал handled intent с пустым action, то есть тик считался обработанным, но бот ничего не делал.
+- `hero-pass` проигрывал `creep-aggro` по priority, поэтому герои могли проходить рядом без атаки.
+- Low HP survival мог не получить тик, потому что early intents стояли до `AIBSurvive.Think`.
+
+Фиксы после аудита:
+- `creep-aggro` теперь не срабатывает выше `creep_aggro_relief_hp`, даже если рядом много крипов.
+- `creep-aggro cooldown_hold` больше не пустой no-op: либо продолжает движение к последней safe-точке, либо yield.
+- `hero-pass` и `heal-interrupt` подняты по priority выше обычного creep-aggro.
+- При HP `<55%` early `AIBSurvive.Think` вызывается до visual-afk / trade / creep intents.
+- `match_stats.py` больше не считает `build=...` обычным diag.

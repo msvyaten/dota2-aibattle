@@ -23,14 +23,18 @@ function M.CreepAggroRelief(ctx)
 	local enemyCreeps = ctx.enemyCreeps or {}
 	local hp = J.GetHP(bot)
 	local hpGate = rules.creep_aggro_relief_hp or 0.68
-	if hp >= hpGate and #enemyCreeps < 3 then
+	if hp >= hpGate then
 		return Engine.Blocked("creep-aggro", 90, "hp_ok", string.format("hp=%.0f creeps=%d", hp*100, #enemyCreeps))
 	end
 
 	local now = DotaTime()
 	if bot.aib_creepReliefLast ~= nil and now - bot.aib_creepReliefLast < 1.2 then
-		return Engine.Intent("creep-aggro", 95, "cooldown_hold", function() end,
-			string.format("hp=%.0f", hp*100))
+		if bot.aib_creepReliefDest ~= nil then
+			return Engine.Intent("creep-aggro", 70, "cooldown_hold", function()
+				bot:Action_MoveToLocation(bot.aib_creepReliefDest)
+			end, string.format("hp=%.0f", hp*100))
+		end
+		return nil
 	end
 
 	local dest = AIBUtils.ForwardSurvivingTowerLoc(bot)
@@ -47,6 +51,7 @@ function M.CreepAggroRelief(ctx)
 
 	return Engine.Intent("creep-aggro", 95, "recent_creep_damage", function()
 		bot.aib_creepReliefLast = DotaTime()
+		bot.aib_creepReliefDest = dest
 		bot:Action_MoveToLocation(dest)
 		Style.Diag(bot, "creep-aggro-back")
 	end, string.format("hp=%.0f dest=%.0f,%.0f", hp*100, dest.x, dest.y))

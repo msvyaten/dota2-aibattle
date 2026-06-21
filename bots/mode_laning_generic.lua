@@ -591,6 +591,7 @@ local function ThinkLaningCore(dials, rules)
 	elseif debugNoForward then
 		Style.DiagRL(bot, "dbg-no-fwd", 10)
 	end
+	if J.GetHP(bot) < 0.55 and AIBSurvive.Think(bot, dials, nEnemyCreeps) then return end
 	if AIB_VisualAFKStep(rules) then return end
 	local intentCtx = {
 		bot = bot,
