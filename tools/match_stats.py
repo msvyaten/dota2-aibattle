@@ -128,8 +128,9 @@ def extract_telemetry(text):
     telemetry = {"R": [], "D": []}
     pat = (r"AIB\[([RD])\]\s+t=([\d.]+)s\s+hp=([\d.]+)%\s+gold=(\d+)\s+"
            r"loc=([-\d.]+),([-\d.]+)(?:\s+enemy-dist=([\d.]+))?"
-           r"(?:\s+lh=(-?\d+))?(?:\s+dn=(-?\d+))?(?:\s+dg=([+-]?\d+))?(?:\s+dlh=([+-]?\d+))?")
-    for side, t, hp, gold, x, y, enemy_dist, lh, dn, dg, dlh in re.findall(pat, text):
+           r"(?:\s+lh=(-?\d+))?(?:\s+dn=(-?\d+))?(?:\s+dg=([+-]?\d+))?(?:\s+dlh=([+-]?\d+))?"
+           r"(?:\s+bottle=(-?\d+))?")
+    for side, t, hp, gold, x, y, enemy_dist, lh, dn, dg, dlh, bottle in re.findall(pat, text):
         telemetry[side].append({
             "t": float(t),
             "hp": float(hp),
@@ -140,10 +141,23 @@ def extract_telemetry(text):
             "dn": int(dn) if dn else None,
             "dg": int(dg) if dg else None,
             "dlh": int(dlh) if dlh else None,
+            "bottle": int(bottle) if bottle != "" else None,
         })
     for samples in telemetry.values():
         samples.sort(key=lambda p: p["t"])
     return telemetry
+
+def bottle_summary(samples):
+    """Sustain visibility: how much of the game the bot sat on an empty bottle.
+
+    Only present in logs from builds that emit bottle= telemetry; returns None otherwise.
+    """
+    vals = [s["bottle"] for s in samples if s.get("bottle") is not None and s["bottle"] >= 0]
+    if not vals:
+        return None
+    empty = sum(1 for v in vals if v == 0)
+    return f"empty {empty}/{len(vals)} samples ({100 * empty / len(vals):.0f}%)"
+
 
 def extract_deaths(telemetry):
     """Death timestamps per side from hp->0 transitions (AIB telemetry, ~5s resolution)."""
@@ -620,6 +634,10 @@ def main():
             ft = farm_trace(telemetry.get(side, []))
             if ft:
                 print(f"  farmtrace[{side}]: {ft}")
+        for side in ["R", "D"]:
+            bs = bottle_summary(telemetry.get(side, []))
+            if bs:
+                print(f"  bottle[{side}]: {bs}")
         for side in ["R", "D"]:
             spans = stationary_spans(telemetry.get(side, []))
             if spans:

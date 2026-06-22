@@ -387,7 +387,14 @@ local function ThinkLocationReport()
 	local dlh = (lh ~= nil and bot.aib_lastReportLH ~= nil) and (lh - bot.aib_lastReportLH) or 0
 	bot.aib_lastReportGold = gold
 	if lh ~= nil then bot.aib_lastReportLH = lh end
-	local statSuffix = string.format(" lh=%d dn=%d dg=%+d dlh=%+d", lh or -1, dn or -1, dg, dlh)
+	-- Bottle charges: the one sustain signal we couldn't see before. -1 = no bottle owned.
+	local bottleCharges = -1
+	local bSlot = bot:FindItemSlot("item_bottle")
+	if bSlot ~= nil and bSlot >= 0 then
+		local bottle = bot:GetItemInSlot(bSlot)
+		if bottle ~= nil then bottleCharges = bottle:GetCurrentCharges() end
+	end
+	local statSuffix = string.format(" lh=%d dn=%d dg=%+d dlh=%+d bottle=%d", lh or -1, dn or -1, dg, dlh, bottleCharges)
 	if nearby and #nearby > 0 and nearby[1]:IsAlive() then
 		bot:ActionImmediate_Chat(string.format(
 			"AIB[%s] t=%.0fs hp=%.0f%% gold=%d loc=%.0f,%.0f enemy-dist=%.0f%s",
