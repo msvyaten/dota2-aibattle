@@ -788,7 +788,7 @@ end
 
 local function AIB_PreCreepStandoffStep()
 	local now = DotaTime()
-	if now < 0 or now > 25 then return false end
+	if now < 0 or now > 45 then return false end
 	if (nEnemyCreeps and #nEnemyCreeps > 0) or (nAllyCreeps and #nAllyCreeps > 0) then return false end
 
 	local range = botAttackRange or bot:GetAttackRange()
@@ -805,18 +805,21 @@ local function AIB_PreCreepStandoffStep()
 		local a, b = ownT1:GetLocation(), enmT1:GetLocation()
 		local totalDist = math.sqrt((b.x-a.x)^2 + (b.y-a.y)^2)
 		if totalDist > 1 then
-			local anchor = Vector(a.x + (b.x-a.x)/totalDist * 900, a.y + (b.y-a.y)/totalDist * 900, a.z)
-			if GetUnitToLocationDistance(bot, anchor) > 220 then
-				if bot.aib_preCreepMoveLast == nil or now - bot.aib_preCreepMoveLast >= 2.5 then
-					bot.aib_preCreepMoveLast = now
-					bot:Action_MoveToLocation(anchor)
-					AIB_Diag("precreep-anchor")
-				else
-					Style.DiagRL(bot, "precreep-hold", 5)
+			local dirX, dirY = (b.x-a.x)/totalDist, (b.y-a.y)/totalDist
+			local anchorDist = math.min(totalDist * 0.46, totalDist - range - 250)
+			local anchor = Vector(a.x + dirX * anchorDist, a.y + dirY * anchorDist, a.z)
+			local anchorGap = GetUnitToLocationDistance(bot, anchor)
+			if anchorGap <= 160 then
+				local farEnemy = AIB_NearestEnemyHero(1200)
+				if farEnemy ~= nil and not AIB_UphillMiss(farEnemy) then
+					AIB_MoveToAttackEdgeOf(farEnemy, "precreep-edge", 0)
+					return true
 				end
-			else
 				Style.DiagRL(bot, "precreep-hold", 5)
+				return false
 			end
+			bot:Action_MoveToLocation(anchor)
+			AIB_Diag("precreep-anchor")
 			return true
 		end
 	end
@@ -993,7 +996,7 @@ local function ThinkLaningCore(dials, rules)
 	if passingHeroIntent ~= nil then intents[#intents + 1] = passingHeroIntent end
 	if AIBEngine.Resolve(intents, intentCtx) then return end
 
-	local hitCreep = (GetBestLastHitCreep(nEnemyCreeps))
+	local hitCreep, csSoon = GetBestLastHitCreep(nEnemyCreeps)
 
 	-- Last-hit / harass interleave: secure an IN-RANGE last-hit before heal check.
 	-- attack is instant and safe even at low HP; heal can fire next tick if still needed.
@@ -1002,10 +1005,11 @@ local function ThinkLaningCore(dials, rules)
 	local csLaneCheck = J.GetPosition(bot) <= 2 or not J.IsThereNonSelfCoreNearby(700)
 	-- freeze: never use the push block, but still last-hit (wave stays frozen without proactive attacks)
 	local csAllowed = J.IsValid(hitCreep) and csLaneCheck
-	local needMove = csAllowed and (GetUnitToUnitDistance(bot, hitCreep) > botAttackRange)
+	local csDistNow = csAllowed and GetUnitToUnitDistance(bot, hitCreep) or nil
+	local needMove = csAllowed and (csDistNow > botAttackRange or csSoon == true)
 
 	-- 1) grab a securable last-hit that's already in range
-	if csAllowed and not needMove then
+	if csAllowed and not needMove and csSoon ~= true then
 		bot:SetTarget(hitCreep)
 		bot:Action_AttackUnit(hitCreep, true)
 		AIB_Diag("cs-inrange")
@@ -1146,8 +1150,12 @@ local function ThinkLaningCore(dials, rules)
 	-- Melee heroes: walk directly (Action_MoveToUnit), engine handles range.
 	-- Cap: don't chase killable creep beyond 1.5x attack range so positioning can still recover.
 	-- when bot is returning from death and a pushed creep wave sits just out of range.
-	local csDist = csAllowed and needMove and GetUnitToUnitDistance(bot, hitCreep)
+	local csDist = csAllowed and needMove and (csDistNow or GetUnitToUnitDistance(bot, hitCreep))
 	if csAllowed and needMove and csDist <= botAttackRange * 1.5 then
+		if csSoon == true and csDist <= botAttackRange - 35 then
+			Style.DiagRL(bot, "cs-wait", 2)
+			return
+		end
 		AIB_Diag("cs-walk")
 		AIB_MoveToAttackEdgeOf(hitCreep, nil, 20)
 		return

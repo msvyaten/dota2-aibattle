@@ -109,7 +109,7 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 		and bot.aib_bottleRuneStarted ~= nil
 		and now - bot.aib_bottleRuneStarted < 14.0 then
 		local targetDist = GetUnitToLocationDistance(bot, bot.aib_bottleRuneTarget)
-		if targetDist > 180 then
+		if targetDist > 55 then
 			Style.Intent(bot, diagKey, string.format("dist=%.0f age=%.0f reason=commit", targetDist, now - bot.aib_bottleRuneStarted), 2.0)
 			bot:Action_MoveToLocation(bot.aib_bottleRuneTarget)
 			return true
@@ -167,7 +167,11 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 
 	if bot.aib_bottleRuneLast ~= nil and now - bot.aib_bottleRuneLast < 3.0 then
 		Style.Intent(bot, diagKey, string.format("dist=%.0f reason=cooldown_hold", bestDist), 2.0)
-		return bestDist > 180
+		if bestDist > 55 then
+			bot:Action_MoveToLocation(bestLoc)
+			return true
+		end
+		return false
 	end
 
 	bot.aib_bottleRuneLast = now
