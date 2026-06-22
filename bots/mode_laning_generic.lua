@@ -755,21 +755,37 @@ local function AIB_ActiveLowHpStep()
 		return true
 	end
 	if back ~= nil and GetUnitToLocationDistance(bot, back) > 140 then
-		if bot.aib_lowHpActiveLast == nil or DotaTime() - bot.aib_lowHpActiveLast >= 1.2 then
+		if bot.aib_lowHpActiveLast == nil or DotaTime() - bot.aib_lowHpActiveLast >= 0.8 then
 			bot.aib_lowHpActiveLast = DotaTime()
 			bot:Action_MoveToLocation(back)
 			AIB_Diag("low-hp-back")
 		else
-			Style.DiagRL(bot, "low-hp-active-hold", 5)
+			local nudge = AIB_TowardFountainFrom(bot:GetLocation(), 220)
+			if nudge ~= nil then
+				bot:Action_MoveToLocation(nudge)
+				AIB_Diag("low-hp-nudge")
+			end
 		end
 		return true
 	end
-	if back ~= nil and bot.aib_lowHpActiveLast ~= nil
-		and DotaTime() - bot.aib_lowHpActiveLast >= 2.5 then
-		bot.aib_lowHpActiveLast = DotaTime()
-		bot:Action_MoveToLocation((AIB_TowardFountainFrom(bot:GetLocation(), 260) or back) + RandomVector(35))
-		AIB_Diag("low-hp-watch-step")
-		return true
+	if back ~= nil then
+		local dangerNear = false
+		local nearHeroes = bot:GetNearbyHeroes(900, true, BOT_MODE_NONE)
+		if nearHeroes and #nearHeroes > 0 and nearHeroes[1]:IsAlive() then dangerNear = true end
+		if not dangerNear then
+			for _, creep in pairs(nEnemyCreeps or {}) do
+				if J.IsValid(creep) and GetUnitToUnitDistance(bot, creep) <= range + 180 then
+					dangerNear = true; break
+				end
+			end
+		end
+		if dangerNear
+			and (bot.aib_lowHpActiveLast == nil or DotaTime() - bot.aib_lowHpActiveLast >= 1.2) then
+			bot.aib_lowHpActiveLast = DotaTime()
+			bot:Action_MoveToLocation((AIB_TowardFountainFrom(bot:GetLocation(), 300) or back) + RandomVector(35))
+			AIB_Diag("low-hp-watch-step")
+			return true
+		end
 	end
 	return false
 end

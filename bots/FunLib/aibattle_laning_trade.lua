@@ -91,27 +91,29 @@ end
 
 function M.HealInterrupt(ctx)
 	local bot = ctx.bot
-	local enemies = bot:GetNearbyHeroes(900, true, BOT_MODE_NONE)
+	local range = ctx.attackRange or bot:GetAttackRange()
+	local enemies = bot:GetNearbyHeroes(math.max(1100, range + 520), true, BOT_MODE_NONE)
 	if not (enemies and #enemies > 0) then return nil end
 	local hp = J.GetHP(bot)
 	for _, enemy in ipairs(enemies) do
-		if enemy:IsAlive() and (hasCancelableHealModifier(enemy) or isChanneling(enemy)) then
-			local channelKey = enemy:HasModifier("modifier_teleporting") and "tp" or "channel"
-			if hp < 0.25 and not isKillable(bot, enemy, ctx.dials or {}) then
+		local isHeal = enemy:IsAlive() and hasCancelableHealModifier(enemy)
+		if enemy:IsAlive() and (isHeal or isChanneling(enemy)) then
+			local channelKey = isHeal and "heal" or (enemy:HasModifier("modifier_teleporting") and "tp" or "channel")
+			local dist = GetUnitToUnitDistance(bot, enemy)
+			if hp < 0.18 and dist > range + 80 and not isKillable(bot, enemy, ctx.dials or {}) then
 				return Engine.Blocked("channel-interrupt", 85, "low_hp", string.format("hp=%.0f kind=%s", hp*100, channelKey))
 			end
-			local dist = GetUnitToUnitDistance(bot, enemy)
-			local range = ctx.attackRange or bot:GetAttackRange()
-			if dist <= range + 70 and not towerThreat(ctx) then
-				return Engine.Intent("channel-interrupt", 132, "enemy_" .. channelKey, function()
+			if dist <= range + 120 and not towerThreat(ctx) then
+				return Engine.Intent("channel-interrupt", isHeal and 142 or 132, "enemy_" .. channelKey, function()
 					bot:Action_AttackUnit(enemy, true)
 					Style.Diag(bot, "channel-interrupt-atk")
 				end, string.format("dist=%.0f hp=%.0f kind=%s", dist, hp*100, channelKey))
 			end
-			if dist <= math.max(700, range + 260)
+			if dist <= math.max(900, range + (isHeal and 520 or 300))
 				and not AIBUtils.UphillMiss(bot, enemy)
-				and (hp >= 0.45 or not bot:WasRecentlyDamagedByAnyHero(1.0)) then
-				return Engine.Intent("channel-interrupt", 118, "enemy_" .. channelKey, function()
+				and (hp >= (isHeal and 0.30 or 0.45) or not bot:WasRecentlyDamagedByAnyHero(1.0))
+				and not towerThreat(ctx) then
+				return Engine.Intent("channel-interrupt", isHeal and 128 or 118, "enemy_" .. channelKey, function()
 					moveToAttackEdge(bot, enemy, range)
 					Style.Diag(bot, "channel-interrupt-chase")
 				end, string.format("dist=%.0f hp=%.0f kind=%s", dist, hp*100, channelKey))
