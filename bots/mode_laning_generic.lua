@@ -900,7 +900,15 @@ end
 local function AIB_PreCreepStandoffStep()
 	local now = DotaTime()
 	if now < 0 or now > 45 then return false end
-	if (nEnemyCreeps and #nEnemyCreeps > 0) or (nAllyCreeps and #nAllyCreeps > 0) then return false end
+	local function hasNearbyLaneCreep(list)
+		for _, creep in pairs(list or {}) do
+			if J.IsValid(creep) and GetUnitToUnitDistance(bot, creep) <= 900 then
+				return true
+			end
+		end
+		return false
+	end
+	if hasNearbyLaneCreep(nEnemyCreeps) or hasNearbyLaneCreep(nAllyCreeps) then return false end
 
 	local range = botAttackRange or bot:GetAttackRange()
 	local enemy, dist = AIB_NearestEnemyHero(range + 80)
@@ -1114,6 +1122,7 @@ local function ThinkLaningCore(dials, rules)
 		assignedLane = botAssignedLane,
 		attackRange = botAttackRange,
 	}
+	if J.GetHP(bot) < 0.22 and AIBSurvive.Think(bot, dials, nEnemyCreeps) then return end
 	local urgentIntents = {}
 	local urgentKill = AIBLaneTrade.KillLock(intentCtx)
 	if urgentKill ~= nil then urgentIntents[#urgentIntents + 1] = urgentKill end

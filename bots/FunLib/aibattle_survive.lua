@@ -18,6 +18,11 @@ local function getItem(bot, name)
 	return (it ~= nil and it:IsFullyCastable()) and it or nil
 end
 
+local function hasItem(bot, name)
+	local slot = bot:FindItemSlot(name)
+	return slot >= 0 and bot:GetItemInSlot(slot) ~= nil
+end
+
 local function forwardTowerLoc(bot) return AIBUtils.SafeRetreatTowerLoc(bot) end
 
 local function hasFountainAura(bot)
@@ -528,11 +533,20 @@ local function recovery(bot, dials)
 
 	-- a. Buy flask + courier (rate-limited 15s)
 	if gold >= 55 and (bot.aib_recBuyLast == nil or DotaTime() - bot.aib_recBuyLast >= 15.0) then
+		if hasItem(bot, "item_flask") then
+			Style.Blocked(bot, "recovery-buy", "flask_in_inventory", string.format("hp=%.0f", hp*100), 8.0)
+			return false
+		end
+		if (bot.aib_recBuyCount or 0) >= 2 then
+			Style.Blocked(bot, "recovery-buy", "budget_cap", string.format("hp=%.0f gold=%d", hp*100, gold), 8.0)
+			return false
+		end
 		if wantsBottleFromStyle(bot) and hp >= 0.22 then
 			Style.DiagRL(bot, "bottle-gold-protect", 8)
 			return false
 		end
 		bot.aib_recBuyLast = DotaTime()
+		bot.aib_recBuyCount = (bot.aib_recBuyCount or 0) + 1
 		bot:ActionImmediate_PurchaseItem("item_flask")
 		Style.Diag(bot, "recovery-buy")
 		return true
