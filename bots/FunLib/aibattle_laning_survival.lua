@@ -14,6 +14,15 @@ local function moveAwayFrom(loc, awayFrom, distance)
 	return Vector(loc.x + (dx/d)*distance, loc.y + (dy/d)*distance, loc.z)
 end
 
+local function laneRetreatLoc(bot, ctx, fallbackCen)
+	local lane = ctx.assignedLane or LANE_MID
+	local dest = AIBUtils.ForwardSurvivingTowerLoc(bot)
+		or GetLaneFrontLocation(bot:GetTeam(), lane, -450)
+	if dest ~= nil then return dest end
+	if fallbackCen ~= nil then return moveAwayFrom(bot:GetLocation(), fallbackCen, 360) end
+	return nil
+end
+
 function M.CreepAggroRelief(ctx)
 	local bot = ctx.bot
 	if not bot:WasRecentlyDamagedByCreep(1.0) then return nil end
@@ -41,7 +50,8 @@ function M.CreepAggroRelief(ctx)
 
 	local cen = AIBUtils.EnemyCreepCentroid(enemyCreeps)
 	if cen ~= nil and ((bot.aib_creepDmgCount or 0) >= 2 or hp < 0.90) then
-		local dest = moveAwayFrom(bot:GetLocation(), cen, 320)
+		local dest = laneRetreatLoc(bot, ctx, cen)
+		if dest == nil then return nil end
 		return Engine.Intent("creep-aggro", 116, "creep_pressure", function()
 			bot:Action_MoveToLocation(dest)
 			Style.Diag(bot, "creep-aggro-kite")
@@ -71,11 +81,7 @@ function M.CreepAggroRelief(ctx)
 		return nil
 	end
 
-	local dest = AIBUtils.ForwardSurvivingTowerLoc(bot)
-	if dest == nil and cen ~= nil then
-		dest = moveAwayFrom(bot:GetLocation(), cen, 420)
-	end
-	if dest == nil then dest = GetLaneFrontLocation(bot:GetTeam(), ctx.assignedLane, -350) end
+	local dest = laneRetreatLoc(bot, ctx, cen)
 	if dest == nil then return nil end
 
 	if GetUnitToLocationDistance(bot, dest) < 220 and cen ~= nil then

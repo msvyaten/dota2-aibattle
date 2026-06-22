@@ -623,13 +623,10 @@ local function AIB_DamageUnstuckStep()
 	if elapsed < 4.0 or hpDrop < 6.0 then return false end
 	if bot.aib_damageUnstuckLast ~= nil and now - bot.aib_damageUnstuckLast < 3.0 then return false end
 
-	local dest = nil
+	local dest = AIBUtils.SafeRetreatTowerLoc(bot)
 	local cen = AIB_EnemyCreepCentroid(nEnemyCreeps)
-	if cen ~= nil then
+	if dest == nil and cen ~= nil then
 		dest = AIB_MoveAwayFrom(loc, cen, 420)
-	end
-	if dest == nil or J.GetHP(bot) < 0.35 then
-		dest = AIBUtils.SafeRetreatTowerLoc(bot)
 	end
 	if dest == nil then return false end
 
