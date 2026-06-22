@@ -415,6 +415,28 @@ local function AIB_MoveAwayFrom(loc, awayFrom, distance)
 	return Vector(loc.x + (dx/d)*distance, loc.y + (dy/d)*distance, loc.z)
 end
 
+local function AIB_TowardFountainFrom(loc, distance)
+	local fountain = J.GetTeamFountain()
+	if fountain == nil then return nil end
+	local dx, dy = fountain.x - loc.x, fountain.y - loc.y
+	local d = math.sqrt(dx*dx + dy*dy)
+	if d < 1 then return loc + RandomVector(distance) end
+	return Vector(loc.x + (dx/d)*distance, loc.y + (dy/d)*distance, loc.z)
+end
+
+local function AIB_BottleIfUseful(hpLimit, manaLimit, diagKey)
+	local bSlot = bot:FindItemSlot("item_bottle")
+	if bSlot < 0 then return false end
+	local bottle = bot:GetItemInSlot(bSlot)
+	if bottle == nil or not bottle:IsFullyCastable() or bottle:GetCurrentCharges() <= 0 then return false end
+	local maxMana = bot:GetMaxMana()
+	local mana = maxMana > 0 and (bot:GetMana() / maxMana) or 1.0
+	if J.GetHP(bot) > hpLimit and mana > manaLimit then return false end
+	bot:Action_UseAbility(bottle)
+	AIB_Diag(diagKey or "bottle-heal")
+	return true
+end
+
 local function AIB_VisualAFKStep(rules)
 	local now = DotaTime()
 	if now <= 0 then return false end
@@ -658,12 +680,38 @@ local function AIB_DamageUnstuckStep()
 	if elapsed < 4.0 or hpDrop < 6.0 then return false end
 	if bot.aib_damageUnstuckLast ~= nil and now - bot.aib_damageUnstuckLast < 3.0 then return false end
 
+	if AIB_BottleIfUseful(0.72, 0.35, "damage-unstuck-bottle") then
+		bot.aib_damageUnstuckLast = now
+		bot.aib_damageAnchorLoc = loc
+		bot.aib_damageAnchorTime = now
+		bot.aib_damageAnchorHp = hpPct
+		Style.Intent(bot, "damage-unstuck", string.format("drop=%.0f elapsed=%.0f reason=bottle", hpDrop, elapsed), 2.0)
+		return true
+	end
+
+	if bot:WasRecentlyDamagedByCreep(1.5) and J.GetHP(bot) >= 0.28 then
+		local creep, dist = AIB_NearestAttackableEnemyCreep((botAttackRange or bot:GetAttackRange()) + 80)
+		if creep ~= nil and dist <= (botAttackRange or bot:GetAttackRange()) + 40 then
+			bot.aib_damageUnstuckLast = now
+			bot.aib_damageAnchorLoc = loc
+			bot.aib_damageAnchorTime = now
+			bot.aib_damageAnchorHp = hpPct
+			Style.Intent(bot, "damage-unstuck", string.format("drop=%.0f elapsed=%.0f reason=creep_atk", hpDrop, elapsed), 2.0)
+			bot:Action_AttackUnit(creep, true)
+			AIB_Diag("damage-unstuck-atk")
+			return true
+		end
+	end
+
 	local dest = AIBUtils.SafeRetreatTowerLoc(bot)
 	local cen = AIB_EnemyCreepCentroid(nEnemyCreeps)
 	if dest == nil and cen ~= nil then
 		dest = AIB_MoveAwayFrom(loc, cen, 420)
 	end
 	if dest == nil then return false end
+	if GetUnitToLocationDistance(bot, dest) < 220 then
+		dest = AIB_TowardFountainFrom(loc, 460) or (dest + RandomVector(260))
+	end
 
 	bot.aib_damageUnstuckLast = now
 	bot.aib_damageAnchorLoc = loc
@@ -678,6 +726,7 @@ end
 local function AIB_ActiveLowHpStep()
 	local hp = J.GetHP(bot)
 	if hp >= (GetRules().low_hp_hold or 0.45) then return false end
+	if AIB_BottleIfUseful(0.62, 0.30, "low-hp-bottle") then return true end
 	local range = botAttackRange or bot:GetAttackRange()
 	local enemies = bot:GetNearbyHeroes(range + 60, true, BOT_MODE_NONE)
 	if hp >= 0.32 and enemies and #enemies > 0 and enemies[1]:IsAlive()
@@ -698,6 +747,13 @@ local function AIB_ActiveLowHpStep()
 		end
 	end
 	local back = AIBUtils.SafeRetreatTowerLoc(bot)
+	if back ~= nil and (bot:WasRecentlyDamagedByCreep(2.0) or bot:WasRecentlyDamagedByAnyHero(2.0)) then
+		local farBack = AIB_TowardFountainFrom(bot:GetLocation(), 430) or (back + RandomVector(260))
+		bot.aib_lowHpActiveLast = DotaTime()
+		bot:Action_MoveToLocation(farBack)
+		AIB_Diag("low-hp-safe-step")
+		return true
+	end
 	if back ~= nil and GetUnitToLocationDistance(bot, back) > 140 then
 		if bot.aib_lowHpActiveLast == nil or DotaTime() - bot.aib_lowHpActiveLast >= 1.2 then
 			bot.aib_lowHpActiveLast = DotaTime()
@@ -708,31 +764,36 @@ local function AIB_ActiveLowHpStep()
 		end
 		return true
 	end
-	if back ~= nil and (bot:WasRecentlyDamagedByCreep(1.5) or bot:WasRecentlyDamagedByAnyHero(1.5)) then
-		local ownT1 = GetTower(GetTeam(), TOWER_MID_1)
-		local enmT1 = GetTower(GetOpposingTeam(), TOWER_MID_1)
-		if ownT1 ~= nil and enmT1 ~= nil then
-			local a, b = ownT1:GetLocation(), enmT1:GetLocation()
-			local dx, dy = a.x - b.x, a.y - b.y
-			local d = math.sqrt(dx*dx + dy*dy)
-			if d > 1 then
-				back = Vector(back.x + (dx/d)*260, back.y + (dy/d)*260, back.z)
-			end
-		end
-		bot:Action_MoveToLocation(back + RandomVector(35))
-		AIB_Diag("low-hp-safe-step")
+	if back ~= nil and bot.aib_lowHpActiveLast ~= nil
+		and DotaTime() - bot.aib_lowHpActiveLast >= 2.5 then
+		bot.aib_lowHpActiveLast = DotaTime()
+		bot:Action_MoveToLocation((AIB_TowardFountainFrom(bot:GetLocation(), 260) or back) + RandomVector(35))
+		AIB_Diag("low-hp-watch-step")
 		return true
 	end
 	return false
+end
+
+local function AIB_EnemyDeadRecently()
+	return bot.aib_eDeadSince ~= nil and DotaTime() - bot.aib_eDeadSince < 45.0
 end
 
 local function AIB_SiegeIntent(dials, rules)
 	local twr = AIB_EnemyTowerDanger()
 	if twr == nil or AIB_TowerActuallyThreatening(twr) then return false end
 	local cwp = rules.creep_wave_priority or "last_hit_only"
-	local wantsSiege = cwp == "push" or (dials.push_desire or 0.5) >= 0.65
+	local enemy, enemyDist = AIB_NearestEnemyHero(2200)
+	local enemyFarOrWeak = enemy == nil or enemyDist > 1300 or J.GetHP(enemy) < 0.28
+	local waveAtTower = false
+	for _, creep in pairs(nAllyCreeps or {}) do
+		if J.IsValid(creep) and GetUnitToUnitDistance(creep, twr) <= twr:GetAttackRange() + 180 then
+			waveAtTower = true; break
+		end
+	end
+	local advantageSiege = AIB_EnemyDeadRecently() or (waveAtTower and enemyFarOrWeak)
+	local wantsSiege = cwp == "push" or advantageSiege or (dials.push_desire or 0.5) >= 0.65
 	if not wantsSiege or J.GetHP(bot) < 0.35 then
-		AIB_WantBlocked("siege", "desire_or_hp", string.format("hp=%.0f", J.GetHP(bot) * 100), 5.0)
+		AIB_WantBlocked("siege", "desire_or_hp", string.format("hp=%.0f adv=%s", J.GetHP(bot) * 100, tostring(advantageSiege)), 5.0)
 		return false
 	end
 

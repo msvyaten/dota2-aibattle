@@ -46,6 +46,7 @@ function M.Reset(bot)
 	bot.aib_bottleRuneLast = nil
 	bot.aib_bottleRuneStarted = nil
 	bot.aib_bottleRuneTarget = nil
+	bot.aib_bottleRuneId = nil
 end
 
 local function wantsBottleFromStyle(bot)
@@ -133,19 +134,57 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 	local now = DotaTime()
 	if bot.aib_bottleRuneTarget ~= nil
 		and bot.aib_bottleRuneStarted ~= nil
-		and now - bot.aib_bottleRuneStarted < 14.0 then
+		and now - bot.aib_bottleRuneStarted < 22.0 then
+		local criticalAbort = hp < 0.22 and bot:WasRecentlyDamagedByAnyHero(1.2)
+		if criticalAbort then
+			Style.Blocked(bot, diagKey, "critical_abort", string.format("hp=%.0f", hp*100), 4.0)
+			bot.aib_bottleRuneTarget = nil
+			bot.aib_bottleRuneStarted = nil
+			bot.aib_bottleRuneId = nil
+			return false
+		end
+		if bottleCharges(bot) ~= 0 then
+			Style.Intent(bot, diagKey, "reason=filled", 2.0)
+			bot.aib_bottleRuneTarget = nil
+			bot.aib_bottleRuneStarted = nil
+			bot.aib_bottleRuneId = nil
+			return false
+		end
+		if bot.aib_bottleRuneId ~= nil
+			and GetRuneStatus(bot.aib_bottleRuneId) ~= RUNE_STATUS_AVAILABLE then
+			Style.Intent(bot, diagKey, "reason=gone", 2.0)
+			bot.aib_bottleRuneTarget = nil
+			bot.aib_bottleRuneStarted = nil
+			bot.aib_bottleRuneId = nil
+			return false
+		end
 		local targetDist = GetUnitToLocationDistance(bot, bot.aib_bottleRuneTarget)
-		if targetDist > 55 then
+		if bot.aib_bottleRuneId ~= nil and targetDist <= 140 then
+			Style.Intent(bot, diagKey, string.format("dist=%.0f age=%.0f reason=pickup", targetDist, now - bot.aib_bottleRuneStarted), 1.0)
+			if bot.Action_PickUpRune ~= nil then
+				bot:Action_PickUpRune(bot.aib_bottleRuneId)
+			else
+				bot:Action_MoveToLocation(bot.aib_bottleRuneTarget)
+			end
+			return true
+		end
+		if targetDist > 35 then
 			Style.Intent(bot, diagKey, string.format("dist=%.0f age=%.0f reason=commit", targetDist, now - bot.aib_bottleRuneStarted), 2.0)
 			bot:Action_MoveToLocation(bot.aib_bottleRuneTarget)
 			return true
 		end
-		Style.Intent(bot, diagKey, string.format("dist=%.0f reason=arrived", targetDist), 2.0)
+		Style.Intent(bot, diagKey, string.format("dist=%.0f age=%.0f reason=hold", targetDist, now - bot.aib_bottleRuneStarted), 1.0)
+		bot:Action_MoveToLocation(bot.aib_bottleRuneTarget + RandomVector(25))
+		return true
+	end
+	if bot.aib_bottleRuneStarted ~= nil then
+		Style.Blocked(bot, diagKey, "commit_timeout", "age=22", 4.0)
 		bot.aib_bottleRuneTarget = nil
 		bot.aib_bottleRuneStarted = nil
+		bot.aib_bottleRuneId = nil
 	end
 
-	local bestLoc, bestDist, bestScore = nil, math.huge, math.huge
+	local bestRune, bestLoc, bestDist, bestScore = nil, nil, math.huge, math.huge
 	for _, runeId in ipairs({ RUNE_POWERUP_1, RUNE_POWERUP_2 }) do
 		if GetRuneStatus(runeId) == RUNE_STATUS_AVAILABLE then
 			local loc = GetRuneSpawnLocation(runeId)
@@ -154,7 +193,7 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 				local runeType = GetRuneType(runeId)
 				local score = dist + ((runeType == RUNE_WATER) and 0 or 350)
 				if dist <= (maxDist or 2600) and score < bestScore then
-					bestLoc, bestDist, bestScore = loc, dist, score
+					bestRune, bestLoc, bestDist, bestScore = runeId, loc, dist, score
 				end
 			end
 		end
@@ -203,6 +242,7 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 	bot.aib_bottleRuneLast = now
 	bot.aib_bottleRuneStarted = now
 	bot.aib_bottleRuneTarget = bestLoc
+	bot.aib_bottleRuneId = bestRune
 	Style.Intent(bot, diagKey, string.format("dist=%.0f hp=%.0f mana=%.0f reason=start", bestDist, hp*100, mana*100), 2.0)
 	Style.Diag(bot, diagKey)
 	bot:Action_MoveToLocation(bestLoc)
