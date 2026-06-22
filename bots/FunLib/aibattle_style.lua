@@ -128,8 +128,6 @@ local RULE_NUMBERS = {
     creep_aggro_relief_hp = { default = 0.55, min = 0.45, max = 0.90 },
     bottle_rune_max_dist = { default = 1900.0, min = 900.0, max = 2600.0 },
     bottle_rune_lane_budget = { default = 1500.0, min = 700.0, max = 2400.0 },
-    visual_afk_seconds = { default = 6.0, min = 3.0, max = 12.0 },
-    visual_afk_distance = { default = 90.0, min = 50.0, max = 180.0 },
 }
 
 local function clamp01(x)
@@ -296,9 +294,6 @@ local function buildStyle(raw)
     -- style rules; set them by hand in playstyle_*.lua for one diagnostic match.
     local debug_disable_forwardness_fallbacks = rawRules.debug_disable_forwardness_fallbacks == true
     local debug_skeleton_laning = rawRules.debug_skeleton_laning == true
-    local visual_afk_seconds = ruleNumber(rawRules, "visual_afk_seconds")
-    local visual_afk_distance = ruleNumber(rawRules, "visual_afk_distance")
-
     return { dials = dials, rules = {
         respawn_behavior = respawn, dive_policy = dive, smoke_usage = smoke,
         buyback_policy = buyback, aegis_policy = aegis, low_hp_behavior = low_hp,
@@ -312,8 +307,6 @@ local function buildStyle(raw)
         bottle_rune_lane_budget = bottle_rune_lane_budget,
         debug_disable_forwardness_fallbacks = debug_disable_forwardness_fallbacks,
         debug_skeleton_laning = debug_skeleton_laning,
-        visual_afk_seconds = visual_afk_seconds,
-        visual_afk_distance = visual_afk_distance,
     }, item_build = items, skill_build = skills, item_rules = item_rules }
 end
 

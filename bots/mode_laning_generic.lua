@@ -56,6 +56,8 @@ local function GetRules() return Style.Get().rules end
 -- carries the cumulative totals. (print() is invisible in console.log, so chat is the only
 -- logging channel - keep it sparse.)
 local AIB_SIDE = (bot:GetTeam() == TEAM_RADIANT) and "R" or "D"
+local AIB_VISUAL_AFK_SECONDS = 5.0
+local AIB_VISUAL_AFK_DISTANCE = 90.0
 -- Delegates to the shared counter (FunLib/aibattle_style M.Diag); kept as a thin local
 -- wrapper so existing call sites stay unchanged. Counters live on the bot handle, so
 -- laning + team-mode diags merge into the same summary line.
@@ -323,7 +325,7 @@ local function ThinkAnnounce(dials)
 		dials.gank_desire, dials.push_desire), true)
 	local r = Style.Get().rules
 	bot:ActionImmediate_Chat(string.format(
-		"AIB[%s] defend=%.2f ward=%.2f roshan=%.2f dive=%s heal=%s abil=%s cw=%s at=%s pgb=%s vafk=%.0f",
+		"AIB[%s] defend=%.2f ward=%.2f roshan=%.2f dive=%s heal=%s abil=%s cw=%s at=%s pgb=%s",
 		AIB_SIDE,
 		dials.defend_desire, dials.ward_desire, dials.roshan_desire,
 		tostring(r.dive_policy or "finish_only"),
@@ -331,8 +333,7 @@ local function ThinkAnnounce(dials)
 		tostring(r.ability_usage or "default"),
 		tostring(r.creep_wave_priority or "last_hit_only"),
 		tostring(r.ability_timing or "on_cooldown"),
-		tostring(r.pregame_behavior or "default"),
-		r.visual_afk_seconds or 6.0), true)
+		tostring(r.pregame_behavior or "default")), true)
 end
 
 local function AIB_TowerActuallyThreatening(twr)
@@ -398,10 +399,10 @@ end
 local function AIB_VisualAFKStep(rules)
 	local now = DotaTime()
 	if now <= 0 then return false end
-	local limit = rules.visual_afk_seconds or 6.0
+	local limit = AIB_VISUAL_AFK_SECONDS
 	if limit <= 0 then return false end
 	local loc = bot:GetLocation()
-	local moveDist = rules.visual_afk_distance or 90.0
+	local moveDist = AIB_VISUAL_AFK_DISTANCE
 	if bot.aib_afkAnchorLoc == nil or bot.aib_afkAnchorTime == nil then
 		AIB_ResetVisualAFK(now, loc)
 		return false

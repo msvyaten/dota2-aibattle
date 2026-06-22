@@ -93,7 +93,7 @@ def decode_items(id_str):
     return " ".join(parts)
 
 
-DIAL_KEYS = ["harass", "farm", "exec", "retreat", "fwd", "abil", "rune", "gank", "push", "defend", "ward", "roshan", "dive", "heal", "vafk"]
+DIAL_KEYS = ["harass", "farm", "exec", "retreat", "fwd", "abil", "rune", "gank", "push", "defend", "ward", "roshan", "dive", "heal"]
 
 def extract_dials(cfg_lines):
     """Extract dial values from cfg announce lines, keyed by side R/D.

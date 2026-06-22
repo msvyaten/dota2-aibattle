@@ -51,6 +51,5 @@ return {
 		creep_wave_priority = "last_hit_only",
 		hero_priority       = "always",
 		deny_policy         = "default",
-		visual_afk_seconds  = 5,
 	},
 }
