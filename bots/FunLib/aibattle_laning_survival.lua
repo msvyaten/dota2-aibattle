@@ -28,7 +28,6 @@ function M.CreepAggroRelief(ctx)
 	if not bot:WasRecentlyDamagedByCreep(1.0) then return nil end
 	Style.DiagRL(bot, "creep-dmg", 3)
 
-	local rules = ctx.rules or {}
 	local enemyCreeps = ctx.enemyCreeps or {}
 	local hp = J.GetHP(bot)
 	local range = ctx.attackRange or bot:GetAttackRange()
@@ -48,16 +47,6 @@ function M.CreepAggroRelief(ctx)
 		bot.aib_creepDmgCount = (bot.aib_creepDmgCount or 0) + 1
 	end
 
-	local cen = AIBUtils.EnemyCreepCentroid(enemyCreeps)
-	if cen ~= nil and ((bot.aib_creepDmgCount or 0) >= 2 or hp < 0.90) then
-		local dest = laneRetreatLoc(bot, ctx, cen)
-		if dest == nil then return nil end
-		return Engine.Intent("creep-aggro", 116, "creep_pressure", function()
-			bot:Action_MoveToLocation(dest)
-			Style.Diag(bot, "creep-aggro-kite")
-		end, string.format("hp=%.0f hits=%d", hp*100, bot.aib_creepDmgCount or 0))
-	end
-
 	for _, creep in pairs(enemyCreeps or {}) do
 		local dist = J.IsValid(creep) and GetUnitToUnitDistance(bot, creep) or math.huge
 		if J.IsValid(creep) and J.CanBeAttacked(creep)
@@ -71,6 +60,9 @@ function M.CreepAggroRelief(ctx)
 	if hp >= 0.82 then
 		return Engine.Blocked("creep-aggro", 75, "no_attackable_creep", string.format("hp=%.0f creeps=%d", hp*100, #enemyCreeps))
 	end
+	if hp >= 0.55 then
+		return Engine.Blocked("creep-aggro", 74, "hold_position", string.format("hp=%.0f creeps=%d", hp*100, #enemyCreeps))
+	end
 
 	if bot.aib_creepReliefLast ~= nil and now - bot.aib_creepReliefLast < 1.2 then
 		if bot.aib_creepReliefDest ~= nil then
@@ -81,12 +73,9 @@ function M.CreepAggroRelief(ctx)
 		return nil
 	end
 
+	local cen = AIBUtils.EnemyCreepCentroid(enemyCreeps)
 	local dest = laneRetreatLoc(bot, ctx, cen)
 	if dest == nil then return nil end
-
-	if GetUnitToLocationDistance(bot, dest) < 220 and cen ~= nil then
-		dest = moveAwayFrom(bot:GetLocation(), cen, 360)
-	end
 
 	return Engine.Intent("creep-aggro", 95, "recent_creep_damage", function()
 		bot.aib_creepReliefLast = DotaTime()

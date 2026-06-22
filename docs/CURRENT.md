@@ -66,7 +66,6 @@ Creeps / lane:
 - `deny-act`
 - `creep-dmg`
 - `creep-aggro-hit`
-- `creep-aggro-kite`
 - `creep-aggro-back`
 - `cw-push`
 - `siege-creep`
