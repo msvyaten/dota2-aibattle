@@ -145,6 +145,51 @@ def extract_telemetry(text):
         samples.sort(key=lambda p: p["t"])
     return telemetry
 
+def extract_deaths(telemetry):
+    """Death timestamps per side from hp->0 transitions (AIB telemetry, ~5s resolution)."""
+    deaths = {"R": [], "D": []}
+    for side, samples in telemetry.items():
+        prev_alive = True
+        for s in samples:
+            alive = s["hp"] > 0
+            if prev_alive and not alive:
+                deaths[side].append(s["t"])
+            prev_alive = alive
+    return deaths
+
+
+def format_flow(deaths, dur, kill_win, score):
+    """One-line game narrative: first blood, per-side death times, kill score, end reason.
+
+    Death timing comes from hp->0 telemetry; kill score is authoritative from the final
+    stat dump. A kill that lands on the game-ending tick has no hp=0 sample, so per side we
+    backfill any missing death with the end time (~dur) to keep timing and score consistent.
+    """
+    try:
+        dur_f = float(dur)
+    except (TypeError, ValueError):
+        dur_f = None
+    rk, rd, dk, dd = score  # R kills/deaths, D kills/deaths (authoritative)
+    times = {"R": list(deaths.get("R", [])), "D": list(deaths.get("D", []))}
+    for side, auth_deaths in (("R", rd), ("D", dd)):
+        while auth_deaths is not None and len(times[side]) < auth_deaths and dur_f is not None:
+            times[side].append(dur_f)  # death coincided with game end
+    events = sorted((t, side) for side in times for t in times[side])
+    if not events:
+        return None
+    fb_t, fb_loser = events[0]
+    fb_winner = "R" if fb_loser == "D" else "D"
+    parts = [f"first-blood {fb_winner}@{fb_t:.0f}s"]
+    death_bits = [f"{side}@" + ",".join(f"{t:.0f}s" for t in times[side])
+                  for side in ("R", "D") if times[side]]
+    if death_bits:
+        parts.append("deaths " + " ".join(death_bits))
+    parts.append(f"kills R:{rk} D:{dk}")
+    end_s = f"{dur_f:.0f}s" if dur_f is not None else f"{dur}s"
+    parts.append(f"end {end_s} " + ("kill-win" if kill_win else "tower/other"))
+    return " | ".join(parts)
+
+
 def stationary_spans(samples, move_threshold=90.0, min_seconds=10.0):
     """Return spans where consecutive location samples barely moved."""
     spans = []
@@ -561,6 +606,13 @@ def main():
             print("  alert:", alert)
         for verdict in verdicts(diag, telemetry):
             print("  verdict:", verdict)
+        def _pk(idx, key):
+            return int(players[idx].get(key) or 0) if idx < len(players) else 0
+        score = (_pk(0, "kills"), _pk(0, "deaths"), _pk(1, "kills"), _pk(1, "deaths"))
+        flow = format_flow(extract_deaths(telemetry), dur,
+                           max((int(p.get('kills') or 0) for p in players), default=0) >= 2, score)
+        if flow:
+            print("  flow:", flow)
         for side in ["R", "D"]:
             if timeline.get(side):
                 print(f"  timeline[{side}]: " + " | ".join(timeline[side]))
