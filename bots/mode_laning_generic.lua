@@ -558,6 +558,14 @@ local function AIB_CreepHitReactStep()
 
 	local hp = J.GetHP(bot)
 	local range = botAttackRange or bot:GetAttackRange()
+	if bot.aib_creepReactSeen == nil or now - bot.aib_creepReactSeen > 3.0 then
+		bot.aib_creepReactCount = 0
+	end
+	if bot.aib_creepReactTick == nil or now - bot.aib_creepReactTick >= 0.6 then
+		bot.aib_creepReactTick = now
+		bot.aib_creepReactSeen = now
+		bot.aib_creepReactCount = (bot.aib_creepReactCount or 0) + 1
+	end
 	local creep, dist = AIB_NearestAttackableEnemyCreep(range + 160)
 	if creep == nil then
 		AIB_WantBlocked("creep-hit-react", "no_creep", string.format("hp=%.0f", hp * 100), 3.0)
@@ -565,8 +573,11 @@ local function AIB_CreepHitReactStep()
 	end
 
 	bot.aib_creepReactLast = now
-	if hp >= 0.38 and dist <= range + 40 and AIB_EnemyTowerDanger() == nil then
-		Style.Intent(bot, "creep-hit-react", string.format("dist=%.0f hp=%.0f reason=attack", dist, hp * 100), 1.5)
+	local repeatedDamage = (bot.aib_creepReactCount or 0) >= 2
+	local safeToTrade = hp >= 0.70 and not repeatedDamage
+		and dist <= range - 80 and AIB_EnemyTowerDanger() == nil
+	if safeToTrade then
+		Style.Intent(bot, "creep-hit-react", string.format("dist=%.0f hp=%.0f hits=%d reason=attack", dist, hp * 100, bot.aib_creepReactCount or 0), 1.5)
 		bot:Action_AttackUnit(creep, true)
 		AIB_Diag("creep-hit-react-atk")
 		return true
@@ -580,7 +591,7 @@ local function AIB_CreepHitReactStep()
 	if safe ~= nil then
 		bot.aib_creepReliefLast = now
 		bot.aib_creepReliefDest = safe
-		Style.Intent(bot, "creep-hit-react", string.format("dist=%.0f hp=%.0f reason=kite", dist, hp * 100), 1.5)
+		Style.Intent(bot, "creep-hit-react", string.format("dist=%.0f hp=%.0f hits=%d reason=kite", dist, hp * 100, bot.aib_creepReactCount or 0), 1.5)
 		bot:Action_MoveToLocation(safe)
 		AIB_Diag("creep-hit-react-kite")
 		return true
