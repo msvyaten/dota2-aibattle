@@ -132,6 +132,14 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 	if bottle == nil or bottle:GetCurrentCharges() ~= 0 then return false end
 
 	local now = DotaTime()
+	local enemyDeadWindow = bot.aib_eDeadSince ~= nil and now - bot.aib_eDeadSince < 45.0
+	if enemyDeadWindow and hp >= 0.35 then
+		Style.Blocked(bot, diagKey, "enemy_dead_push", string.format("hp=%.0f", hp*100), 4.0)
+		bot.aib_bottleRuneTarget = nil
+		bot.aib_bottleRuneStarted = nil
+		bot.aib_bottleRuneId = nil
+		return false
+	end
 	if bot.aib_bottleRuneTarget ~= nil
 		and bot.aib_bottleRuneStarted ~= nil
 		and now - bot.aib_bottleRuneStarted < 22.0 then
@@ -465,7 +473,7 @@ local function recovery(bot, dials)
 					bot.aib_recBottleLast = DotaTime()
 					Style.Diag(bot, "recovery-bottle"); bot:Action_UseAbility(bItem); return true
 				elseif bItem:GetCurrentCharges() == 0 then
-					if seekBottleRune(bot, hp, mana, "recovery-rune-bottle", 2600, { lane_aware = false }) then return true end
+					if seekBottleRune(bot, hp, mana, "recovery-rune-bottle", 3600, { lane_aware = false }) then return true end
 					-- No rune: fall through to threshold check (fountain only if HP critically low)
 				end
 			end

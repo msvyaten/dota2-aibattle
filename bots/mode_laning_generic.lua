@@ -632,7 +632,7 @@ local function AIB_CreepHitReactStep()
 	bot.aib_creepReactLast = now
 	local repeatedDamage = (bot.aib_creepReactCount or 0) >= 2
 	local safeToTrade = hp >= 0.70 and not repeatedDamage
-		and dist <= range - 80 and AIB_EnemyTowerDanger() == nil
+		and dist <= range + 25 and AIB_EnemyTowerDanger() == nil
 	if safeToTrade then
 		Style.Intent(bot, "creep-hit-react", string.format("dist=%.0f hp=%.0f hits=%d reason=attack", dist, hp * 100, bot.aib_creepReactCount or 0), 1.5)
 		bot:Action_AttackUnit(creep, true)
@@ -904,7 +904,9 @@ local function AIB_PreCreepStandoffStep()
 
 	local range = botAttackRange or bot:GetAttackRange()
 	local enemy, dist = AIB_NearestEnemyHero(range + 80)
-	if enemy ~= nil and dist <= range + 40 and not AIB_UphillMiss(enemy) then
+	local preMode = GetRules().pregame_behavior or "default"
+	if preMode == "aggressive_mid" and enemy ~= nil and dist <= range + 20
+		and not AIB_UphillMiss(enemy) and J.GetHP(bot) >= 0.70 then
 		bot:Action_AttackUnit(enemy, false)
 		AIB_Diag("precreep-trade")
 		return true
@@ -921,13 +923,19 @@ local function AIB_PreCreepStandoffStep()
 			local anchor = Vector(a.x + dirX * anchorDist, a.y + dirY * anchorDist, a.z)
 			local anchorGap = GetUnitToLocationDistance(bot, anchor)
 			if anchorGap <= 160 then
-				local farEnemy = AIB_NearestEnemyHero(1200)
-				if farEnemy ~= nil and not AIB_UphillMiss(farEnemy) then
-					AIB_MoveToAttackEdgeOf(farEnemy, "precreep-edge", 0)
+				if enemy ~= nil and dist < range * 0.70 then
+					local back = AIB_TowardFountainFrom(bot:GetLocation(), 260)
+					if back ~= nil then
+						bot:Action_MoveToLocation(back)
+						AIB_Diag("precreep-space")
+						return true
+					end
+				elseif enemy ~= nil and dist > range + 180 and preMode == "aggressive_mid" then
+					AIB_MoveToAttackEdgeOf(enemy, "precreep-edge", 0)
 					return true
 				end
 				Style.DiagRL(bot, "precreep-hold", 5)
-				return false
+				return true
 			end
 			bot:Action_MoveToLocation(anchor)
 			AIB_Diag("precreep-anchor")
