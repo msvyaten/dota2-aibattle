@@ -44,6 +44,19 @@ local _healOk, _healResult = pcall(require, GetScriptDirectory()..'/FunLib/aibat
 local AIBSurvive = _healOk and _healResult or { Think = function() return false end }
 local AIBLaneSurvival = require(GetScriptDirectory()..'/FunLib/aibattle_laning_survival')
 local AIBLaneTrade = require(GetScriptDirectory()..'/FunLib/aibattle_laning_trade')
+
+local function AIB_ClearRecoveryState()
+	if AIBSurvive.Reset ~= nil then
+		AIBSurvive.Reset(bot)
+	else
+		bot.aib_fountainTrip = false
+		bot.aib_fountainTping = false
+		bot.aib_fountainTpCast = nil
+		bot.aib_fountainWaitLast = nil
+		bot.aib_bottleRuneTarget = nil
+		bot.aib_bottleRuneStarted = nil
+	end
+end
 if not _healOk then
     -- Emit once to all-chat so it shows in console.log during test matches
     local _b = GetBot(); if _b then _b:ActionImmediate_Chat("AIB HEAL LOAD ERR: " .. tostring(_healResult), true) end
@@ -99,8 +112,14 @@ end
 
 -- AIBattle: on death->alive transition, act per rules.respawn_behavior. Returns true if it issued an action.
 local function AIB_HandleRespawn()
-	if not bot:IsAlive() then bot.aib_wasDead = true; bot.aib_tping = false; return false end
+	if not bot:IsAlive() then
+		bot.aib_wasDead = true
+		bot.aib_tping = false
+		AIB_ClearRecoveryState()
+		return false
+	end
 	if not bot.aib_wasDead then return false end
+	AIB_ClearRecoveryState()
 
 	-- Pregame: no TP waste -- let pregame block handle positioning instead.
 	if DotaTime() < 0 then bot.aib_wasDead = false; return false end
@@ -942,9 +961,23 @@ local function ThinkDeathWindow()
 		eIsDead = bot.aib_eDeadSince ~= nil
 			and DotaTime() - bot.aib_eDeadSince < respawnWindow
 	end
+	if GetHeroKills ~= nil then
+		local ok, kills = pcall(GetHeroKills, bot:GetPlayerID())
+		if ok and type(kills) == "number" then
+			if bot.aib_myKillCount == nil then
+				bot.aib_myKillCount = kills
+			elseif kills > bot.aib_myKillCount then
+				bot.aib_myKillCount = kills
+				bot.aib_eDeadSince = DotaTime()
+				eIsDead = true
+			end
+		end
+	end
 	if not eIsDead then return false end
+	Style.DiagRL(bot, "dw-active", 3)
+	AIB_ClearRecoveryState()
 	-- Heal with consumables while safe
-	if J.GetHP(bot) < 0.95 then
+	if J.GetHP(bot) < 0.65 then
 		for s = 0, 5 do
 			local it = bot:GetItemInSlot(s)
 			if it ~= nil and it:IsFullyCastable() then
@@ -971,6 +1004,14 @@ local function ThinkDeathWindow()
 				AIB_Diag("dw-farm"); return true
 			end
 		end
+	end
+	local twr = AIB_EnemyTowerDanger()
+	if twr ~= nil and J.GetHP(bot) >= 0.35 and not AIB_TowerActuallyThreatening(twr) then
+		if GetUnitToUnitDistance(bot, twr) <= (botAttackRange or bot:GetAttackRange()) + 60 then
+			bot:Action_AttackUnit(twr, true)
+			AIB_Diag("dw-tower"); return true
+		end
+		if AIB_MoveToAttackEdgeOf(twr, "dw-tower-step", 30) then return true end
 	end
 	-- No creeps in range: advance toward lane front (override botAhead)
 	local dwDest = GetLaneFrontLocation(GetTeam(), botAssignedLane, 0)

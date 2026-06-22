@@ -33,6 +33,21 @@ local function bottleCharges(bot)
 	return bottle:GetCurrentCharges()
 end
 
+function M.Reset(bot)
+	if bot == nil then return end
+	bot.aib_fountainTrip = false
+	bot.aib_fountainTping = false
+	bot.aib_fountainTpCast = nil
+	bot.aib_fountainWaitLast = nil
+	bot.aib_recWaitStart = nil
+	bot.aib_recMoveLast = nil
+	bot.aib_recBottleLast = nil
+	bot.aib_recFlaskLast = nil
+	bot.aib_bottleRuneLast = nil
+	bot.aib_bottleRuneStarted = nil
+	bot.aib_bottleRuneTarget = nil
+end
+
 local function wantsBottleFromStyle(bot)
 	if GetGameMode() ~= GAMEMODE_1V1MID then return false end
 	if bottleCharges(bot) ~= nil then return false end
