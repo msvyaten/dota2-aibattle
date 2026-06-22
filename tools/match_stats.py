@@ -248,7 +248,9 @@ def classify_event(body):
         return ",".join(interesting[:4])
     return None
 
-def extract_event_timeline(text, limit=22):
+def extract_event_timeline(text, limit=22, window=None):
+    # window=(lo,hi): keep every event in that second-range and skip the mid truncation,
+    # so a focused look (e.g. a death window) doesn't get collapsed into "...+N".
     timeline = {"R": [], "D": []}
     last_t = {"R": None, "D": None}
     for line in text.splitlines():
@@ -263,10 +265,14 @@ def extract_event_timeline(text, limit=22):
         if label is None:
             continue
         t = last_t[side]
+        if window is not None and (t is None or t < window[0] or t > window[1]):
+            continue
         stamp = f"{t:.0f}s" if t is not None else "?s"
         entry = f"{stamp}:{label}"
         if not timeline[side] or timeline[side][-1] != entry:
             timeline[side].append(entry)
+    if window is not None:
+        return timeline
     for side in timeline:
         if len(timeline[side]) > limit:
             head = timeline[side][:limit // 2]
@@ -302,14 +308,14 @@ def span_actions(events, side, start_t, end_t):
                 labels.append(label)
     return labels[:5]
 
-def parse(path):
+def parse(path, window=None):
     lines = open(path, encoding="utf-8", errors="ignore").read().splitlines()
     text = "\n".join(lines)
     telemetry = extract_telemetry(text)
     intents = extract_intents(text)
     blocked = extract_blocked(text)
     builds = extract_builds(text)
-    timeline = extract_event_timeline(text)
+    timeline = extract_event_timeline(text, window=window)
     action_events = extract_action_events(text)
     # Pick up both MSG1 (harass=) and MSG2 (defend=) config announce lines.
     cfg = [l.split("localize: ", 1)[1] for l in lines
@@ -470,6 +476,8 @@ def main():
     parser.add_argument("matchids", nargs="*", help="Match IDs to analyze")
     parser.add_argument("--latest", action="store_true", help="Analyze the newest console.<id>.log")
     parser.add_argument("--live", action="store_true", help="Print live deployed AIBattle build sha")
+    parser.add_argument("--window", nargs=2, type=int, metavar=("START", "END"),
+                        help="Show the full event timeline for seconds START..END (no mid truncation)")
     args = parser.parse_args()
 
     matchids = list(args.matchids)
@@ -495,7 +503,7 @@ def main():
         if not os.path.exists(path):
             print(f"  (not found: {path})")
             continue
-        cfg, diag, dur, win, items, players, dealt, received, pg_locs, telemetry, intents, blocked, builds, timeline, action_events = parse(path)
+        cfg, diag, dur, win, items, players, dealt, received, pg_locs, telemetry, intents, blocked, builds, timeline, action_events = parse(path, window=tuple(args.window) if args.window else None)
         if builds:
             print("  build:", " ".join(f"{s}={sha}" for s, sha in sorted(builds.items())))
             if live_sha:

@@ -35,6 +35,15 @@ LIVE_CODE_FILES = [
     "FretBots/SettingsDefault.lua",
 ]
 
+# Files we hand-edit and deploy: a syntax slip here crashes the live match. Mirrors deploy.bat.
+SYNTAX_FILES = LIVE_CODE_FILES + [
+    "item_purchase_generic.lua",
+    "Customize/canonical_pusher.lua",
+    "Customize/canonical_ganker.lua",
+    "Customize/playstyle_radiant.lua",
+    "Customize/playstyle_dire.lua",
+]
+
 
 def run_step(name, cmd):
     print(f"[check] {name}", flush=True)
@@ -54,6 +63,89 @@ def check_forbidden_laning_keys():
             found.append(key)
     if found:
         print("[fail] forbidden keys in mode_laning_generic.lua:", ", ".join(found), flush=True)
+        return False
+    return True
+
+
+def _strip_lua(src):
+    """Blank out comments and string literals so delimiter counts only see real code."""
+    out = []
+    i, n = 0, len(src)
+    while i < n:
+        c = src[i]
+        if src[i:i + 2] == "--":
+            j = i + 2
+            if j < n and src[j] == "[":           # long comment --[[ ... ]] / --[=[ ... ]=]
+                k, eqs = j + 1, 0
+                while k < n and src[k] == "=":
+                    eqs += 1; k += 1
+                if k < n and src[k] == "[":
+                    close = "]" + "=" * eqs + "]"
+                    end = src.find(close, k + 1)
+                    i = (end + len(close)) if end != -1 else n
+                    continue
+            nl = src.find("\n", i)                 # line comment
+            i = nl if nl != -1 else n
+            continue
+        if c == "[":                               # long string [[ ... ]] / [=[ ... ]=]
+            k, eqs = i + 1, 0
+            while k < n and src[k] == "=":
+                eqs += 1; k += 1
+            if k < n and src[k] == "[":
+                close = "]" + "=" * eqs + "]"
+                end = src.find(close, k + 1)
+                out.append(" ")
+                i = (end + len(close)) if end != -1 else n
+                continue
+        if c == '"' or c == "'":                   # quoted string with escapes
+            q, j = c, i + 1
+            while j < n:
+                if src[j] == "\\":
+                    j += 2; continue
+                if src[j] == q:
+                    j += 1; break
+                j += 1
+            out.append(" ")
+            i = j
+            continue
+        out.append(c)
+        i += 1
+    return "".join(out)
+
+
+def check_lua_syntax():
+    """Structural sanity check (no luac available): balanced delimiters and block keywords.
+
+    Invariant: in valid Lua, `end` count == (`function` + `if` + `do`), because every for/while
+    carries exactly one `do`. Validated to flag zero false positives across the whole bots/ tree.
+    """
+    print("[check] lua syntax", flush=True)
+    bad = []
+    for rel in SYNTAX_FILES:
+        path = ROOT / "bots" / rel
+        if not path.exists():
+            continue
+        code = _strip_lua(path.read_text(encoding="utf-8", errors="ignore"))
+        problems = []
+        for open_c, close_c in (("(", ")"), ("[", "]"), ("{", "}")):
+            o, c = code.count(open_c), code.count(close_c)
+            if o != c:
+                problems.append(f"{open_c}{close_c} {o}/{c}")
+
+        def wc(word):
+            return len(re.findall(r"\b" + word + r"\b", code))
+
+        ends, openers = wc("end"), wc("function") + wc("if") + wc("do")
+        if ends != openers:
+            problems.append(f"end={ends} vs function+if+do={openers}")
+        if wc("repeat") != wc("until"):
+            problems.append(f"repeat={wc('repeat')} until={wc('until')}")
+        if problems:
+            bad.append(f"{rel}: " + "; ".join(problems))
+    if bad:
+        print("[fail] lua structure imbalance:", flush=True)
+        for b in bad:
+            print("   ", b, flush=True)
         return False
     return True
 
@@ -116,6 +208,7 @@ def main():
 
     ok = True
     ok = run_step("text encoding", [sys.executable, "tools/check_text_encoding.py"]) and ok
+    ok = check_lua_syntax() and ok
     ok = check_forbidden_laning_keys() and ok
 
     if not args.skip_live:
