@@ -260,6 +260,11 @@ function GetDesire()
 	end
 	if local_mode_laning_generic and local_mode_laning_generic.GetDesire ~= nil then return local_mode_laning_generic.GetDesire() end
 
+	-- AIBattle 1v1: laning is the ONLY useful mode here. Keep desire high the whole game so the
+	-- bot never defers to OHA retreat/jungle modes -- after ~12 min the fallbacks below collapse
+	-- to 0.2/0.01, which let retreat-mode win and walk the bot to fountain, abandoning the lane
+	-- and tower (match 8862431491). All retreat/regen is handled inside ThinkLaningCore.
+	if GetGameMode() == GAMEMODE_1V1MID then return 0.7 end
 
 	if currentTime <= 10 then return 0.268 end
 	if currentTime <= 9 * 60 and botLV <= 7 then return 0.446 end
@@ -808,7 +813,10 @@ local function AIB_SiegeIntent(dials, rules)
 	end
 	local advantageSiege = AIB_EnemyDeadRecently() or (waveAtTower and enemyFarOrWeak)
 	local wantsSiege = cwp == "push" or advantageSiege or (dials.push_desire or 0.5) >= 0.65
-	if not wantsSiege or J.GetHP(bot) < 0.35 then
+	-- When the enemy is dead the tower is undefended, so keep sieging at lower HP rather than
+	-- aborting and walking off (match 8862431491: pusher bailed mid-window and lost its own tower).
+	local siegeHpFloor = AIB_EnemyDeadRecently() and 0.22 or 0.35
+	if not wantsSiege or J.GetHP(bot) < siegeHpFloor then
 		AIB_WantBlocked("siege", "desire_or_hp", string.format("hp=%.0f adv=%s", J.GetHP(bot) * 100, tostring(advantageSiege)), 5.0)
 		return false
 	end
@@ -1206,6 +1214,30 @@ local function ThinkLaningCore(dials, rules)
 						end
 						bot:Action_MoveToLocation(back); return
 					end
+				end
+			end
+		end
+	end
+
+	-- Forward low-HP pullback: being low on the ENEMY's half is the gap that emergency-retreat
+	-- (HP<25%) and low-hp-hold (near OWN tower) both miss. Match 8862516153: the bot pushed onto
+	-- the enemy side at 25-30% HP and was killed by the respawned enemy. Skip during the enemy-dead
+	-- window -- that's a safe siege (fix #5), not an overextension.
+	do
+		local holdThresh = rules.low_hp_hold or 0.45
+		if not debugSkeleton and J.GetHP(bot) < holdThresh and not AIB_EnemyDeadRecently() then
+			local ownT1 = GetTower(GetTeam(), TOWER_MID_1)
+			local enmT1 = GetTower(GetOpposingTeam(), TOWER_MID_1)
+			if ownT1 ~= nil and enmT1 ~= nil
+				and GetUnitToUnitDistance(bot, enmT1) < GetUnitToUnitDistance(bot, ownT1) then
+				local back = AIB_ForwardSurvivingTowerLoc()
+				if back and GetUnitToLocationDistance(bot, back) > 200 then
+					if bot.aib_fwdPullLast == nil or DotaTime() - bot.aib_fwdPullLast >= 1.2 then
+						bot.aib_fwdPullLast = DotaTime()
+						AIB_Diag("fwd-lowhp-pull")
+						bot:Action_MoveToLocation(back)
+					end
+					return
 				end
 			end
 		end

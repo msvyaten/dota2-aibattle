@@ -52,6 +52,9 @@ function M.Reset(bot)
 	bot.aib_bottleRuneStarted = nil
 	bot.aib_bottleRuneTarget = nil
 	bot.aib_bottleRuneId = nil
+	-- Flask budget is per-life, not per-game: a bot that's behind and respawning still needs
+	-- sustain (match 8862516153: stomped Dire hit the 2-flask cap and couldn't buy at 10% HP).
+	bot.aib_recBuyCount = nil
 end
 
 local function wantsBottleFromStyle(bot)

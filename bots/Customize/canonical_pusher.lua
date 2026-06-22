@@ -3,12 +3,12 @@
 
 return {
 	dials = {
-		harass_desire     = 0.60,
+		harass_desire     = 0.75,
 		farm_focus        = 0.35,
-		forwardness       = 0.55,
-		retreat_caution   = 0.50,
+		forwardness       = 0.65,
+		retreat_caution   = 0.45,
 		rune_control      = 0.75,
-		execute_threshold = 0.25,
+		execute_threshold = 0.50,
 		ability_aggro     = 0.65,
 		gank_desire       = 0.25,
 		push_desire       = 0.90,

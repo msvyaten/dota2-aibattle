@@ -33,7 +33,9 @@ local function isKillable(bot, enemy, dials)
 	if enemy == nil or not enemy:IsAlive() then return false end
 	local exec = dials and dials.execute_threshold or 0
 	if exec > 0 and J.GetHP(enemy) <= exec then return true end
-	return enemy:GetHealth() <= bot:GetAttackDamage() * 2.2
+	-- 3.0x (not 2.2x): GetAttackDamage ignores Raze/Requiem burst, so 2.2x under-counted SF's
+	-- real kill range and the bot passed on winnable commits (15 kill windows -> 2 kills/match).
+	return enemy:GetHealth() <= bot:GetAttackDamage() * 3.0
 end
 
 local function moveToAttackEdge(bot, target, range)
