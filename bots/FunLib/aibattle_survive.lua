@@ -33,6 +33,17 @@ local function bottleCharges(bot)
 	return bottle:GetCurrentCharges()
 end
 
+local function wantsBottleFromStyle(bot)
+	if GetGameMode() ~= GAMEMODE_1V1MID then return false end
+	if bottleCharges(bot) ~= nil then return false end
+	local build = Style.GetItemBuild and Style.GetItemBuild() or nil
+	if type(build) ~= "table" then return false end
+	for _, name in ipairs(build) do
+		if name == "item_bottle" then return true end
+	end
+	return false
+end
+
 local function fountainRecovery(bot)
 	if DotaTime() <= 0 then return false end
 	if bot.aib_fountainTping then
@@ -454,6 +465,10 @@ local function recovery(bot, dials)
 
 	-- a. Buy flask + courier (rate-limited 15s)
 	if gold >= 55 and (bot.aib_recBuyLast == nil or DotaTime() - bot.aib_recBuyLast >= 15.0) then
+		if wantsBottleFromStyle(bot) and hp >= 0.22 then
+			Style.DiagRL(bot, "bottle-gold-protect", 8)
+			return false
+		end
 		bot.aib_recBuyLast = DotaTime()
 		bot:ActionImmediate_PurchaseItem("item_flask")
 		Style.Diag(bot, "recovery-buy")

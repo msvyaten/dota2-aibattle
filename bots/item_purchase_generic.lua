@@ -101,6 +101,31 @@ local initSmoke = false
 
 local currentTime, botLevel, botGold, botWorth, botMode, botHP, botCourierValue, botStashValue, botDistanceFromFountain
 
+local function AIBProtectBottleGold(itemName)
+	if not okAIB or type(AIBStyle) ~= 'table' or AIBStyle.GetItemBuild == nil then return false end
+	if GetGameMode() ~= GAMEMODE_1V1MID then return false end
+	if J.HasItem(bot, 'item_bottle') then return false end
+
+	local okBuild, build = pcall(AIBStyle.GetItemBuild)
+	if not okBuild or type(build) ~= 'table' then return false end
+	local wantsBottle = false
+	for _, name in ipairs(build) do
+		if name == 'item_bottle' then wantsBottle = true; break end
+	end
+	if not wantsBottle then return false end
+
+	if itemName == 'item_flask' and J.GetHP(bot) < 0.22 then return false end
+	return itemName == 'item_flask' or itemName == 'item_clarity'
+end
+
+local function AIBPurchaseConsumable(itemName)
+	if AIBProtectBottleGold(itemName) then
+		if AIBStyle.DiagRL ~= nil then AIBStyle.DiagRL(bot, 'bottle-gold-protect', 8) end
+		return false
+	end
+	return bot:ActionImmediate_PurchaseItem(itemName)
+end
+
 -- utilities for counting/need detection
 local function _countOwnedEverywhere(unit, itemName)
 	local count = 0
@@ -801,7 +826,7 @@ function ItemPurchaseThink()
 	and botGold >= GetItemCost( "item_clarity" )
 	then
 		bot.hasBuyClarity = true
-		bot:ActionImmediate_PurchaseItem( "item_clarity" )
+		AIBPurchaseConsumable( "item_clarity" )
 	end
 
 	--辅助定位英雄购买辅助物品
@@ -813,7 +838,7 @@ function ItemPurchaseThink()
 			and Utils.CountBackpackEmptySpace(bot) >= 2
 		then
 			bot.hasBuyClarity = true
-			bot:ActionImmediate_PurchaseItem( "item_clarity" )
+			AIBPurchaseConsumable( "item_clarity" )
 		elseif botLevel >= 5
 			and Role['invisEnemyExist'] == true
 			and buyBootsStatus == true
@@ -861,7 +886,7 @@ function ItemPurchaseThink()
 						and botGold >= GetItemCost('item_flask')
 						and GetItemStockCount('item_flask') > 1
 						then
-							bot:ActionImmediate_PurchaseItem('item_flask')
+							AIBPurchaseConsumable('item_flask')
 						end
 					else
 						if Item.GetItemCharges(bot, 'item_flask') <= 0
@@ -870,7 +895,7 @@ function ItemPurchaseThink()
 						and (not J.HasItem(bot, 'item_bottle')
 							or (J.HasItem(bot, 'item_bottle') and Item.GetItemCharges(bot, 'item_bottle') <= 0))
 						then
-							bot:ActionImmediate_PurchaseItem('item_flask')
+							AIBPurchaseConsumable('item_flask')
 						end
 					end
 				else
@@ -878,7 +903,7 @@ function ItemPurchaseThink()
 					and botGold >= GetItemCost('item_flask')
 					and GetItemStockCount('item_flask') > 1
 					then
-						bot:ActionImmediate_PurchaseItem('item_flask')
+						AIBPurchaseConsumable('item_flask')
 					end
 				end
 			else
@@ -902,7 +927,7 @@ function ItemPurchaseThink()
 						and (not J.HasItem(bot, 'item_bottle')
 							or (J.HasItem(bot, 'item_bottle') and Item.GetItemCharges(bot, 'item_bottle') <= 0))
 						then
-							bot:ActionImmediate_PurchaseItem('item_flask')
+							AIBPurchaseConsumable('item_flask')
 						end
 					end
 				else

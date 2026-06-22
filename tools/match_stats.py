@@ -127,14 +127,19 @@ def extract_telemetry(text):
     """Parse periodic AIB location reports separately from action diagnostics."""
     telemetry = {"R": [], "D": []}
     pat = (r"AIB\[([RD])\]\s+t=([\d.]+)s\s+hp=([\d.]+)%\s+gold=(\d+)\s+"
-           r"loc=([-\d.]+),([-\d.]+)(?:\s+enemy-dist=([\d.]+))?")
-    for side, t, hp, gold, x, y, enemy_dist in re.findall(pat, text):
+           r"loc=([-\d.]+),([-\d.]+)(?:\s+enemy-dist=([\d.]+))?"
+           r"(?:\s+lh=(-?\d+))?(?:\s+dn=(-?\d+))?(?:\s+dg=([+-]?\d+))?(?:\s+dlh=([+-]?\d+))?")
+    for side, t, hp, gold, x, y, enemy_dist, lh, dn, dg, dlh in re.findall(pat, text):
         telemetry[side].append({
             "t": float(t),
             "hp": float(hp),
             "gold": int(gold),
             "loc": (float(x), float(y)),
             "enemy_dist": float(enemy_dist) if enemy_dist else None,
+            "lh": int(lh) if lh else None,
+            "dn": int(dn) if dn else None,
+            "dg": int(dg) if dg else None,
+            "dlh": int(dlh) if dlh else None,
         })
     for samples in telemetry.values():
         samples.sort(key=lambda p: p["t"])
@@ -164,6 +169,33 @@ def stationary_spans(samples, move_threshold=90.0, min_seconds=10.0):
     if start is not None and last is not None and last["t"] - start["t"] >= min_seconds:
         spans.append((start, last))
     return spans
+
+def farm_trace(samples, limit=14):
+    """Compact real farm/economy trace from AIB telemetry, when available."""
+    rich = [s for s in samples if s.get("lh") is not None or s.get("dg") is not None]
+    if not rich:
+        return None
+    lh_vals = [s["lh"] for s in rich if s.get("lh") is not None and s["lh"] >= 0]
+    dn_vals = [s["dn"] for s in rich if s.get("dn") is not None and s["dn"] >= 0]
+    total_lh = (lh_vals[-1] - lh_vals[0]) if len(lh_vals) >= 2 else None
+    total_dn = (dn_vals[-1] - dn_vals[0]) if len(dn_vals) >= 2 else None
+    events = []
+    for s in rich:
+        dg = s.get("dg")
+        dlh = s.get("dlh")
+        if dg is None and dlh is None:
+            continue
+        if (dg is not None and abs(dg) >= 40) or (dlh is not None and dlh != 0):
+            bits = []
+            if dg is not None: bits.append(f"dg={dg:+d}")
+            if dlh is not None: bits.append(f"dlh={dlh:+d}")
+            if s.get("lh") is not None and s["lh"] >= 0: bits.append(f"lh={s['lh']}")
+            events.append(f"{s['t']:.0f}s(" + ",".join(bits) + ")")
+    more = f" +{len(events)-limit} more" if len(events) > limit else ""
+    totals = []
+    if total_lh is not None: totals.append(f"LHd={total_lh}")
+    if total_dn is not None: totals.append(f"DNd={total_dn}")
+    return " ".join(totals + events[:limit]) + more
 
 def extract_intents(text):
     """Parse AIB intent lines: side/name count plus last key=value detail string."""
@@ -524,6 +556,10 @@ def main():
         for side in ["R", "D"]:
             if timeline.get(side):
                 print(f"  timeline[{side}]: " + " | ".join(timeline[side]))
+        for side in ["R", "D"]:
+            ft = farm_trace(telemetry.get(side, []))
+            if ft:
+                print(f"  farmtrace[{side}]: {ft}")
         for side in ["R", "D"]:
             spans = stationary_spans(telemetry.get(side, []))
             if spans:

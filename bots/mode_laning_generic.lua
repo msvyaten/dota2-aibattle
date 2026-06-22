@@ -339,6 +339,13 @@ local function AIB_TowerActuallyThreatening(twr)
 	return AIBUtils.IsTowerActuallyThreatening(bot, twr)
 end
 
+local function AIB_SafeCounter(methodName)
+	if bot == nil or bot[methodName] == nil then return nil end
+	local ok, val = pcall(function() return bot[methodName](bot) end)
+	if ok and type(val) == "number" then return val end
+	return nil
+end
+
 -- Periodic location report every 5s (in-game only, DotaTime > 0).
 local function ThinkLocationReport()
 	local now = DotaTime()
@@ -348,15 +355,23 @@ local function ThinkLocationReport()
 	local sp   = bot:GetLocation()
 	local side = (bot:GetTeam() == TEAM_RADIANT) and "R" or "D"
 	local nearby = bot:GetNearbyHeroes(1600, true, BOT_MODE_NONE)
+	local gold = bot:GetGold()
+	local lh = AIB_SafeCounter("GetLastHits")
+	local dn = AIB_SafeCounter("GetDenies")
+	local dg = (bot.aib_lastReportGold ~= nil) and (gold - bot.aib_lastReportGold) or 0
+	local dlh = (lh ~= nil and bot.aib_lastReportLH ~= nil) and (lh - bot.aib_lastReportLH) or 0
+	bot.aib_lastReportGold = gold
+	if lh ~= nil then bot.aib_lastReportLH = lh end
+	local statSuffix = string.format(" lh=%d dn=%d dg=%+d dlh=%+d", lh or -1, dn or -1, dg, dlh)
 	if nearby and #nearby > 0 and nearby[1]:IsAlive() then
 		bot:ActionImmediate_Chat(string.format(
-			"AIB[%s] t=%.0fs hp=%.0f%% gold=%d loc=%.0f,%.0f enemy-dist=%.0f",
-			side, now, J.GetHP(bot)*100, bot:GetGold(), sp.x, sp.y,
-			GetUnitToUnitDistance(bot, nearby[1])), true)
+			"AIB[%s] t=%.0fs hp=%.0f%% gold=%d loc=%.0f,%.0f enemy-dist=%.0f%s",
+			side, now, J.GetHP(bot)*100, gold, sp.x, sp.y,
+			GetUnitToUnitDistance(bot, nearby[1]), statSuffix), true)
 	else
 		bot:ActionImmediate_Chat(string.format(
-			"AIB[%s] t=%.0fs hp=%.0f%% gold=%d loc=%.0f,%.0f",
-			side, now, J.GetHP(bot)*100, bot:GetGold(), sp.x, sp.y), true)
+			"AIB[%s] t=%.0fs hp=%.0f%% gold=%d loc=%.0f,%.0f%s",
+			side, now, J.GetHP(bot)*100, gold, sp.x, sp.y, statSuffix), true)
 	end
 end
 
@@ -654,7 +669,7 @@ local function AIB_ActiveLowHpStep()
 	for _, creep in pairs(nEnemyCreeps or {}) do
 		if J.IsValid(creep) and J.CanBeAttacked(creep)
 			and GetUnitToUnitDistance(bot, creep) <= range + 40 then
-			if hp >= 0.35 then
+			if hp >= 0.35 or (hp >= 0.28 and bot:WasRecentlyDamagedByCreep(1.5)) then
 				bot:Action_AttackUnit(creep, true)
 				AIB_Diag("low-hp-creep")
 				return true
@@ -671,6 +686,21 @@ local function AIB_ActiveLowHpStep()
 		else
 			Style.DiagRL(bot, "low-hp-active-hold", 5)
 		end
+		return true
+	end
+	if back ~= nil and (bot:WasRecentlyDamagedByCreep(1.5) or bot:WasRecentlyDamagedByAnyHero(1.5)) then
+		local ownT1 = GetTower(GetTeam(), TOWER_MID_1)
+		local enmT1 = GetTower(GetOpposingTeam(), TOWER_MID_1)
+		if ownT1 ~= nil and enmT1 ~= nil then
+			local a, b = ownT1:GetLocation(), enmT1:GetLocation()
+			local dx, dy = a.x - b.x, a.y - b.y
+			local d = math.sqrt(dx*dx + dy*dy)
+			if d > 1 then
+				back = Vector(back.x + (dx/d)*260, back.y + (dy/d)*260, back.z)
+			end
+		end
+		bot:Action_MoveToLocation(back + RandomVector(35))
+		AIB_Diag("low-hp-safe-step")
 		return true
 	end
 	return false

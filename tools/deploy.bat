@@ -57,6 +57,7 @@ if "%DO_CODE%"=="1" (
 	call :copyfile "FunLib\aibattle_laning_trade.lua" || exit /b 1
 	call :copyfile "FunLib\aibattle_utils.lua" || exit /b 1
 	call :copyfile "FunLib\jmz_func.lua" || exit /b 1
+	call :copyfile "item_purchase_generic.lua" || exit /b 1
 	call :copyfile "mode_laning_generic.lua" || exit /b 1
 	call :copyfile "mode_roam_generic.lua" || exit /b 1
 	call :copyfile "mode_retreat_generic.lua" || exit /b 1
