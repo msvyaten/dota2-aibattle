@@ -113,6 +113,31 @@ def _strip_lua(src):
     return "".join(out)
 
 
+def lua_structure_problems(src):
+    """Return a list of structural problems for one Lua source string ([] = clean).
+
+    Invariant: in valid Lua, `end` count == (`function` + `if` + `do`), because every for/while
+    carries exactly one `do`. Plus balanced ()/[]/{} and repeat==until. Operates on comment-
+    and string-stripped code so keywords/brackets inside those don't miscount.
+    """
+    code = _strip_lua(src)
+    problems = []
+    for open_c, close_c in (("(", ")"), ("[", "]"), ("{", "}")):
+        o, c = code.count(open_c), code.count(close_c)
+        if o != c:
+            problems.append(f"{open_c}{close_c} {o}/{c}")
+
+    def wc(word):
+        return len(re.findall(r"\b" + word + r"\b", code))
+
+    ends, openers = wc("end"), wc("function") + wc("if") + wc("do")
+    if ends != openers:
+        problems.append(f"end={ends} vs function+if+do={openers}")
+    if wc("repeat") != wc("until"):
+        problems.append(f"repeat={wc('repeat')} until={wc('until')}")
+    return problems
+
+
 def check_lua_syntax():
     """Structural sanity check (no luac available): balanced delimiters and block keywords.
 
@@ -125,21 +150,7 @@ def check_lua_syntax():
         path = ROOT / "bots" / rel
         if not path.exists():
             continue
-        code = _strip_lua(path.read_text(encoding="utf-8", errors="ignore"))
-        problems = []
-        for open_c, close_c in (("(", ")"), ("[", "]"), ("{", "}")):
-            o, c = code.count(open_c), code.count(close_c)
-            if o != c:
-                problems.append(f"{open_c}{close_c} {o}/{c}")
-
-        def wc(word):
-            return len(re.findall(r"\b" + word + r"\b", code))
-
-        ends, openers = wc("end"), wc("function") + wc("if") + wc("do")
-        if ends != openers:
-            problems.append(f"end={ends} vs function+if+do={openers}")
-        if wc("repeat") != wc("until"):
-            problems.append(f"repeat={wc('repeat')} until={wc('until')}")
+        problems = lua_structure_problems(path.read_text(encoding="utf-8", errors="ignore"))
         if problems:
             bad.append(f"{rel}: " + "; ".join(problems))
     if bad:
