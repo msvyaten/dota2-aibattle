@@ -16,6 +16,17 @@ return {
 		ward_desire       = 0.90,
 		roshan_desire     = 0.85,
 	},
+	item_build = {
+		npc_dota_hero_nevermore = {
+			"item_tango",
+			"item_branches",
+			"item_branches",
+			"item_bottle",
+			"item_boots",
+			"item_magic_wand",
+			"item_belt_of_strength",
+		},
+	},
 	rules = {
 		respawn_behavior    = "tp_to_lane",
 		pregame_behavior    = "safe_tower",

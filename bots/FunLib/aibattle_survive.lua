@@ -263,8 +263,8 @@ local function defensiveHeal(bot, dials)
 		end
 	end
 
-	-- 3. Mango: instant, separate mana CD
-	if mana < 0.20 and manaReady then
+	-- 3. Mango: instant, separate mana CD; keep it for true mana emergencies.
+	if mana < 0.12 and manaReady then
 		local mango = getItem(bot, "item_enchanted_mango")
 		if mango then
 			bot.aib_manaLast = DotaTime(); Style.Diag(bot, "mana-mango")
@@ -300,8 +300,8 @@ local function defensiveHeal(bot, dials)
 		end
 	end
 
-	-- 8. Clarity: channel, any damage cancels -- separate mana CD
-	if mana < 0.40 and manaReady then
+	-- 8. Clarity: channel, any damage cancels -- separate mana CD.
+	if mana < 0.25 and manaReady then
 		local safe = not (bot:WasRecentlyDamagedByAnyHero(0.5) or bot:WasRecentlyDamagedByCreep(0.5))
 		if safe then
 			local clarity = getItem(bot, "item_clarity")

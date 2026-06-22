@@ -786,6 +786,43 @@ local function AIB_ContactHeroStep(rules)
 	return false
 end
 
+local function AIB_PreCreepStandoffStep()
+	local now = DotaTime()
+	if now < 0 or now > 25 then return false end
+	if (nEnemyCreeps and #nEnemyCreeps > 0) or (nAllyCreeps and #nAllyCreeps > 0) then return false end
+
+	local range = botAttackRange or bot:GetAttackRange()
+	local enemy, dist = AIB_NearestEnemyHero(range + 80)
+	if enemy ~= nil and dist <= range + 40 and not AIB_UphillMiss(enemy) then
+		bot:Action_AttackUnit(enemy, false)
+		AIB_Diag("precreep-trade")
+		return true
+	end
+
+	local ownT1 = GetTower(GetTeam(), TOWER_MID_1)
+	local enmT1 = GetTower(GetOpposingTeam(), TOWER_MID_1)
+	if ownT1 ~= nil and enmT1 ~= nil then
+		local a, b = ownT1:GetLocation(), enmT1:GetLocation()
+		local totalDist = math.sqrt((b.x-a.x)^2 + (b.y-a.y)^2)
+		if totalDist > 1 then
+			local anchor = Vector(a.x + (b.x-a.x)/totalDist * 900, a.y + (b.y-a.y)/totalDist * 900, a.z)
+			if GetUnitToLocationDistance(bot, anchor) > 220 then
+				if bot.aib_preCreepMoveLast == nil or now - bot.aib_preCreepMoveLast >= 2.5 then
+					bot.aib_preCreepMoveLast = now
+					bot:Action_MoveToLocation(anchor)
+					AIB_Diag("precreep-anchor")
+				else
+					Style.DiagRL(bot, "precreep-hold", 5)
+				end
+			else
+				Style.DiagRL(bot, "precreep-hold", 5)
+			end
+			return true
+		end
+	end
+	return false
+end
+
 local function ThinkPregame(dials)
 	if DotaTime() >= 0 or GetGameMode() ~= GAMEMODE_1V1MID then return false end
 	if AIBSurvive.Think(bot, dials, nil) then return true end
@@ -940,6 +977,7 @@ local function ThinkLaningCore(dials, rules)
 	if urgentInterrupt ~= nil then urgentIntents[#urgentIntents + 1] = urgentInterrupt end
 	if AIBEngine.Resolve(urgentIntents, intentCtx) then return end
 
+	if AIB_PreCreepStandoffStep() then return end
 	if AIB_ContactHeroStep(rules) then return end
 	if AIB_CreepHitReactStep() then return end
 	if AIB_DamageUnstuckStep() then return end
@@ -1223,10 +1261,10 @@ local function ThinkLaningCore(dials, rules)
 				dest = Vector(a.x + (b.x - a.x) * fwd, a.y + (b.y - a.y) * fwd, a.z)
 			end
 		end
-		if dest ~= nil and GetUnitToLocationDistance(bot, dest) > 220 then
+		if dest ~= nil and GetUnitToLocationDistance(bot, dest) > 360 then
 			local now = DotaTime()
-			if bot.aib_fwdLast == nil or now - bot.aib_fwdLast >= 1.0
-				or GetUnitToLocationDistance(bot, dest) > 700 then
+			if bot.aib_fwdLast == nil or now - bot.aib_fwdLast >= 2.0
+				or GetUnitToLocationDistance(bot, dest) > 850 then
 				bot.aib_fwdLast = now
 				bot:Action_MoveToLocation(dest)
 				AIB_Diag("fwd-position")
