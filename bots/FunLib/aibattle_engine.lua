@@ -49,6 +49,17 @@ function M.Resolve(intents, ctx)
 			if intent.blocked then
 				Style.Blocked(bot, intent.name, intent.reason, intent.detail, intent.sec)
 			elseif intent.action ~= nil then
+				if #(intents or {}) > 1 then
+					local losers = {}
+					for _, other in ipairs(intents or {}) do
+						if other ~= intent and other ~= nil and other.name ~= nil then
+							losers[#losers + 1] = tostring(other.name) .. ":" .. tostring(other.priority or 0)
+							if #losers >= 4 then break end
+						end
+					end
+					Style.Intent(bot, "arbiter", string.format("winner=%s:%s losers=%s",
+						tostring(intent.name), tostring(intent.priority or 0), table.concat(losers, ",")), 1.5)
+				end
 				Style.Intent(bot, intent.name, intentDetail(intent), intent.sec)
 				intent.action(ctx)
 				if ctx ~= nil then ctx.last_intent = intent.name end

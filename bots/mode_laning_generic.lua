@@ -492,11 +492,8 @@ local function AIB_VisualAFKStep(rules)
 				return false
 			end
 			if dist > botAttackRange + 120 then
-				bot:Action_MoveToUnit(enemy)
-				bot.aib_afkLast = now
-				AIB_ResetVisualAFK(now, loc)
-				AIB_Diag("anti-afk-chase")
-				return true
+				Style.DiagRL(bot, "anti-afk-no-chase", 5)
+				return false
 			end
 			local dx, dy = loc.x - enemyLoc.x, loc.y - enemyLoc.y
 			local d = math.sqrt(dx*dx + dy*dy)
@@ -969,9 +966,6 @@ local function AIB_PreCreepStandoffStep()
 						AIB_Diag("precreep-space")
 						return true
 					end
-				elseif enemy ~= nil and dist > range + 180 and preMode == "aggressive_mid" then
-					AIB_MoveToAttackEdgeOf(enemy, "precreep-edge", 0)
-					return true
 				end
 				Style.DiagRL(bot, "precreep-hold", 5)
 				return true
@@ -1268,19 +1262,34 @@ local function ThinkLaningCore(dials, rules)
 		end
 	end
 
-	-- Survival baseline: low HP near own tower suppresses forward movement but not farming.
+	-- Survival baseline: low HP near own tower limits risky actions, but it must not
+	-- consume the tick by itself. Only take an active low-HP step when danger is present.
 	local aib_lowHpHold = false
+	local aib_lowHpDanger = false
 	do
 		local holdThresh = rules.low_hp_hold or 0.45
 		if not debugSkeleton and holdThresh > 0 and J.GetHP(bot) < holdThresh then
 			local ownT1 = GetTower(GetTeam(), TOWER_MID_1)
 			if ownT1 ~= nil and GetUnitToUnitDistance(bot, ownT1) < 900 then
 				aib_lowHpHold = true
-				AIB_Diag("low-hp-hold")
+				Style.DiagRL(bot, "low-hp-limit", 3)
+				if bot:WasRecentlyDamagedByCreep(2.0) or bot:WasRecentlyDamagedByAnyHero(2.0) then
+					aib_lowHpDanger = true
+				else
+					local nearHeroes = bot:GetNearbyHeroes(math.max(botAttackRange + 180, 850), true, BOT_MODE_NONE)
+					aib_lowHpDanger = nearHeroes and #nearHeroes > 0 and nearHeroes[1]:IsAlive()
+					if not aib_lowHpDanger then
+						for _, creep in pairs(nEnemyCreeps or {}) do
+							if J.IsValid(creep) and GetUnitToUnitDistance(bot, creep) <= botAttackRange + 180 then
+								aib_lowHpDanger = true; break
+							end
+						end
+					end
+				end
 			end
 		end
 	end
-	if aib_lowHpHold and AIB_ActiveLowHpStep() then return end
+	if aib_lowHpHold and aib_lowHpDanger and AIB_ActiveLowHpStep() then return end
 
 	-- Uphill repositioning: fires BEFORE harass; no trading from low ground.
 	-- Target = own T1 location (guaranteed high ground). 350u-ahead offset overshoots the ramp.
@@ -1452,13 +1461,27 @@ local function ThinkLaningCore(dials, rules)
 		end
 	end
 
-	-- Forwardness is only a final lane-positioning preference. It yields to combat,
-	-- attackable creeps, low-HP hold, and tower safety.
+	-- Forwardness is only a final lane-positioning preference. Keep it rare and
+	-- quiet: it must yield to combat, creep damage, recovery/rune commits, CS,
+	-- low-HP limits, siege commits, and tower safety.
 	local pressureEnemy = AIB_NearestEnemyHero(math.max(botAttackRange + 180, 700))
 	local attackableCreep = AIB_HasAttackableEnemyCreep(botAttackRange + 30)
+	local nowFwd = DotaTime()
+	local pendingLastHit = csAllowed and (csDistNow or math.huge) <= botAttackRange * 1.8
+	local recentRecovery = bot.aib_recMoveLast ~= nil and nowFwd - bot.aib_recMoveLast < 2.5
+	local recentCreepRelief = bot.aib_creepReliefLast ~= nil and nowFwd - bot.aib_creepReliefLast < 1.8
+	local runeCommit = bot.aib_bottleRuneStarted ~= nil and nowFwd - bot.aib_bottleRuneStarted < 22.0
+	local siegeCommit = bot.aib_siegeCommitUntil ~= nil and nowFwd <= bot.aib_siegeCommitUntil
 	local suppressForward = pressureEnemy ~= nil
 		or attackableCreep
+		or pendingLastHit
 		or aib_lowHpHold
+		or recentRecovery
+		or recentCreepRelief
+		or runeCommit
+		or siegeCommit
+		or bot:WasRecentlyDamagedByCreep(2.0)
+		or (J.GetHP(bot) < 0.55 and bot:WasRecentlyDamagedByAnyHero(2.0))
 		or (AIB_EnemyTowerDanger() ~= nil and AIB_TowerActuallyThreatening(AIB_EnemyTowerDanger()) and not Style.MayDive(bot))
 	if not debugNoForward and not suppressForward then
 		local fwd = dials.forwardness or 0.5
@@ -1474,11 +1497,10 @@ local function ThinkLaningCore(dials, rules)
 				dest = Vector(a.x + (b.x - a.x) * fwd, a.y + (b.y - a.y) * fwd, a.z)
 			end
 		end
-		if dest ~= nil and GetUnitToLocationDistance(bot, dest) > 360 then
-			local now = DotaTime()
-			if bot.aib_fwdLast == nil or now - bot.aib_fwdLast >= 2.0
-				or GetUnitToLocationDistance(bot, dest) > 850 then
-				bot.aib_fwdLast = now
+		if dest ~= nil and GetUnitToLocationDistance(bot, dest) > 520 then
+			if bot.aib_fwdLast == nil or nowFwd - bot.aib_fwdLast >= 3.5
+				or GetUnitToLocationDistance(bot, dest) > 1050 then
+				bot.aib_fwdLast = nowFwd
 				bot:Action_MoveToLocation(dest)
 				AIB_Diag("fwd-position")
 			else
@@ -1496,6 +1518,14 @@ local function ThinkLaningCore(dials, rules)
 			Style.DiagRL(bot, "fwd-suppressed-hero", 5)
 		elseif attackableCreep then
 			Style.DiagRL(bot, "fwd-suppressed-creep", 5)
+		elseif pendingLastHit then
+			Style.DiagRL(bot, "fwd-suppressed-cs", 5)
+		elseif recentRecovery then
+			Style.DiagRL(bot, "fwd-suppressed-recovery", 5)
+		elseif runeCommit then
+			Style.DiagRL(bot, "fwd-suppressed-rune", 5)
+		elseif recentCreepRelief then
+			Style.DiagRL(bot, "fwd-suppressed-damage", 5)
 		else
 			Style.DiagRL(bot, "fwd-suppressed-tower", 5)
 		end

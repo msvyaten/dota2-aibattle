@@ -38,6 +38,38 @@ local function bottleCharges(bot)
 	return bottle:GetCurrentCharges()
 end
 
+local function recoveryPlan(bot, action, reason, detail, sec)
+	local text = "action=" .. tostring(action) .. " reason=" .. tostring(reason)
+	if detail ~= nil and detail ~= "" then text = text .. " " .. detail end
+	Style.Intent(bot, "recovery-plan", text, sec or 2.0)
+end
+
+local function itemCost(name)
+	local ok, cost = pcall(function() return GetItemCost(name) end)
+	if ok and type(cost) == "number" and cost > 0 then return cost end
+	local fallback = {
+		item_bottle = 675,
+		item_magic_wand = 450,
+		item_boots = 500,
+		item_power_treads = 1400,
+		item_lifesteal = 900,
+	}
+	return fallback[name] or 0
+end
+
+local function missingCheckpointItem(bot)
+	local checkpoints = {
+		"item_bottle",
+		"item_magic_wand",
+		"item_power_treads",
+		"item_lifesteal",
+	}
+	for _, name in ipairs(checkpoints) do
+		if not hasItem(bot, name) then return name, itemCost(name) end
+	end
+	return nil, 0
+end
+
 function M.Reset(bot)
 	if bot == nil then return end
 	bot.aib_fountainTrip = false
@@ -176,6 +208,7 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 		end
 		local targetDist = GetUnitToLocationDistance(bot, bot.aib_bottleRuneTarget)
 		if bot.aib_bottleRuneId ~= nil and targetDist <= 140 then
+			recoveryPlan(bot, "rune", "pickup", string.format("source=%s dist=%.0f", diagKey, targetDist), 1.0)
 			Style.Intent(bot, diagKey, string.format("dist=%.0f age=%.0f reason=pickup", targetDist, now - bot.aib_bottleRuneStarted), 1.0)
 			if bot.Action_PickUpRune ~= nil then
 				bot:Action_PickUpRune(bot.aib_bottleRuneId)
@@ -185,10 +218,12 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 			return true
 		end
 		if targetDist > 35 then
+			recoveryPlan(bot, "rune", "commit", string.format("source=%s dist=%.0f", diagKey, targetDist), 2.0)
 			Style.Intent(bot, diagKey, string.format("dist=%.0f age=%.0f reason=commit", targetDist, now - bot.aib_bottleRuneStarted), 2.0)
 			bot:Action_MoveToLocation(bot.aib_bottleRuneTarget)
 			return true
 		end
+		recoveryPlan(bot, "rune", "hold", string.format("source=%s dist=%.0f", diagKey, targetDist), 1.0)
 		Style.Intent(bot, diagKey, string.format("dist=%.0f age=%.0f reason=hold", targetDist, now - bot.aib_bottleRuneStarted), 1.0)
 		bot:Action_MoveToLocation(bot.aib_bottleRuneTarget + RandomVector(25))
 		return true
@@ -259,6 +294,7 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 	bot.aib_bottleRuneStarted = now
 	bot.aib_bottleRuneTarget = bestLoc
 	bot.aib_bottleRuneId = bestRune
+	recoveryPlan(bot, "rune", "start", string.format("source=%s dist=%.0f hp=%.0f mana=%.0f", diagKey, bestDist, hp*100, mana*100), 2.0)
 	Style.Intent(bot, diagKey, string.format("dist=%.0f hp=%.0f mana=%.0f reason=start", bestDist, hp*100, mana*100), 2.0)
 	Style.Diag(bot, diagKey)
 	bot:Action_MoveToLocation(bestLoc)
@@ -479,6 +515,7 @@ local function recovery(bot, dials)
 				elseif bItem:GetCurrentCharges() > 0 and bItem:IsFullyCastable()
 					and (bot.aib_recBottleLast == nil or DotaTime() - bot.aib_recBottleLast >= 3.0) then
 					bot.aib_recBottleLast = DotaTime()
+					recoveryPlan(bot, "bottle", "charges", string.format("hp=%.0f mana=%.0f charges=%d", hp*100, mana*100, bItem:GetCurrentCharges()), 2.0)
 					Style.Diag(bot, "recovery-bottle"); bot:Action_UseAbility(bItem); return true
 				elseif bItem:GetCurrentCharges() == 0 then
 					if seekBottleRune(bot, hp, mana, "recovery-rune-bottle", 3600, { lane_aware = false }) then return true end
@@ -497,6 +534,7 @@ local function recovery(bot, dials)
 		if flask then
 			if bot.aib_recFlaskLast == nil or DotaTime() - bot.aib_recFlaskLast >= 8.0 then
 				bot.aib_recFlaskLast = DotaTime()
+				recoveryPlan(bot, "flask", "inventory", string.format("hp=%.0f", hp*100), 2.0)
 				Style.Diag(bot, "recovery-flask"); bot:Action_UseAbilityOnEntity(flask, bot)
 				return true  -- protect first tick after cast
 			end
@@ -518,6 +556,7 @@ local function recovery(bot, dials)
 			if back then
 				if bot.aib_recMoveLast == nil or DotaTime() - bot.aib_recMoveLast >= 5.0 then
 					bot.aib_recMoveLast = DotaTime()
+					recoveryPlan(bot, "back", "post_fight_regen", string.format("hp=%.0f", hp*100), 2.0)
 					Style.Diag(bot, "recovery-regen")
 					bot:Action_MoveToLocation(back)
 				end
@@ -548,8 +587,15 @@ local function recovery(bot, dials)
 			Style.DiagRL(bot, "bottle-gold-protect", 8)
 			return false
 		end
+		local checkpoint, cost = missingCheckpointItem(bot)
+		if checkpoint ~= nil and hp >= 0.16 and cost > 0 and gold >= cost - 120 then
+			Style.Blocked(bot, "recovery-buy", "item_checkpoint", string.format("item=%s hp=%.0f gold=%d cost=%d", checkpoint, hp*100, gold, cost), 8.0)
+			recoveryPlan(bot, "buy_flask", "checkpoint_block", string.format("item=%s hp=%.0f gold=%d", checkpoint, hp*100, gold), 3.0)
+			return false
+		end
 		bot.aib_recBuyLast = DotaTime()
 		bot.aib_recBuyCount = (bot.aib_recBuyCount or 0) + 1
+		recoveryPlan(bot, "buy_flask", "critical", string.format("hp=%.0f gold=%d count=%d", hp*100, gold, bot.aib_recBuyCount or 0), 2.0)
 		bot:ActionImmediate_PurchaseItem("item_flask")
 		Style.Diag(bot, "recovery-buy")
 		return true
@@ -559,6 +605,7 @@ local function recovery(bot, dials)
 	local tp = getItem(bot, "item_tpscroll")
 	if tp and (behavior == "tp_fountain" or behavior == "walk_fountain") then
 		bot.aib_fountainTrip = true
+		recoveryPlan(bot, "tp_fountain", "critical", string.format("hp=%.0f", hp*100), 2.0)
 		Style.Diag(bot, "recovery-tp"); bot:Action_UseAbility(tp); return true
 	end
 
@@ -566,6 +613,7 @@ local function recovery(bot, dials)
 	if behavior == "walk_fountain" or (behavior == "tp_fountain" and not tp) then
 		if bot.aib_recMoveLast == nil or DotaTime() - bot.aib_recMoveLast >= 5.0 then
 			bot.aib_fountainTrip = true
+			recoveryPlan(bot, "walk_fountain", "no_tp", string.format("hp=%.0f", hp*100), 2.0)
 			bot.aib_recMoveLast = DotaTime(); Style.Diag(bot, "recovery-walk")
 			bot:Action_MoveToLocation(J.GetTeamFountain())
 		end
@@ -577,6 +625,7 @@ local function recovery(bot, dials)
 		for _, runeId in ipairs({ RUNE_POWERUP_1, RUNE_POWERUP_2 }) do
 			if GetRuneStatus(runeId) == RUNE_STATUS_AVAILABLE and GetRuneType(runeId) == RUNE_WATER then
 				if bot.aib_recMoveLast == nil or DotaTime() - bot.aib_recMoveLast >= 5.0 then
+					recoveryPlan(bot, "water_rune", "regen_lane", string.format("hp=%.0f mana=%.0f", hp*100, mana*100), 2.0)
 					bot.aib_recMoveLast = DotaTime(); Style.Diag(bot, "recovery-rune")
 					bot:Action_MoveToLocation(GetRuneSpawnLocation(runeId))
 				end
@@ -592,6 +641,7 @@ local function recovery(bot, dials)
 		if DotaTime() - bot.aib_recWaitStart < 10.0 then
 			if bot.aib_recMoveLast == nil or DotaTime() - bot.aib_recMoveLast >= 5.0 then
 				bot.aib_recMoveLast = DotaTime(); Style.Diag(bot, "recovery-wait")
+				recoveryPlan(bot, "wait_safe", "no_resources", string.format("hp=%.0f", hp*100), 2.0)
 				bot:Action_MoveToLocation(back)
 			end
 			return true
