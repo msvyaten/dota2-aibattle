@@ -107,6 +107,7 @@ function M.Reset(bot)
 	bot.aib_bottleRuneStageWindow = nil
 	bot.aib_bottleRuneStageUntil = nil
 	bot.aib_bottleRuneStageTarget = nil
+	bot.aib_bottleRuneStageFollowLast = nil
 	-- Flask budget is per-life, not per-game: a bot that's behind and respawning still needs
 	-- sustain (match 8862516153: stomped Dire hit the 2-flask cap and couldn't buy at 10% HP).
 	bot.aib_recBuyCount = nil
@@ -294,7 +295,9 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 	end
 	if bot.aib_bottleRuneStarted ~= nil then
 		Style.Blocked(bot, diagKey, "commit_timeout", "age=22", 4.0)
-		runeResult(bot, diagKey, "timeout", "age=22", 10.0)
+		local combatTimeout = bot:WasRecentlyDamagedByAnyHero(4.0)
+		local timeoutCd = combatTimeout and 3.0 or 6.0
+		runeResult(bot, diagKey, "timeout", string.format("age=22 combat=%s", tostring(combatTimeout)), timeoutCd)
 		clearRuneAttempt(bot)
 	end
 
@@ -324,7 +327,8 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 				if bot.aib_bottleRuneStageUntil ~= nil and now <= bot.aib_bottleRuneStageUntil
 					and bot.aib_bottleRuneStageTarget ~= nil then
 					local followDist = GetUnitToLocationDistance(bot, bot.aib_bottleRuneStageTarget)
-					if secsToSpawn <= 4.0 and followDist > 140 then
+					if followDist > 140 and (bot.aib_bottleRuneStageFollowLast == nil or now - bot.aib_bottleRuneStageFollowLast >= 4.0) then
+						bot.aib_bottleRuneStageFollowLast = now
 						recoveryPlan(bot, "rune_stage", "follow", string.format("source=%s dist=%.0f eta=%.0f", diagKey, followDist, secsToSpawn), 3.0)
 						bot:Action_MoveToLocation(bot.aib_bottleRuneStageTarget)
 						return true
@@ -345,6 +349,7 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 				bot.aib_bottleRuneStageWindow = nextSpawnAt
 				bot.aib_bottleRuneStageUntil = nextSpawnAt + 3.0
 				bot.aib_bottleRuneStageTarget = stageLoc
+				bot.aib_bottleRuneStageFollowLast = now
 				recoveryPlan(bot, "rune_stage", spawnKind or "upcoming", string.format("source=%s dist=%.0f eta=%.0f", diagKey, stageDist, secsToSpawn), 2.0)
 				Style.Intent(bot, diagKey, string.format("dist=%.0f eta=%.0f reason=stage", stageDist, secsToSpawn), 2.0)
 				Style.Diag(bot, diagKey)
@@ -403,6 +408,7 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 	bot.aib_bottleRuneStageWindow = nil
 	bot.aib_bottleRuneStageUntil = nil
 	bot.aib_bottleRuneStageTarget = nil
+	bot.aib_bottleRuneStageFollowLast = nil
 	recoveryPlan(bot, "rune", "start", string.format("source=%s dist=%.0f hp=%.0f mana=%.0f", diagKey, bestDist, hp*100, mana*100), 2.0)
 	Style.Intent(bot, diagKey, string.format("dist=%.0f hp=%.0f mana=%.0f reason=start", bestDist, hp*100, mana*100), 2.0)
 	Style.Diag(bot, diagKey)
@@ -471,7 +477,8 @@ local function defensiveHeal(bot, dials)
 	if seekBottleRune(bot, hp, mana, "bottle-rune", rules.bottle_rune_max_dist or 1900, {
 		lane_aware = true,
 		stage_upcoming = true,
-		stage_window = 10.0,
+		stage_window = 18.0,
+		stage_max_dist = 3600,
 	}) then return true end
 
 	if Style.Get().rules.healing_style ~= "active" then return false end
@@ -635,8 +642,8 @@ local function recovery(bot, dials)
 						lane_aware = false,
 						force_empty_bottle = true,
 						stage_upcoming = true,
-						stage_window = 14.0,
-						stage_max_dist = 3200,
+						stage_window = 24.0,
+						stage_max_dist = 4200,
 					}) then return true end
 					recoveryPlan(bot, "lane", "empty_bottle_no_rune", string.format("hp=%.0f mana=%.0f", hp*100, mana*100), 8.0)
 					if hp >= 0.24 then bot.aib_recWaitStart = nil end
