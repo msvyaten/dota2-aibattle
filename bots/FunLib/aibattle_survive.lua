@@ -160,11 +160,34 @@ local function laneFrontDistance(bot)
 	return GetUnitToLocationDistance(bot, front)
 end
 
+local function nearestRuneSpot(bot)
+	local bestRune, bestLoc, bestDist = nil, nil, math.huge
+	for _, runeId in ipairs({ RUNE_POWERUP_1, RUNE_POWERUP_2 }) do
+		local loc = GetRuneSpawnLocation(runeId)
+		if loc ~= nil then
+			local dist = GetUnitToLocationDistance(bot, loc)
+			if dist < bestDist then
+				bestRune, bestLoc, bestDist = runeId, loc, dist
+			end
+		end
+	end
+	return bestRune, bestLoc, bestDist
+end
+
+local function nextBottleRuneSpawn(now)
+	if now == nil or now < 0 then return nil end
+	if now < 120 then return 120, "water" end
+	if now < 240 then return 240, "water" end
+	if now < 360 then return 360, "power" end
+	return (math.floor(now / 120) + 1) * 120, "power"
+end
+
 local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 	opts = opts or {}
 	local rules = Style.Get().rules
 	local laneAware = opts.lane_aware ~= false
-	if hp >= 0.78 and mana >= 0.45 then return false end
+	local forceEmptyBottle = opts.force_empty_bottle == true
+	if hp >= 0.78 and mana >= 0.45 and not forceEmptyBottle then return false end
 
 	local bSlot = bot:FindItemSlot("item_bottle")
 	if bSlot < 0 then return false end
@@ -250,6 +273,32 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 		end
 	end
 	if bestLoc == nil then
+		if opts.stage_upcoming == true then
+			local nextSpawnAt, spawnKind = nextBottleRuneSpawn(now)
+			local secsToSpawn = nextSpawnAt ~= nil and (nextSpawnAt - now) or math.huge
+			local stageWindow = opts.stage_window or 16.0
+			local stageRune, stageLoc, stageDist = nearestRuneSpot(bot)
+			local stageMaxDist = opts.stage_max_dist or math.max(maxDist or 2600, 2600)
+			if stageRune ~= nil and stageLoc ~= nil and secsToSpawn >= 0 and secsToSpawn <= stageWindow and stageDist <= stageMaxDist then
+				if laneAware and stageDist > 700 and hp > 0.62 and hasLastHitWindow(bot) and secsToSpawn > 5 then
+					Style.Blocked(bot, diagKey, "last_hit_window", string.format("stage=1 rune=%.0f hp=%.0f eta=%.0f", stageDist, hp*100, secsToSpawn), 6.0)
+					return false
+				end
+				if stageDist > 700 and bot:WasRecentlyDamagedByAnyHero(1.0) and hp < 0.45 then
+					Style.Blocked(bot, diagKey, "hero_damage", string.format("stage=1 hp=%.0f rune=%.0f eta=%.0f", hp*100, stageDist, secsToSpawn), 6.0)
+					return false
+				end
+				recoveryPlan(bot, "rune_stage", spawnKind or "upcoming", string.format("source=%s dist=%.0f eta=%.0f", diagKey, stageDist, secsToSpawn), 2.0)
+				Style.Intent(bot, diagKey, string.format("dist=%.0f eta=%.0f reason=stage", stageDist, secsToSpawn), 2.0)
+				Style.Diag(bot, diagKey)
+				if stageDist > 120 then
+					bot:Action_MoveToLocation(stageLoc)
+				else
+					bot:Action_MoveToLocation(stageLoc + RandomVector(35))
+				end
+				return true
+			end
+		end
 		Style.Blocked(bot, diagKey, "no_close_rune", string.format("max=%.0f", maxDist or 2600), 8.0)
 		return false
 	end
@@ -359,7 +408,11 @@ local function defensiveHeal(bot, dials)
 	end
 
 	local rules = Style.Get().rules
-	if seekBottleRune(bot, hp, mana, "bottle-rune", rules.bottle_rune_max_dist or 1900, { lane_aware = true }) then return true end
+	if seekBottleRune(bot, hp, mana, "bottle-rune", rules.bottle_rune_max_dist or 1900, {
+		lane_aware = true,
+		stage_upcoming = true,
+		stage_window = 10.0,
+	}) then return true end
 
 	if Style.Get().rules.healing_style ~= "active" then return false end
 
@@ -518,7 +571,13 @@ local function recovery(bot, dials)
 					recoveryPlan(bot, "bottle", "charges", string.format("hp=%.0f mana=%.0f charges=%d", hp*100, mana*100, bItem:GetCurrentCharges()), 2.0)
 					Style.Diag(bot, "recovery-bottle"); bot:Action_UseAbility(bItem); return true
 				elseif bItem:GetCurrentCharges() == 0 then
-					if seekBottleRune(bot, hp, mana, "recovery-rune-bottle", 3600, { lane_aware = false }) then return true end
+					if seekBottleRune(bot, hp, mana, "recovery-rune-bottle", 3600, {
+						lane_aware = false,
+						force_empty_bottle = true,
+						stage_upcoming = true,
+						stage_window = 18.0,
+						stage_max_dist = 3600,
+					}) then return true end
 					-- No rune: fall through to threshold check (fountain only if HP critically low)
 				end
 			end
