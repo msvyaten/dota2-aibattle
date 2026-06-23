@@ -53,6 +53,8 @@ local function itemCost(name)
 		item_boots = 500,
 		item_power_treads = 1400,
 		item_lifesteal = 900,
+		item_flask = 100,
+		item_clarity = 50,
 	}
 	return fallback[name] or 0
 end
@@ -70,6 +72,23 @@ local function missingCheckpointItem(bot)
 	return nil, 0
 end
 
+local function consumableSpendBlocked(bot, hp, gold, itemName)
+	local spend = itemCost(itemName)
+	local checkpoint, cost = missingCheckpointItem(bot)
+	if checkpoint == nil or cost <= 0 then return false end
+	if hp >= 0.16 and spend > 0 and gold - spend < cost and gold >= cost - 160 then
+		Style.Blocked(bot, "recovery-buy", "item_checkpoint", string.format("item=%s hp=%.0f gold=%d cost=%d spend=%d", checkpoint, hp*100, gold, cost, spend), 8.0)
+		recoveryPlan(bot, "buy_" .. tostring(itemName), "checkpoint_block", string.format("item=%s hp=%.0f gold=%d", checkpoint, hp*100, gold), 3.0)
+		return true
+	end
+	if hp >= 0.18 and checkpoint ~= nil and (bot.aib_recBuySpent or 0) >= 220 then
+		Style.Blocked(bot, "recovery-buy", "consumable_budget", string.format("item=%s hp=%.0f spent=%d", checkpoint, hp*100, bot.aib_recBuySpent or 0), 8.0)
+		recoveryPlan(bot, "buy_" .. tostring(itemName), "budget_block", string.format("item=%s hp=%.0f spent=%d", checkpoint, hp*100, bot.aib_recBuySpent or 0), 3.0)
+		return true
+	end
+	return false
+end
+
 function M.Reset(bot)
 	if bot == nil then return end
 	bot.aib_fountainTrip = false
@@ -84,9 +103,14 @@ function M.Reset(bot)
 	bot.aib_bottleRuneStarted = nil
 	bot.aib_bottleRuneTarget = nil
 	bot.aib_bottleRuneId = nil
+	bot.aib_bottleRuneCooldownUntil = nil
+	bot.aib_bottleRuneStageWindow = nil
+	bot.aib_bottleRuneStageUntil = nil
+	bot.aib_bottleRuneStageTarget = nil
 	-- Flask budget is per-life, not per-game: a bot that's behind and respawning still needs
 	-- sustain (match 8862516153: stomped Dire hit the 2-flask cap and couldn't buy at 10% HP).
 	bot.aib_recBuyCount = nil
+	bot.aib_recBuySpent = nil
 end
 
 local function wantsBottleFromStyle(bot)
@@ -182,6 +206,22 @@ local function nextBottleRuneSpawn(now)
 	return (math.floor(now / 120) + 1) * 120, "power"
 end
 
+local function clearRuneAttempt(bot)
+	bot.aib_bottleRuneTarget = nil
+	bot.aib_bottleRuneStarted = nil
+	bot.aib_bottleRuneId = nil
+end
+
+local function runeResult(bot, diagKey, result, detail, cooldown)
+	local now = DotaTime()
+	local text = "source=" .. tostring(diagKey) .. " result=" .. tostring(result)
+	if detail ~= nil and detail ~= "" then text = text .. " " .. detail end
+	Style.Intent(bot, "rune-result", text, 1.0)
+	if cooldown ~= nil and cooldown > 0 then
+		bot.aib_bottleRuneCooldownUntil = now + cooldown
+	end
+end
+
 local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 	opts = opts or {}
 	local rules = Style.Get().rules
@@ -195,12 +235,15 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 	if bottle == nil or bottle:GetCurrentCharges() ~= 0 then return false end
 
 	local now = DotaTime()
+	if bot.aib_bottleRuneCooldownUntil ~= nil and now < bot.aib_bottleRuneCooldownUntil then
+		Style.Blocked(bot, diagKey, "cooldown", string.format("left=%.0f", bot.aib_bottleRuneCooldownUntil - now), 4.0)
+		return false
+	end
 	local enemyDeadWindow = bot.aib_eDeadSince ~= nil and now - bot.aib_eDeadSince < 45.0
 	if enemyDeadWindow and hp >= 0.35 then
 		Style.Blocked(bot, diagKey, "enemy_dead_push", string.format("hp=%.0f", hp*100), 4.0)
-		bot.aib_bottleRuneTarget = nil
-		bot.aib_bottleRuneStarted = nil
-		bot.aib_bottleRuneId = nil
+		runeResult(bot, diagKey, "abort", "reason=enemy_dead_push", 6.0)
+		clearRuneAttempt(bot)
 		return false
 	end
 	if bot.aib_bottleRuneTarget ~= nil
@@ -209,29 +252,27 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 		local criticalAbort = hp < 0.22 and bot:WasRecentlyDamagedByAnyHero(1.2)
 		if criticalAbort then
 			Style.Blocked(bot, diagKey, "critical_abort", string.format("hp=%.0f", hp*100), 4.0)
-			bot.aib_bottleRuneTarget = nil
-			bot.aib_bottleRuneStarted = nil
-			bot.aib_bottleRuneId = nil
+			runeResult(bot, diagKey, "abort", string.format("reason=critical hp=%.0f", hp*100), 8.0)
+			clearRuneAttempt(bot)
 			return false
 		end
 		if bottleCharges(bot) ~= 0 then
 			Style.Intent(bot, diagKey, "reason=filled", 2.0)
-			bot.aib_bottleRuneTarget = nil
-			bot.aib_bottleRuneStarted = nil
-			bot.aib_bottleRuneId = nil
+			runeResult(bot, diagKey, "filled", string.format("age=%.0f", now - bot.aib_bottleRuneStarted), 0)
+			clearRuneAttempt(bot)
 			return false
 		end
 		if bot.aib_bottleRuneId ~= nil
 			and GetRuneStatus(bot.aib_bottleRuneId) ~= RUNE_STATUS_AVAILABLE then
 			Style.Intent(bot, diagKey, "reason=gone", 2.0)
-			bot.aib_bottleRuneTarget = nil
-			bot.aib_bottleRuneStarted = nil
-			bot.aib_bottleRuneId = nil
+			runeResult(bot, diagKey, "gone", string.format("age=%.0f", now - bot.aib_bottleRuneStarted), 6.0)
+			clearRuneAttempt(bot)
 			return false
 		end
 		local targetDist = GetUnitToLocationDistance(bot, bot.aib_bottleRuneTarget)
 		if bot.aib_bottleRuneId ~= nil and targetDist <= 140 then
 			recoveryPlan(bot, "rune", "pickup", string.format("source=%s dist=%.0f", diagKey, targetDist), 1.0)
+			runeResult(bot, diagKey, "pickup_attempt", string.format("dist=%.0f age=%.0f", targetDist, now - bot.aib_bottleRuneStarted), 2.0)
 			Style.Intent(bot, diagKey, string.format("dist=%.0f age=%.0f reason=pickup", targetDist, now - bot.aib_bottleRuneStarted), 1.0)
 			if bot.Action_PickUpRune ~= nil then
 				bot:Action_PickUpRune(bot.aib_bottleRuneId)
@@ -253,9 +294,8 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 	end
 	if bot.aib_bottleRuneStarted ~= nil then
 		Style.Blocked(bot, diagKey, "commit_timeout", "age=22", 4.0)
-		bot.aib_bottleRuneTarget = nil
-		bot.aib_bottleRuneStarted = nil
-		bot.aib_bottleRuneId = nil
+		runeResult(bot, diagKey, "timeout", "age=22", 10.0)
+		clearRuneAttempt(bot)
 	end
 
 	local bestRune, bestLoc, bestDist, bestScore = nil, nil, math.huge, math.huge
@@ -279,6 +319,20 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 			local stageWindow = opts.stage_window or 16.0
 			local stageRune, stageLoc, stageDist = nearestRuneSpot(bot)
 			local stageMaxDist = opts.stage_max_dist or math.max(maxDist or 2600, 2600)
+			local sameStageWindow = bot.aib_bottleRuneStageWindow == nextSpawnAt
+			if sameStageWindow then
+				if bot.aib_bottleRuneStageUntil ~= nil and now <= bot.aib_bottleRuneStageUntil
+					and bot.aib_bottleRuneStageTarget ~= nil then
+					local followDist = GetUnitToLocationDistance(bot, bot.aib_bottleRuneStageTarget)
+					if secsToSpawn <= 4.0 and followDist > 140 then
+						recoveryPlan(bot, "rune_stage", "follow", string.format("source=%s dist=%.0f eta=%.0f", diagKey, followDist, secsToSpawn), 3.0)
+						bot:Action_MoveToLocation(bot.aib_bottleRuneStageTarget)
+						return true
+					end
+				end
+				Style.Blocked(bot, diagKey, "stage_done", string.format("eta=%.0f", secsToSpawn), 6.0)
+				return false
+			end
 			if stageRune ~= nil and stageLoc ~= nil and secsToSpawn >= 0 and secsToSpawn <= stageWindow and stageDist <= stageMaxDist then
 				if laneAware and stageDist > 700 and hp > 0.62 and hasLastHitWindow(bot) and secsToSpawn > 5 then
 					Style.Blocked(bot, diagKey, "last_hit_window", string.format("stage=1 rune=%.0f hp=%.0f eta=%.0f", stageDist, hp*100, secsToSpawn), 6.0)
@@ -288,6 +342,9 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 					Style.Blocked(bot, diagKey, "hero_damage", string.format("stage=1 hp=%.0f rune=%.0f eta=%.0f", hp*100, stageDist, secsToSpawn), 6.0)
 					return false
 				end
+				bot.aib_bottleRuneStageWindow = nextSpawnAt
+				bot.aib_bottleRuneStageUntil = nextSpawnAt + 3.0
+				bot.aib_bottleRuneStageTarget = stageLoc
 				recoveryPlan(bot, "rune_stage", spawnKind or "upcoming", string.format("source=%s dist=%.0f eta=%.0f", diagKey, stageDist, secsToSpawn), 2.0)
 				Style.Intent(bot, diagKey, string.format("dist=%.0f eta=%.0f reason=stage", stageDist, secsToSpawn), 2.0)
 				Style.Diag(bot, diagKey)
@@ -343,6 +400,9 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 	bot.aib_bottleRuneStarted = now
 	bot.aib_bottleRuneTarget = bestLoc
 	bot.aib_bottleRuneId = bestRune
+	bot.aib_bottleRuneStageWindow = nil
+	bot.aib_bottleRuneStageUntil = nil
+	bot.aib_bottleRuneStageTarget = nil
 	recoveryPlan(bot, "rune", "start", string.format("source=%s dist=%.0f hp=%.0f mana=%.0f", diagKey, bestDist, hp*100, mana*100), 2.0)
 	Style.Intent(bot, diagKey, string.format("dist=%.0f hp=%.0f mana=%.0f reason=start", bestDist, hp*100, mana*100), 2.0)
 	Style.Diag(bot, diagKey)
@@ -556,16 +616,16 @@ local function recovery(bot, dials)
 	-- 1. Tango: 800u radius (wider than laning -- enemy gone, safe to step to farther tree).
 	if tryTango(bot, 0.65, 800, "recovery-tango") then return true end
 
-	-- 2. Bottle: no WasRecentlyDamagedByAnyHero check.
-	-- Empty bottle (0 charges): seek water rune to refill; don't fountain just for empty bottle.
-	if hp < 0.80 or mana < 0.50 then
+	-- 2. Bottle: no WasRecentlyDamagedByAnyHero check. Empty bottle may stage
+	-- around rune windows, but outside those windows it yields back to lane play.
+	do
 		local bSlot = bot:FindItemSlot("item_bottle")
 		if bSlot >= 0 then
 			local bItem = bot:GetItemInSlot(bSlot)
 			if bItem ~= nil then
 				if bot:HasModifier("modifier_bottle_regeneration") then
 					return true
-				elseif bItem:GetCurrentCharges() > 0 and bItem:IsFullyCastable()
+				elseif (hp < 0.80 or mana < 0.50) and bItem:GetCurrentCharges() > 0 and bItem:IsFullyCastable()
 					and (bot.aib_recBottleLast == nil or DotaTime() - bot.aib_recBottleLast >= 3.0) then
 					bot.aib_recBottleLast = DotaTime()
 					recoveryPlan(bot, "bottle", "charges", string.format("hp=%.0f mana=%.0f charges=%d", hp*100, mana*100, bItem:GetCurrentCharges()), 2.0)
@@ -575,10 +635,11 @@ local function recovery(bot, dials)
 						lane_aware = false,
 						force_empty_bottle = true,
 						stage_upcoming = true,
-						stage_window = 18.0,
-						stage_max_dist = 3600,
+						stage_window = 14.0,
+						stage_max_dist = 3200,
 					}) then return true end
-					-- No rune: fall through to threshold check (fountain only if HP critically low)
+					recoveryPlan(bot, "lane", "empty_bottle_no_rune", string.format("hp=%.0f mana=%.0f", hp*100, mana*100), 8.0)
+					if hp >= 0.24 then bot.aib_recWaitStart = nil end
 				end
 			end
 		end
@@ -646,14 +707,12 @@ local function recovery(bot, dials)
 			Style.DiagRL(bot, "bottle-gold-protect", 8)
 			return false
 		end
-		local checkpoint, cost = missingCheckpointItem(bot)
-		if checkpoint ~= nil and hp >= 0.16 and cost > 0 and gold >= cost - 120 then
-			Style.Blocked(bot, "recovery-buy", "item_checkpoint", string.format("item=%s hp=%.0f gold=%d cost=%d", checkpoint, hp*100, gold, cost), 8.0)
-			recoveryPlan(bot, "buy_flask", "checkpoint_block", string.format("item=%s hp=%.0f gold=%d", checkpoint, hp*100, gold), 3.0)
+		if consumableSpendBlocked(bot, hp, gold, "item_flask") then
 			return false
 		end
 		bot.aib_recBuyLast = DotaTime()
 		bot.aib_recBuyCount = (bot.aib_recBuyCount or 0) + 1
+		bot.aib_recBuySpent = (bot.aib_recBuySpent or 0) + itemCost("item_flask")
 		recoveryPlan(bot, "buy_flask", "critical", string.format("hp=%.0f gold=%d count=%d", hp*100, gold, bot.aib_recBuyCount or 0), 2.0)
 		bot:ActionImmediate_PurchaseItem("item_flask")
 		Style.Diag(bot, "recovery-buy")
