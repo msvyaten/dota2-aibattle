@@ -101,29 +101,76 @@ local initSmoke = false
 
 local currentTime, botLevel, botGold, botWorth, botMode, botHP, botCourierValue, botStashValue, botDistanceFromFountain
 
+local tAIBConsumables = {
+	item_flask = true,
+	item_clarity = true,
+	item_tango = true,
+	item_enchanted_mango = true,
+}
+
+local tAIBCheckpoints = {
+	item_bottle = true,
+	item_magic_wand = true,
+	item_boots = true,
+	item_power_treads = true,
+	item_lifesteal = true,
+}
+
+local function AIBItemCost(name)
+	local ok, cost = pcall(GetItemCost, name)
+	return (ok and type(cost) == 'number') and cost or 0
+end
+
+local function AIBMissingBuildCheckpoint()
+	if not okAIB or type(AIBStyle) ~= 'table' or AIBStyle.GetItemBuild == nil then return nil, 0 end
+	local okBuild, build = pcall(AIBStyle.GetItemBuild)
+	if not okBuild or type(build) ~= 'table' then return nil, 0 end
+	for _, name in ipairs(build) do
+		if tAIBCheckpoints[name] and not J.HasItem(bot, name) then
+			return name, AIBItemCost(name)
+		end
+	end
+	return nil, 0
+end
+
 local function AIBProtectBottleGold(itemName)
+	if not tAIBConsumables[itemName] then return false end
 	if not okAIB or type(AIBStyle) ~= 'table' or AIBStyle.GetItemBuild == nil then return false end
 	if GetGameMode() ~= GAMEMODE_1V1MID then return false end
-	if J.HasItem(bot, 'item_bottle') then return false end
+	if (itemName == 'item_flask' or itemName == 'item_tango') and J.GetHP(bot) < 0.20 then return false end
+	if (itemName == 'item_clarity' or itemName == 'item_enchanted_mango') and J.GetMP(bot) < 0.12 then return false end
 
-	local okBuild, build = pcall(AIBStyle.GetItemBuild)
-	if not okBuild or type(build) ~= 'table' then return false end
-	local wantsBottle = false
-	for _, name in ipairs(build) do
-		if name == 'item_bottle' then wantsBottle = true; break end
+	local checkpoint, checkpointCost = AIBMissingBuildCheckpoint()
+	if checkpoint == nil or checkpointCost <= 0 then return false end
+	local spend = AIBItemCost(itemName)
+	local gold = bot:GetGold()
+	if spend > 0 and gold - spend < checkpointCost and gold >= checkpointCost - 220 then
+		if AIBStyle.Blocked ~= nil then
+			AIBStyle.Blocked(bot, 'buy-consumable', 'checkpoint_gold',
+				string.format('item=%s checkpoint=%s gold=%d cost=%d spend=%d', itemName, checkpoint, gold, checkpointCost, spend), 8.0)
+		end
+		return true
 	end
-	if not wantsBottle then return false end
-
-	if itemName == 'item_flask' and J.GetHP(bot) < 0.22 then return false end
-	return itemName == 'item_flask' or itemName == 'item_clarity'
+	if J.GetHP(bot) >= 0.25 and (bot.aib_buyConsumableSpent or 0) >= 220 then
+		if AIBStyle.Blocked ~= nil then
+			AIBStyle.Blocked(bot, 'buy-consumable', 'budget_cap',
+				string.format('item=%s checkpoint=%s spent=%d', itemName, checkpoint, bot.aib_buyConsumableSpent or 0), 8.0)
+		end
+		return true
+	end
+	return false
 end
 
 local function AIBPurchaseConsumable(itemName)
 	if AIBProtectBottleGold(itemName) then
-		if AIBStyle.DiagRL ~= nil then AIBStyle.DiagRL(bot, 'bottle-gold-protect', 8) end
+		if AIBStyle.DiagRL ~= nil then AIBStyle.DiagRL(bot, 'checkpoint-gold-protect', 8) end
 		return false
 	end
-	return bot:ActionImmediate_PurchaseItem(itemName)
+	local res = bot:ActionImmediate_PurchaseItem(itemName)
+	if res == PURCHASE_ITEM_SUCCESS then
+		bot.aib_buyConsumableSpent = (bot.aib_buyConsumableSpent or 0) + AIBItemCost(itemName)
+	end
+	return res
 end
 
 -- utilities for counting/need detection
@@ -918,7 +965,7 @@ function ItemPurchaseThink()
 						and botGold >= GetItemCost('item_tango')
 						and GetItemStockCount('item_flask') > 1
 						then
-							bot:ActionImmediate_PurchaseItem('item_tango')
+							AIBPurchaseConsumable('item_tango')
 						end
 					else
 						if Item.GetItemCharges(bot, 'item_flask') <= 0
@@ -934,7 +981,7 @@ function ItemPurchaseThink()
 					if Item.GetItemCharges(bot, 'item_tango') <= 0
 					and botGold >= GetItemCost('item_tango')
 					then
-						bot:ActionImmediate_PurchaseItem('item_tango')
+						AIBPurchaseConsumable('item_tango')
 					end
 				end
 			end

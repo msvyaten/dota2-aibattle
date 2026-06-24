@@ -71,6 +71,8 @@ local function GetRules() return Style.Get().rules end
 local AIB_SIDE = (bot:GetTeam() == TEAM_RADIANT) and "R" or "D"
 local AIB_VISUAL_AFK_SECONDS = 5.0
 local AIB_VISUAL_AFK_DISTANCE = 90.0
+local AIB_VISUAL_HOLD_SECONDS = 2.0
+local AIB_VISUAL_HOLD_DISTANCE = 55.0
 -- Delegates to the shared counter (FunLib/aibattle_style M.Diag); kept as a thin local
 -- wrapper so existing call sites stay unchanged. Counters live on the bot handle, so
 -- laning + team-mode diags merge into the same summary line.
@@ -85,6 +87,24 @@ local function AIB_EnemyTowerDanger()          return AIBUtils.EnemyTowerDanger(
 local function AIB_ForwardSurvivingTowerLoc()  return AIBUtils.ForwardSurvivingTowerLoc(bot) end
 local function AIB_EnemyCreepCentroid(creeps)  return AIBUtils.EnemyCreepCentroid(creeps) end
 local function AIB_UphillMiss(target)          return AIBUtils.UphillMiss(bot, target) end
+
+local function AIB_IsMeleeCreep(unit)
+	if not J.IsValid(unit) then return false end
+	local ok, range = pcall(function() return unit:GetAttackRange() end)
+	return ok and type(range) == "number" and range <= 220
+end
+
+local function AIB_MeleeCreepCentroid(creeps, maxDist)
+	local sx, sy, sz, n = 0, 0, 0, 0
+	for _, creep in pairs(creeps or {}) do
+		if AIB_IsMeleeCreep(creep) and GetUnitToUnitDistance(bot, creep) <= (maxDist or 320) then
+			local loc = creep:GetLocation()
+			sx = sx + loc.x; sy = sy + loc.y; sz = sz + loc.z; n = n + 1
+		end
+	end
+	if n == 0 then return nil, 0 end
+	return Vector(sx / n, sy / n, sz / n), n
+end
 
 -- AIBattle: tower aggro drop cooldown (per bot instance)
 local aib_lastAggroDrop = 0
@@ -597,6 +617,27 @@ AIB_MoveToAttackEdgeOf = function(target, diagKey, extraBack)
 	return true
 end
 
+local function AIB_RangedMeleePackSpacingStep()
+	local now = DotaTime()
+	if now <= 0 or (botAttackRange or bot:GetAttackRange()) <= 350 then return false end
+	if bot.aib_meleeSpaceLast ~= nil and now - bot.aib_meleeSpaceLast < 1.4 then return false end
+	local cen, count = AIB_MeleeCreepCentroid(nEnemyCreeps, 300)
+	if cen == nil or count < 2 then return false end
+	local ownT1 = GetTower(GetTeam(), TOWER_MID_1)
+	local away = ownT1 ~= nil and ownT1:GetLocation() or bot:GetLocation()
+	local dx, dy = away.x - cen.x, away.y - cen.y
+	local d = math.sqrt(dx*dx + dy*dy)
+	if d < 1 then return false end
+	local safe = math.max(360, (botAttackRange or bot:GetAttackRange()) - 90)
+	local dest = Vector(cen.x + (dx/d)*safe, cen.y + (dy/d)*safe, cen.z)
+	if GetUnitToLocationDistance(bot, dest) < 120 then return false end
+	bot.aib_meleeSpaceLast = now
+	Style.Intent(bot, "melee-pack-space", string.format("count=%d dist=%.0f", count, GetUnitToLocationDistance(bot, dest)), 1.5)
+	bot:Action_MoveToLocation(dest)
+	AIB_Diag("melee-pack-space")
+	return true
+end
+
 local function AIB_NearestAttackableEnemyCreep(range)
 	local best = nil
 	local bestDist = range or math.huge
@@ -610,6 +651,24 @@ local function AIB_NearestAttackableEnemyCreep(range)
 		end
 	end
 	return best, bestDist
+end
+
+local function AIB_WeakestAttackableEnemyCreep(maxDist)
+	local best = nil
+	local bestHp = math.huge
+	local bestDist = math.huge
+	for _, creep in pairs(nEnemyCreeps or {}) do
+		if J.IsValid(creep) and J.CanBeAttacked(creep) then
+			local dist = GetUnitToUnitDistance(bot, creep)
+			local hp = creep:GetHealth()
+			if dist <= (maxDist or math.huge) and hp < bestHp then
+				best = creep
+				bestHp = hp
+				bestDist = dist
+			end
+		end
+	end
+	return best, bestDist, bestHp
 end
 
 local function AIB_WantBlocked(name, reason, detail, sec)
@@ -795,6 +854,89 @@ local function AIB_ActiveLowHpStep()
 			AIB_Diag("low-hp-watch-step")
 			return true
 		end
+	end
+	return false
+end
+
+local function AIB_LastHitWatchdogStep()
+	local now = DotaTime()
+	if now < 85 or now > 8 * 60 then return false end
+	local lh = AIB_SafeCounter("GetLastHits")
+	if lh == nil then return false end
+	if bot.aib_csWatchLastCheck == nil or now - bot.aib_csWatchLastCheck >= 20.0 then
+		if bot.aib_csWatchLH == nil or lh > bot.aib_csWatchLH then
+			bot.aib_csWatchLH = lh
+			bot.aib_csWatchNoGainSince = now
+		elseif bot.aib_csWatchNoGainSince == nil then
+			bot.aib_csWatchNoGainSince = now
+		end
+		bot.aib_csWatchLastCheck = now
+	end
+	local noGainFor = now - (bot.aib_csWatchNoGainSince or now)
+	if lh > 0 and noGainFor < 55.0 then return false end
+	if lh == 0 and now < 115 then return false end
+	if bot.aib_csWatchLast ~= nil and now - bot.aib_csWatchLast < 1.2 then return false end
+	if AIB_EnemyTowerDanger() ~= nil and AIB_TowerActuallyThreatening(AIB_EnemyTowerDanger()) then return false end
+
+	local range = botAttackRange or bot:GetAttackRange()
+	local creep, dist, hp = AIB_WeakestAttackableEnemyCreep(range * 1.65)
+	if creep == nil then
+		AIB_WantBlocked("cs-watchdog", "no_creep", string.format("lh=%d idle=%.0f", lh, noGainFor), 5.0)
+		return false
+	end
+	bot.aib_csWatchLast = now
+	Style.Intent(bot, "cs-watchdog", string.format("lh=%d idle=%.0f creep_hp=%.0f dist=%.0f", lh, noGainFor, hp or -1, dist or -1), 2.0)
+	if dist <= range + 35 then
+		bot:Action_AttackUnit(creep, true)
+		AIB_Diag("cs-watchdog-atk")
+	else
+		AIB_MoveToAttackEdgeOf(creep, "cs-watchdog-step", 30)
+	end
+	return true
+end
+
+local function AIB_VisualHoldHeartbeatStep()
+	local now = DotaTime()
+	if now <= 0 then return false end
+	local loc = bot:GetLocation()
+	if bot.aib_holdAnchorLoc == nil or bot.aib_holdAnchorTime == nil
+		or AIB_Dist2D(loc, bot.aib_holdAnchorLoc) > AIB_VISUAL_HOLD_DISTANCE then
+		bot.aib_holdAnchorLoc = loc
+		bot.aib_holdAnchorTime = now
+		return false
+	end
+	if now - bot.aib_holdAnchorTime < AIB_VISUAL_HOLD_SECONDS then return false end
+	if bot.aib_holdLast ~= nil and now - bot.aib_holdLast < 1.0 then return false end
+
+	local range = botAttackRange or bot:GetAttackRange()
+	local enemy, enemyDist = AIB_NearestEnemyHero(range + 70)
+	local creep, creepDist = AIB_NearestAttackableEnemyCreep(range + 70)
+	local reason = "empty"
+	if bot:WasRecentlyDamagedByCreep(2.0) then reason = "creep_damage"
+	elseif enemy ~= nil then reason = "hero_in_range"
+	elseif creep ~= nil then reason = "creep_in_range"
+	elseif AIB_EnemyTowerDanger() ~= nil then reason = "tower"
+	end
+	Style.Blocked(bot, "visual-hold", reason,
+		string.format("held=%.1f hp=%.0f", now - bot.aib_holdAnchorTime, J.GetHP(bot) * 100), 2.0)
+
+	bot.aib_holdLast = now
+	if enemy ~= nil and enemyDist <= range + 40 and J.GetHP(bot) >= 0.30 and not AIB_UphillMiss(enemy) then
+		bot:Action_AttackUnit(enemy, false)
+		AIB_Diag("visual-hold-hero")
+		bot.aib_holdAnchorLoc = loc; bot.aib_holdAnchorTime = now
+		return true
+	end
+	if creep ~= nil and creepDist <= range + 45 then
+		bot:Action_AttackUnit(creep, true)
+		AIB_Diag("visual-hold-creep")
+		bot.aib_holdAnchorLoc = loc; bot.aib_holdAnchorTime = now
+		return true
+	end
+	if bot:WasRecentlyDamagedByCreep(2.0) and AIB_RangedMeleePackSpacingStep() then
+		AIB_Diag("visual-hold-dmg")
+		bot.aib_holdAnchorLoc = loc; bot.aib_holdAnchorTime = now
+		return true
 	end
 	return false
 end
@@ -1078,8 +1220,9 @@ local function ThinkDeathWindow()
 	if not eIsDead then return false end
 	Style.DiagRL(bot, "dw-active", 3)
 	AIB_ClearRecoveryState()
-	-- Heal with consumables while safe
-	if J.GetHP(bot) < 0.65 then
+	-- Heal only when the death window would still be dangerous. Otherwise spend the window
+	-- on free farm and tower damage; passive recovery can happen between attacks.
+	if J.GetHP(bot) < 0.38 or (J.GetHP(bot) < 0.55 and bot:WasRecentlyDamagedByAnyHero(4.0)) then
 		for s = 0, 5 do
 			local it = bot:GetItemInSlot(s)
 			if it ~= nil and it:IsFullyCastable() then
@@ -1108,7 +1251,7 @@ local function ThinkDeathWindow()
 		end
 	end
 	local twr = AIB_EnemyTowerDanger()
-	if twr ~= nil and J.GetHP(bot) >= 0.35 and not AIB_TowerActuallyThreatening(twr) then
+	if twr ~= nil and J.GetHP(bot) >= 0.25 and not AIB_TowerActuallyThreatening(twr) then
 		if GetUnitToUnitDistance(bot, twr) <= (botAttackRange or bot:GetAttackRange()) + 60 then
 			bot:Action_AttackUnit(twr, true)
 			AIB_Diag("dw-tower"); return true
@@ -1374,6 +1517,8 @@ local function ThinkLaningCore(dials, rules)
 		AIB_MoveToAttackEdgeOf(hitCreep, nil, 20)
 		return
 	end
+	if AIB_RangedMeleePackSpacingStep() then return end
+	if AIB_LastHitWatchdogStep() then return end
 
 	-- creep_wave_priority = push: attack any in-range enemy creep (not just last-hit window).
 	-- Guard: only push when allied creeps are nearby (<500) so aggro is shared with the wave.
@@ -1533,6 +1678,7 @@ local function ThinkLaningCore(dials, rules)
 
 	-- AIBattle: anti-idle fallback - reached when forwardness had no dest OR bot is already at target.
 	-- Attack a visible enemy or move to assist an ally in combat.
+	if AIB_VisualHoldHeartbeatStep() then return end
 	if AIB_VisualAFKStep(rules) then return end
 	Style.DiagRL(bot, "pre-aig", 3)
 	Style.AntiIdleGlobal(bot)

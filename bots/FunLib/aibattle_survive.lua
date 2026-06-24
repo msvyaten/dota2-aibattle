@@ -95,6 +95,7 @@ function M.Reset(bot)
 	bot.aib_fountainTping = false
 	bot.aib_fountainTpCast = nil
 	bot.aib_fountainWaitLast = nil
+	bot.aib_fountainFullSince = nil
 	bot.aib_recWaitStart = nil
 	bot.aib_recMoveLast = nil
 	bot.aib_recBottleLast = nil
@@ -141,6 +142,7 @@ local function fountainRecovery(bot)
 	local inFountain = hasFountainAura(bot)
 	if not inFountain and not nearBase and not bot.aib_fountainTrip then return false end
 	if hp < 0.98 or mana < 0.90 or bottleNotFull then
+		bot.aib_fountainFullSince = nil
 		if bot.aib_fountainWaitLast == nil or DotaTime() - bot.aib_fountainWaitLast >= 1.0 then
 			bot.aib_fountainWaitLast = DotaTime()
 			bot.aib_fountainTrip = true
@@ -149,7 +151,15 @@ local function fountainRecovery(bot)
 		end
 		return true
 	end
+	if bot.aib_fountainTrip and inFountain then
+		if bot.aib_fountainFullSince == nil then bot.aib_fountainFullSince = DotaTime() end
+		if DotaTime() - bot.aib_fountainFullSince < 2.0 then
+			Style.DiagRL(bot, "fountain-stabilize", 3)
+			return true
+		end
+	end
 	bot.aib_fountainTrip = false
+	bot.aib_fountainFullSince = nil
 
 	local tp = getItem(bot, "item_tpscroll")
 	local t1 = GetTower(bot:GetTeam(), TOWER_MID_1)
