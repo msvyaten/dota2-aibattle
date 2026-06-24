@@ -1,7 +1,8 @@
 # AIBattle Current State
 
-Last updated by Codex on 2026-06-24 after matches `8864125273` and `8864152947`.
-Current live/repo build after the latest deploy: `f3b5403`.
+Last updated by Codex on 2026-06-24 after match `8865079476` and the debug-tree tooling pass.
+Current live bot build: `c7a5874`.
+Current repo HEAD: `7284fbf` (`tools/` only after live deploy; bot behavior still matches `c7a5874`).
 
 ## Goal
 
@@ -200,25 +201,34 @@ use `deploy.bat playstyle` or `deploy.bat all`. Match `8864152947` showed this t
 ## Latest State
 
 Recent local commits:
-- `f3b5403 codex: soften lane chase guard`
-- `0bd1edd codex: make lane pressure less passive`
-- `1a2bd66 codex: add lane watchdog guardrails`
-- `ac9a368 codex: widen rune staging and soften timeout`
+- `7284fbf codex: add debug desire tree to match stats` - tooling only, not deployed to Dota.
+- `c7a5874 codex: restore pregame duel state metrics` - deployed live; restores pregame duel inside `ThinkPregame`.
+- `06a45db codex: make recovery and siege lane-aware` - deployed before `c7a5874`.
+- `4aa123f codex: let recovery beat push gates`
+- `6870738 codex: protect early lane actions`
+- `92e2a34 codex: disable post-horn precreep hold`
 
-What `0bd1edd` fixed:
-- SF ability pressure started working: match `8864152947` had `ability-harass D#36 R#47`, `execute D#2`.
-- The dials/rules announcement no longer falls into `invalid index`.
+What `c7a5874` fixed:
+- Pregame duel no longer depends on falling through to lower laning-core. `ThinkPregame` now runs `pg-duel`
+  / `pg-duel-step` before passive pregame positioning.
+- Added runtime state intents: `state-prewave-duel`, `state-rune-commit`, `state-siege-window`,
+  `state-recover-xp`, `state-recover-safe`.
+- Recovery now distinguishes XP-range recovery from hard safe retreat via `recover-xp` / `recover-safe`.
+- Siege now emits `tower-opportunity result=hit|step|blocked_*`.
 
-What `f3b5403` fixed after Claude's review:
-- `hero-prio-chase` is no longer blocked by `lane_work` when the enemy is within 700u, bot has at least
-  +8% HP advantage, bot HP is >=45%, no enemy tower is threatening, and there is no uphill miss.
-- `visual-hold empty` now attempts a lane-front/enemy-T1 step via `visual-hold-lane`.
-- It was deployed with `deploy all`, so current live canonical configs are actually `pregame_behavior="aggressive_mid"`.
+What `7284fbf` added:
+- `tools/match_stats.py` now prints a compact desire hierarchy:
+  `debug_tree[R/D] -> fight / rune / recover / push / lane`.
+- Each branch groups `state[...]`, `action[...]`, `blocked[...]`, and `symptom[...]`.
+- Existing detailed `diag:`, `intent:`, `blocked:`, timeline, farmtrace, bottle, stationary output remains unchanged.
 
 Open code candidates:
-- Improve bottle/rune recovery: `no_close_rune` and empty bottle are still high in long games.
-- Strengthen heal interrupt: `enemy-healed-without-interrupt` still appeared in `8864152947`.
-- Consider adding config drift checks for `Customize/canonical_*.lua` and `Customize/playstyle_*.lua`.
+- Build the real laning arbiter for `fight / cs / rune / recover / push`.
+- Make `prewave_duel` a small state machine: approach -> trade -> keep range -> disengage.
+- Make creep-damage response a short forced response, not a long kite.
+- Lock close rune commits so a bot does not turn away at 350-500u without a strong reason.
+- Make siege-with-wave always produce a useful action when allied creeps tank tower.
+- Add config drift checks for `Customize/canonical_*.lua` and `Customize/playstyle_*.lua`.
 
 ## Current Debug Philosophy
 
@@ -226,13 +236,21 @@ Do not add another fallback first.
 
 When a bot looks AFK or jittery:
 1. Check build mismatch.
-2. Check `timeline[R/D]`.
-3. Check `verdict:`.
-4. Look for the last action or blocked reason before the visual symptom.
-5. Only then change behavior.
+2. Check `debug_tree[R/D]` first.
+3. Check `timeline[R/D]`.
+4. Check `verdict:` and `alert:`.
+5. Look for the last action or blocked reason before the visual symptom.
+6. Only then change behavior.
 
 The bot should have one owner per concern:
 - hero close contact: `hero-contact`;
 - blocked/competing desires: intent telemetry;
 - lane depth: `fwd-position`;
 - true last resort: `AntiIdleGlobal`.
+
+Debug hierarchy policy:
+- LLM-facing config should stay small: roughly 8-12 public dials/rules.
+- Internal state/diag keys can be more numerous, but `match_stats.py` should group them into public
+  debug branches: `fight`, `rune`, `recover`, `push`, `lane`.
+- Do not put runtime symptoms such as visual AFK into `rules`; rules are model-chosen behavior policy,
+  not debug observations.
