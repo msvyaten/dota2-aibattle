@@ -938,6 +938,19 @@ local function AIB_VisualHoldHeartbeatStep()
 		bot.aib_holdAnchorLoc = loc; bot.aib_holdAnchorTime = now
 		return true
 	end
+	if reason == "empty" then
+		local dest = GetLaneFrontLocation(GetTeam(), botAssignedLane, 0)
+		if dest == nil then
+			local twr = GetTower(GetOpposingTeam(), TOWER_MID_1)
+			if twr ~= nil and twr:IsAlive() then dest = twr:GetLocation() end
+		end
+		if dest ~= nil and GetUnitToLocationDistance(bot, dest) > 260 then
+			bot:Action_MoveToLocation(dest)
+			AIB_Diag("visual-hold-lane")
+			bot.aib_holdAnchorLoc = loc; bot.aib_holdAnchorTime = now
+			return true
+		end
+	end
 	return false
 end
 
@@ -1517,10 +1530,15 @@ local function ThinkLaningCore(dials, rules)
 				if chase and #chase > 0 and chase[1]:IsAlive() then
 					local chaseDist = GetUnitToUnitDistance(bot, chase[1])
 					local creepNear = AIB_HasAttackableEnemyCreep(botAttackRange + 120)
-					if chaseDist <= 950 and not csAllowed and not creepNear then
+					local hpAdvChase = chaseDist <= 700
+						and J.GetHP(bot) >= J.GetHP(chase[1]) + 0.08
+						and J.GetHP(bot) >= 0.45
+						and AIB_EnemyTowerDanger() == nil
+						and not AIB_UphillMiss(chase[1])
+					if hpAdvChase or (chaseDist <= 950 and not csAllowed and not creepNear) then
 						AIB_MoveToAttackEdge(chase[1], "hero-prio-chase"); return
 					end
-					AIB_WantBlocked("hero-prio-chase", "lane_work", string.format("dist=%.0f cs=%s creep=%s", chaseDist, tostring(csAllowed), tostring(creepNear)), 3.0)
+					AIB_WantBlocked("hero-prio-chase", "lane_work", string.format("dist=%.0f cs=%s creep=%s hp_adv=%s", chaseDist, tostring(csAllowed), tostring(creepNear), tostring(hpAdvChase)), 3.0)
 				end
 			end
 		end
