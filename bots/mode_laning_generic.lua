@@ -69,10 +69,11 @@ local function GetRules() return Style.Get().rules end
 -- carries the cumulative totals. (print() is invisible in console.log, so chat is the only
 -- logging channel - keep it sparse.)
 local AIB_SIDE = (bot:GetTeam() == TEAM_RADIANT) and "R" or "D"
-local AIB_VISUAL_AFK_SECONDS = 5.0
+local AIB_VISUAL_AFK_SECONDS = 3.5
 local AIB_VISUAL_AFK_DISTANCE = 90.0
 local AIB_VISUAL_HOLD_SECONDS = 2.0
 local AIB_VISUAL_HOLD_DISTANCE = 55.0
+local AIB_RUNE_COMMIT_SECONDS = 30.0
 -- Delegates to the shared counter (FunLib/aibattle_style M.Diag); kept as a thin local
 -- wrapper so existing call sites stay unchanged. Counters live on the bot handle, so
 -- laning + team-mode diags merge into the same summary line.
@@ -678,6 +679,17 @@ local function AIB_WeakestAttackableEnemyCreep(maxDist)
 	return best, bestDist, bestHp
 end
 
+local function AIB_AlliedCreepsAtTower(tower, distLimit)
+	if tower == nil then return 0 end
+	local count = 0
+	for _, creep in pairs(nAllyCreeps or {}) do
+		if J.IsValid(creep) and GetUnitToUnitDistance(creep, tower) <= (distLimit or tower:GetAttackRange() + 180) then
+			count = count + 1
+		end
+	end
+	return count
+end
+
 local function AIB_WantBlocked(name, reason, detail, sec)
 	Style.Blocked(bot, name, reason, detail, sec or 3.0)
 end
@@ -867,7 +879,7 @@ end
 
 local function AIB_LastHitWatchdogStep()
 	local now = DotaTime()
-	if now < 85 or now > 8 * 60 then return false end
+	if now < 65 or now > 8 * 60 then return false end
 	local lh = AIB_SafeCounter("GetLastHits")
 	if lh == nil then return false end
 	if bot.aib_csWatchLastCheck == nil or now - bot.aib_csWatchLastCheck >= 20.0 then
@@ -880,8 +892,8 @@ local function AIB_LastHitWatchdogStep()
 		bot.aib_csWatchLastCheck = now
 	end
 	local noGainFor = now - (bot.aib_csWatchNoGainSince or now)
-	if lh > 0 and noGainFor < 55.0 then return false end
-	if lh == 0 and now < 115 then return false end
+	if lh > 0 and noGainFor < 40.0 then return false end
+	if lh == 0 and now < 80 then return false end
 	if bot.aib_csWatchLast ~= nil and now - bot.aib_csWatchLast < 1.2 then return false end
 	if AIB_EnemyTowerDanger() ~= nil and AIB_TowerActuallyThreatening(AIB_EnemyTowerDanger()) then return false end
 
@@ -980,6 +992,12 @@ end
 
 local function AIB_SiegeIntent(dials, rules)
 	local twr = AIB_EnemyTowerDanger()
+	if twr == nil then
+		local midT1 = GetTower(GetOpposingTeam(), TOWER_MID_1)
+		if midT1 ~= nil and midT1:IsAlive() and AIB_AlliedCreepsAtTower(midT1, midT1:GetAttackRange() + 220) >= 2 then
+			twr = midT1
+		end
+	end
 	if twr == nil or AIB_TowerActuallyThreatening(twr) then return false end
 	if AIB_HealingChannelActive() and not AIB_EnemyDeadRecently() then
 		AIB_WantBlocked("siege", "healing", string.format("tower=%.0f", GetUnitToUnitDistance(bot, twr)), 4.0)
@@ -988,12 +1006,9 @@ local function AIB_SiegeIntent(dials, rules)
 	local cwp = rules.creep_wave_priority or "last_hit_only"
 	local enemy, enemyDist = AIB_NearestEnemyHero(2200)
 	local enemyFarOrWeak = enemy == nil or enemyDist > 1300 or J.GetHP(enemy) < 0.28
-	local waveAtTower = false
-	for _, creep in pairs(nAllyCreeps or {}) do
-		if J.IsValid(creep) and GetUnitToUnitDistance(creep, twr) <= twr:GetAttackRange() + 180 then
-			waveAtTower = true; break
-		end
-	end
+	local waveCount = AIB_AlliedCreepsAtTower(twr, twr:GetAttackRange() + 180)
+	local waveAtTower = waveCount >= 1
+	local strongWaveAtTower = waveCount >= 3
 	local advantageSiege = AIB_EnemyDeadRecently() or (waveAtTower and enemyFarOrWeak)
 	local wantsSiege = cwp == "push" or advantageSiege or (dials.push_desire or 0.5) >= 0.65
 	-- When the enemy is dead the tower is undefended, so keep sieging at lower HP rather than
@@ -1027,6 +1042,17 @@ local function AIB_SiegeIntent(dials, rules)
 			return true
 		end
 		return AIB_MoveToAttackEdgeOf(twr, "siege-commit-step", 30)
+	end
+
+	if strongWaveAtTower and (cwp == "push" or AIB_EnemyDeadRecently() or enemyFarOrWeak) then
+		if GetUnitToUnitDistance(bot, twr) <= (botAttackRange or bot:GetAttackRange()) + 60 then
+			bot.aib_siegeCommitUntil = now + 2.2
+			bot:Action_AttackUnit(twr, true)
+			AIB_Diag("siege-wave-tower")
+			return true
+		end
+		bot.aib_siegeCommitUntil = now + 2.2
+		return AIB_MoveToAttackEdgeOf(twr, "siege-wave-step", 20)
 	end
 
 	for _, creep in pairs(nEnemyCreeps or {}) do
@@ -1122,9 +1148,12 @@ local function AIB_AbilityPressureStep()
 	return false
 end
 
-local function AIB_PreWaveDuelStep()
+local function AIB_PreWaveDuelStep(rules)
 	local now = DotaTime()
 	if now < 0 or now > 45 then return false end
+	rules = rules or {}
+	if (rules.hero_priority or "default") == "never" then return false end
+	if (rules.pregame_behavior or "default") ~= "aggressive_mid" then return false end
 	local range = botAttackRange or bot:GetAttackRange()
 	local enemy, dist = AIB_NearestEnemyHero(range + 140)
 	if enemy == nil or not enemy:IsAlive() then return false end
@@ -1372,10 +1401,11 @@ local function ThinkLaningCore(dials, rules)
 	if urgentInterrupt ~= nil then urgentIntents[#urgentIntents + 1] = urgentInterrupt end
 	if AIBEngine.Resolve(urgentIntents, intentCtx) then return end
 
-	if AIB_PreWaveDuelStep() then return end
+	if AIB_PreWaveDuelStep(rules) then return end
 	if AIB_PreCreepStandoffStep() then return end
 	if AIB_AbilityPressureStep() then return end
 	if AIB_VisualHoldHeartbeatStep() then return end
+	if AIB_VisualAFKStep(rules) then return end
 	if AIB_ContactHeroStep(rules) then return end
 	if AIB_CreepHitReactStep() then return end
 	if AIB_DamageUnstuckStep() then return end
@@ -1405,9 +1435,14 @@ local function ThinkLaningCore(dials, rules)
 
 	do
 		local atkHero = bot:GetNearbyHeroes(botAttackRange + 60, true, BOT_MODE_NONE)
+		local heroPrio = rules.hero_priority or "default"
+		local exec = dials.execute_threshold or 0
+		local heroOverCreepHp = exec + ((heroPrio == "always") and 0.08 or 0.0)
 		if atkHero and #atkHero > 0 and atkHero[1]:IsAlive()
+			and heroPrio ~= "never"
+			and exec > 0
 			and J.GetHP(bot) >= 0.35
-			and J.GetHP(atkHero[1]) <= math.max(0.55, (dials.execute_threshold or 0.50) + 0.08)
+			and J.GetHP(atkHero[1]) <= math.min(0.65, heroOverCreepHp)
 			and AIB_EnemyTowerDanger() == nil
 			and not AIB_UphillMiss(atkHero[1]) then
 			if Style.AbilityExecute(bot, atkHero[1]) then return end
@@ -1721,7 +1756,7 @@ local function ThinkLaningCore(dials, rules)
 	local pendingLastHit = csAllowed and (csDistNow or math.huge) <= botAttackRange * 1.8
 	local recentRecovery = bot.aib_recMoveLast ~= nil and nowFwd - bot.aib_recMoveLast < 2.5
 	local recentCreepRelief = bot.aib_creepReliefLast ~= nil and nowFwd - bot.aib_creepReliefLast < 1.8
-	local runeCommit = bot.aib_bottleRuneStarted ~= nil and nowFwd - bot.aib_bottleRuneStarted < 22.0
+	local runeCommit = bot.aib_bottleRuneStarted ~= nil and nowFwd - bot.aib_bottleRuneStarted < AIB_RUNE_COMMIT_SECONDS
 	local siegeCommit = bot.aib_siegeCommitUntil ~= nil and nowFwd <= bot.aib_siegeCommitUntil
 	local suppressForward = pressureEnemy ~= nil
 		or attackableCreep

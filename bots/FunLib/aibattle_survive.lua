@@ -373,10 +373,15 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 				if bot.aib_bottleRuneStageUntil ~= nil and now <= bot.aib_bottleRuneStageUntil
 					and bot.aib_bottleRuneStageTarget ~= nil then
 					local followDist = GetUnitToLocationDistance(bot, bot.aib_bottleRuneStageTarget)
-					if followDist > 140 and (bot.aib_bottleRuneStageFollowLast == nil or now - bot.aib_bottleRuneStageFollowLast >= 4.0) then
+					if followDist > 90 and (bot.aib_bottleRuneStageFollowLast == nil or now - bot.aib_bottleRuneStageFollowLast >= 1.0) then
 						bot.aib_bottleRuneStageFollowLast = now
-						recoveryPlan(bot, "rune_stage", "follow", string.format("source=%s dist=%.0f eta=%.0f", diagKey, followDist, secsToSpawn), 3.0)
+						recoveryPlan(bot, "rune_stage", "follow", string.format("source=%s dist=%.0f eta=%.0f", diagKey, followDist, secsToSpawn), 1.5)
 						bot:Action_MoveToLocation(bot.aib_bottleRuneStageTarget)
+						return true
+					end
+					if followDist <= 90 then
+						recoveryPlan(bot, "rune_stage", "hold", string.format("source=%s dist=%.0f eta=%.0f", diagKey, followDist, secsToSpawn), 1.5)
+						bot:Action_MoveToLocation(bot.aib_bottleRuneStageTarget + RandomVector(20))
 						return true
 					end
 				end
@@ -393,7 +398,7 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 					return false
 				end
 				bot.aib_bottleRuneStageWindow = nextSpawnAt
-				bot.aib_bottleRuneStageUntil = nextSpawnAt + 3.0
+				bot.aib_bottleRuneStageUntil = nextSpawnAt + 7.0
 				bot.aib_bottleRuneStageTarget = stageLoc
 				bot.aib_bottleRuneStageFollowLast = now
 				recoveryPlan(bot, "rune_stage", spawnKind or "upcoming", string.format("source=%s dist=%.0f eta=%.0f", diagKey, stageDist, secsToSpawn), 2.0)
