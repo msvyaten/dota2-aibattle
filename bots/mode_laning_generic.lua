@@ -1167,7 +1167,7 @@ end
 
 local function AIB_PreCreepStandoffStep()
 	local now = DotaTime()
-	if now < 0 or now > 45 then return false end
+	if now >= 0 then return false end
 	local function hasNearbyLaneCreep(list)
 		for _, creep in pairs(list or {}) do
 			if J.IsValid(creep) and GetUnitToUnitDistance(bot, creep) <= 900 then
