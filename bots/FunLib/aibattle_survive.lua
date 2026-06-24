@@ -96,6 +96,7 @@ function M.Reset(bot)
 	bot.aib_fountainTpCast = nil
 	bot.aib_fountainWaitLast = nil
 	bot.aib_fountainFullSince = nil
+	bot.aib_fountainBottleLast = nil
 	bot.aib_recWaitStart = nil
 	bot.aib_recMoveLast = nil
 	bot.aib_recBottleLast = nil
@@ -141,6 +142,16 @@ local function fountainRecovery(bot)
 	local nearBase = bot:DistanceFromFountain() < 2600
 	local inFountain = hasFountainAura(bot)
 	if not inFountain and not nearBase and not bot.aib_fountainTrip then return false end
+	if inFountain and charges ~= nil and charges > 0 and (hp < 0.98 or mana < 0.90)
+		and (bot.aib_fountainBottleLast == nil or DotaTime() - bot.aib_fountainBottleLast >= 1.0) then
+		local bottle = getItem(bot, "item_bottle")
+		if bottle ~= nil then
+			bot.aib_fountainBottleLast = DotaTime()
+			Style.Diag(bot, "fountain-bottle")
+			bot:Action_UseAbility(bottle)
+			return true
+		end
+	end
 	if hp < 0.98 or mana < 0.90 or bottleNotFull then
 		bot.aib_fountainFullSince = nil
 		if bot.aib_fountainWaitLast == nil or DotaTime() - bot.aib_fountainWaitLast >= 1.0 then
@@ -259,7 +270,7 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 	end
 	if bot.aib_bottleRuneTarget ~= nil
 		and bot.aib_bottleRuneStarted ~= nil
-		and now - bot.aib_bottleRuneStarted < 22.0 then
+		and now - bot.aib_bottleRuneStarted < 30.0 then
 		local criticalAbort = hp < 0.22 and bot:WasRecentlyDamagedByAnyHero(1.2)
 		if criticalAbort then
 			Style.Blocked(bot, diagKey, "critical_abort", string.format("hp=%.0f", hp*100), 4.0)
@@ -275,13 +286,38 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 		end
 		if bot.aib_bottleRuneId ~= nil
 			and GetRuneStatus(bot.aib_bottleRuneId) ~= RUNE_STATUS_AVAILABLE then
+			local retargetRune, retargetLoc, retargetDist, retargetScore = nil, nil, math.huge, math.huge
+			local retargetMax = math.max(maxDist or 2600, opts.stage_max_dist or 2600)
+			for _, runeId in ipairs({ RUNE_POWERUP_1, RUNE_POWERUP_2 }) do
+				if runeId ~= bot.aib_bottleRuneId and GetRuneStatus(runeId) == RUNE_STATUS_AVAILABLE then
+					local loc = GetRuneSpawnLocation(runeId)
+					if loc ~= nil then
+						local dist = GetUnitToLocationDistance(bot, loc)
+						local runeType = GetRuneType(runeId)
+						local score = dist + ((runeType == RUNE_WATER) and 0 or 350)
+						if dist <= retargetMax and score < retargetScore then
+							retargetRune, retargetLoc, retargetDist, retargetScore = runeId, loc, dist, score
+						end
+					end
+				end
+			end
+			if retargetLoc ~= nil then
+				bot.aib_bottleRuneId = retargetRune
+				bot.aib_bottleRuneTarget = retargetLoc
+				bot.aib_bottleRuneStarted = now
+				bot.aib_bottleRuneLast = now
+				recoveryPlan(bot, "rune", "retarget", string.format("source=%s dist=%.0f", diagKey, retargetDist), 2.0)
+				Style.Intent(bot, diagKey, string.format("dist=%.0f reason=retarget", retargetDist), 2.0)
+				bot:Action_MoveToLocation(retargetLoc)
+				return true
+			end
 			Style.Intent(bot, diagKey, "reason=gone", 2.0)
 			runeResult(bot, diagKey, "gone", string.format("age=%.0f", now - bot.aib_bottleRuneStarted), 6.0)
 			clearRuneAttempt(bot)
 			return false
 		end
 		local targetDist = GetUnitToLocationDistance(bot, bot.aib_bottleRuneTarget)
-		if bot.aib_bottleRuneId ~= nil and targetDist <= 140 then
+		if bot.aib_bottleRuneId ~= nil and targetDist <= 260 then
 			recoveryPlan(bot, "rune", "pickup", string.format("source=%s dist=%.0f", diagKey, targetDist), 1.0)
 			runeResult(bot, diagKey, "pickup_attempt", string.format("dist=%.0f age=%.0f", targetDist, now - bot.aib_bottleRuneStarted), 2.0)
 			Style.Intent(bot, diagKey, string.format("dist=%.0f age=%.0f reason=pickup", targetDist, now - bot.aib_bottleRuneStarted), 1.0)
@@ -292,7 +328,7 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 			end
 			return true
 		end
-		if targetDist > 35 then
+		if targetDist > 90 then
 			recoveryPlan(bot, "rune", "commit", string.format("source=%s dist=%.0f", diagKey, targetDist), 2.0)
 			Style.Intent(bot, diagKey, string.format("dist=%.0f age=%.0f reason=commit", targetDist, now - bot.aib_bottleRuneStarted), 2.0)
 			bot:Action_MoveToLocation(bot.aib_bottleRuneTarget)
@@ -304,10 +340,10 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 		return true
 	end
 	if bot.aib_bottleRuneStarted ~= nil then
-		Style.Blocked(bot, diagKey, "commit_timeout", "age=22", 4.0)
+		Style.Blocked(bot, diagKey, "commit_timeout", "age=30", 4.0)
 		local combatTimeout = bot:WasRecentlyDamagedByAnyHero(4.0)
 		local timeoutCd = combatTimeout and 3.0 or 6.0
-		runeResult(bot, diagKey, "timeout", string.format("age=22 combat=%s", tostring(combatTimeout)), timeoutCd)
+		runeResult(bot, diagKey, "timeout", string.format("age=30 combat=%s", tostring(combatTimeout)), timeoutCd)
 		clearRuneAttempt(bot)
 	end
 

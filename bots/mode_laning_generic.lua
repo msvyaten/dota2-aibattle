@@ -88,6 +88,13 @@ local function AIB_ForwardSurvivingTowerLoc()  return AIBUtils.ForwardSurvivingT
 local function AIB_EnemyCreepCentroid(creeps)  return AIBUtils.EnemyCreepCentroid(creeps) end
 local function AIB_UphillMiss(target)          return AIBUtils.UphillMiss(bot, target) end
 
+local function AIB_HealingChannelActive()
+	return bot:HasModifier("modifier_tango_heal")
+		or bot:HasModifier("modifier_flask_healing")
+		or bot:HasModifier("modifier_bottle_regeneration")
+		or bot:HasModifier("modifier_clarity_potion")
+end
+
 local function AIB_IsMeleeCreep(unit)
 	if not J.IsValid(unit) then return false end
 	local ok, range = pcall(function() return unit:GetAttackRange() end)
@@ -974,6 +981,10 @@ end
 local function AIB_SiegeIntent(dials, rules)
 	local twr = AIB_EnemyTowerDanger()
 	if twr == nil or AIB_TowerActuallyThreatening(twr) then return false end
+	if AIB_HealingChannelActive() and not AIB_EnemyDeadRecently() then
+		AIB_WantBlocked("siege", "healing", string.format("tower=%.0f", GetUnitToUnitDistance(bot, twr)), 4.0)
+		return false
+	end
 	local cwp = rules.creep_wave_priority or "last_hit_only"
 	local enemy, enemyDist = AIB_NearestEnemyHero(2200)
 	local enemyFarOrWeak = enemy == nil or enemyDist > 1300 or J.GetHP(enemy) < 0.28
@@ -1111,6 +1122,20 @@ local function AIB_AbilityPressureStep()
 	return false
 end
 
+local function AIB_PreWaveDuelStep()
+	local now = DotaTime()
+	if now < 0 or now > 45 then return false end
+	local range = botAttackRange or bot:GetAttackRange()
+	local enemy, dist = AIB_NearestEnemyHero(range + 140)
+	if enemy == nil or not enemy:IsAlive() then return false end
+	if J.GetHP(bot) < 0.35 or AIB_UphillMiss(enemy) or AIB_EnemyTowerDanger() ~= nil then return false end
+	if Style.AbilityExecute(bot, enemy) then return true end
+	if Style.AbilityHarass(bot, enemy) then return true end
+	bot:Action_AttackUnit(enemy, false)
+	AIB_Diag("prewave-duel")
+	return true
+end
+
 local function AIB_PreCreepStandoffStep()
 	local now = DotaTime()
 	if now < 0 or now > 45 then return false end
@@ -1208,6 +1233,11 @@ end
 local function ThinkDivePolicy()
 	local twr = AIB_EnemyTowerDanger()
 	if twr == nil then return false end
+	if AIB_HealingChannelActive() and GetUnitToUnitDistance(bot, twr) <= twr:GetAttackRange() + 420 then
+		AIB_Diag("heal-no-dive")
+		bot:Action_MoveToLocation(J.VectorAway(bot:GetLocation(), twr:GetLocation(), 420))
+		return true
+	end
 	if not Style.MayDive(bot) and AIB_TowerActuallyThreatening(twr) then
 		AIB_Diag("no-dive")
 		bot:Action_MoveToLocation(J.VectorAway(bot:GetLocation(), twr:GetLocation(), 350))
@@ -1342,6 +1372,7 @@ local function ThinkLaningCore(dials, rules)
 	if urgentInterrupt ~= nil then urgentIntents[#urgentIntents + 1] = urgentInterrupt end
 	if AIBEngine.Resolve(urgentIntents, intentCtx) then return end
 
+	if AIB_PreWaveDuelStep() then return end
 	if AIB_PreCreepStandoffStep() then return end
 	if AIB_AbilityPressureStep() then return end
 	if AIB_VisualHoldHeartbeatStep() then return end
@@ -1371,6 +1402,20 @@ local function ThinkLaningCore(dials, rules)
 	local csAllowed = J.IsValid(hitCreep) and csLaneCheck
 	local csDistNow = csAllowed and GetUnitToUnitDistance(bot, hitCreep) or nil
 	local needMove = csAllowed and (csDistNow > botAttackRange or csSoon == true)
+
+	do
+		local atkHero = bot:GetNearbyHeroes(botAttackRange + 60, true, BOT_MODE_NONE)
+		if atkHero and #atkHero > 0 and atkHero[1]:IsAlive()
+			and J.GetHP(bot) >= 0.35
+			and J.GetHP(atkHero[1]) <= math.max(0.55, (dials.execute_threshold or 0.50) + 0.08)
+			and AIB_EnemyTowerDanger() == nil
+			and not AIB_UphillMiss(atkHero[1]) then
+			if Style.AbilityExecute(bot, atkHero[1]) then return end
+			bot:Action_AttackUnit(atkHero[1], false)
+			AIB_Diag("hero-over-creep")
+			return
+		end
+	end
 
 	-- 1) grab a securable last-hit that's already in range
 	if csAllowed and not needMove and csSoon ~= true then
@@ -1684,6 +1729,7 @@ local function ThinkLaningCore(dials, rules)
 		or aib_lowHpHold
 		or recentRecovery
 		or recentCreepRelief
+		or AIB_HealingChannelActive()
 		or runeCommit
 		or siegeCommit
 		or bot:WasRecentlyDamagedByCreep(2.0)
