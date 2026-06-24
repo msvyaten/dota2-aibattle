@@ -1,6 +1,7 @@
 # AIBattle Current State
 
-Last updated by Codex after match `8861167287` plus urgent laning fixes.
+Last updated by Codex on 2026-06-24 after matches `8864125273` and `8864152947`.
+Current live/repo build after the latest deploy: `f3b5403`.
 
 ## Goal
 
@@ -23,11 +24,13 @@ The active laning loop is intentionally small:
    - `creep-aggro`
    - `channel-interrupt`
    - `hero-pass`
-6. Last-hit, survival, emergency retreat, kill-priority, harass, CS-walk, push/deny/siege.
-7. Ability execute/harass.
-8. Final positioning via one forwardness action: `fwd-position`, rate-limited by `fwd-hold`.
-9. Visual-AFK watchdog only after normal combat/creep/positioning had a chance to act.
-10. Last-resort `AntiIdleGlobal`.
+6. Early ability pressure (`AbilityExecute` / `AbilityHarass`) before normal hero contact.
+7. Last-hit, survival, emergency retreat, kill-priority, harass, CS-walk, push/deny/siege.
+8. Last-hit watchdog, ranged melee-pack spacing, and visual-hold heartbeat.
+9. Ability execute/harass still also exists later as a secondary chance.
+10. Final positioning via one forwardness action: `fwd-position`, rate-limited by `fwd-hold`.
+11. Visual-AFK watchdog only after normal combat/creep/positioning had a chance to act.
+12. Last-resort `AntiIdleGlobal`.
 
 ## Removed From Active Laning
 
@@ -45,6 +48,10 @@ These old active fallback layers should not return to `mode_laning_generic.lua`:
 ## Normal Diag Keys
 
 Combat / hero:
+- `ability-harass`
+- `ability-harass-move`
+- `execute`
+- `execute-approach`
 - `hero-contact-atk`
 - `hero-contact-chase`
 - `hero-contact-kite`
@@ -62,6 +69,8 @@ Combat / hero:
 
 Creeps / lane:
 - `cs-inrange`
+- `cs-watchdog-atk`
+- `cs-watchdog-step`
 - `cs-walk`
 - `deny-act`
 - `creep-dmg`
@@ -75,6 +84,11 @@ Creeps / lane:
 - `siege-commit-step`
 
 Positioning:
+- `melee-pack-space`
+- `visual-hold-creep`
+- `visual-hold-hero`
+- `visual-hold-dmg`
+- `visual-hold-lane`
 - `fwd-position`
 - `fwd-at-position`
 - `fwd-suppressed-hero`
@@ -113,6 +127,11 @@ Bad signs in a fresh match:
 - `build_mismatch_vs_live` on a match that was supposed to use current code.
 - `fwd-position` firing while an enemy hero or attackable creep is nearby.
 - `creep-dmg` without `creep-hit-react-*`, `creep-aggro-*`, or `damage-unstuck`.
+- `ability-harass=0` in SF 1v1 when `ability_usage=aggressive`.
+- `hero-prio-chase` blocked mostly by `lane_work` even when the enemy is close and bot has HP advantage.
+- `visual-hold empty` accumulating without `visual-hold-lane`.
+- Bottle empty above ~70% of telemetry samples with repeated `no_close_rune`.
+- `enemy-healed-without-interrupt` alerts.
 
 Expected on old matches:
 - Old matches can still show removed keys because their logs were produced by older builds.
@@ -123,6 +142,24 @@ Before a match:
 
 ```powershell
 python tools\check_all.py --latest
+```
+
+Deploy current bot code only:
+
+```powershell
+cmd /c tools\deploy.bat code
+```
+
+Deploy config/playstyle changes only:
+
+```powershell
+cmd /c tools\deploy.bat playstyle
+```
+
+Deploy both code and canonical/playstyle config:
+
+```powershell
+cmd /c tools\deploy.bat all
 ```
 
 Analyze a specific match:
@@ -143,12 +180,6 @@ Encoding check only:
 python tools\check_text_encoding.py
 ```
 
-Deploy current bot code to live Dota folder:
-
-```powershell
-cmd /c tools\deploy.bat
-```
-
 ## Live Build Rule
 
 `tools/deploy.bat` writes:
@@ -160,6 +191,34 @@ return {
 ```
 
 `tools/check_all.py` requires live sha to match repo `HEAD` and checks that key live Lua files match the repo.
+
+Important deploy trap: `deploy.bat code` updates engine/code and live SHA, but it does not copy
+`Customize/canonical_*.lua` or `Customize/playstyle_*.lua`. When Claude or Codex changes configs,
+use `deploy.bat playstyle` or `deploy.bat all`. Match `8864152947` showed this trap: build was
+`0bd1edd`, but live canonical configs were still old `pregame_behavior="safe_tower"` until `deploy all`.
+
+## Latest State
+
+Recent local commits:
+- `f3b5403 codex: soften lane chase guard`
+- `0bd1edd codex: make lane pressure less passive`
+- `1a2bd66 codex: add lane watchdog guardrails`
+- `ac9a368 codex: widen rune staging and soften timeout`
+
+What `0bd1edd` fixed:
+- SF ability pressure started working: match `8864152947` had `ability-harass D#36 R#47`, `execute D#2`.
+- The dials/rules announcement no longer falls into `invalid index`.
+
+What `f3b5403` fixed after Claude's review:
+- `hero-prio-chase` is no longer blocked by `lane_work` when the enemy is within 700u, bot has at least
+  +8% HP advantage, bot HP is >=45%, no enemy tower is threatening, and there is no uphill miss.
+- `visual-hold empty` now attempts a lane-front/enemy-T1 step via `visual-hold-lane`.
+- It was deployed with `deploy all`, so current live canonical configs are actually `pregame_behavior="aggressive_mid"`.
+
+Open code candidates:
+- Improve bottle/rune recovery: `no_close_rune` and empty bottle are still high in long games.
+- Strengthen heal interrupt: `enemy-healed-without-interrupt` still appeared in `8864152947`.
+- Consider adding config drift checks for `Customize/canonical_*.lua` and `Customize/playstyle_*.lua`.
 
 ## Current Debug Philosophy
 
