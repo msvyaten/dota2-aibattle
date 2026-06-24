@@ -261,9 +261,12 @@ def extract_intents(text):
     intents = {}
     for side, name, body in re.findall(r"AIB\[([RD])\]\s+intent=([\w-]+)([^']*)", text):
         side_map = intents.setdefault(name, {})
-        entry = side_map.setdefault(side, {"count": 0, "last": ""})
+        entry = side_map.setdefault(side, {"count": 0, "last": "", "fields": {}})
         entry["count"] += 1
         entry["last"] = body.strip()
+        for key, val in re.findall(r"\b([\w-]+)=([\w.-]+)", body):
+            field = entry["fields"].setdefault(key, {})
+            field[val] = field.get(val, 0) + 1
     return intents
 
 def extract_blocked(text):
@@ -452,6 +455,58 @@ def parse(path, window=None):
 def side_count(diag, key, side):
     return int(diag.get(key, {}).get(side, 0) or 0)
 
+def intent_count(intents, name, side):
+    return int(intents.get(name, {}).get(side, {}).get("count", 0) or 0)
+
+def intent_field_counts(intents, name, side, field):
+    return intents.get(name, {}).get(side, {}).get("fields", {}).get(field, {})
+
+def print_state_metrics(diag, intents):
+    for side in ["R", "D"]:
+        parts = []
+        for label, name in [
+            ("prewave", "state-prewave-duel"),
+            ("rune", "state-rune-commit"),
+            ("siege", "state-siege-window"),
+            ("recover_xp", "state-recover-xp"),
+            ("recover_safe", "state-recover-safe"),
+        ]:
+            n = intent_count(intents, name, side)
+            if n:
+                parts.append(f"{label}={n}")
+        xp = side_count(diag, "recover-xp", side)
+        safe = side_count(diag, "recover-safe", side)
+        if xp or safe:
+            total = xp + safe
+            pct = 100 * xp / total if total else 0
+            parts.append(f"xp_recovery={xp}/{total}({pct:.0f}%)")
+        if parts:
+            print(f"  states[{side}]: " + " ".join(parts))
+
+def print_tower_opportunities(diag, intents, blocked):
+    for side in ["R", "D"]:
+        result_counts = intent_field_counts(intents, "tower-opportunity", side, "result")
+        if result_counts:
+            hit = result_counts.get("hit", 0)
+            step = result_counts.get("step", 0)
+            blocked_n = sum(n for k, n in result_counts.items() if k.startswith("blocked"))
+            total = hit + step + blocked_n
+            if total:
+                print(f"  tower_opp[{side}]: hit={hit} step={step} blocked={blocked_n} total={total}")
+            continue
+
+        hit = sum(side_count(diag, k, side) for k in [
+            "siege-commit-tower", "siege-wave-tower", "siege-tower",
+        ])
+        step = sum(side_count(diag, k, side) for k in [
+            "siege-commit-step", "siege-wave-step", "siege-step",
+        ])
+        blocked_n = sum(entry.get("count", 0)
+                        for entry in blocked.get("siege", {}).get(side, {}).values())
+        total = hit + step + blocked_n
+        if total:
+            print(f"  tower_opp[{side}]: hit={hit} step={step} blocked={blocked_n} total={total}")
+
 def alert_symptoms(diag, telemetry, intents, blocked, items, action_events):
     alerts = []
     for side in ["R", "D"]:
@@ -618,6 +673,8 @@ def main():
         alerts = alert_symptoms(diag, telemetry, intents, blocked, items, action_events)
         for alert in alerts:
             print("  alert:", alert)
+        print_state_metrics(diag, intents)
+        print_tower_opportunities(diag, intents, blocked)
         for verdict in verdicts(diag, telemetry):
             print("  verdict:", verdict)
         def _pk(idx, key):

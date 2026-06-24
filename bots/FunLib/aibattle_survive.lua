@@ -44,7 +44,7 @@ local function enemyTowerNearLoc(loc, extra)
 end
 
 local function xpRecoveryLoc(bot, nEnemyCreeps, hp)
-	if hp < 0.28 then return AIBUtils.SafeRetreatTowerLoc(bot) end
+	if hp < 0.28 then return AIBUtils.SafeRetreatTowerLoc(bot), "safe" end
 	local fountain = J.GetTeamFountain()
 	local cen = AIBUtils.EnemyCreepCentroid(nEnemyCreeps)
 	if cen ~= nil and fountain ~= nil then
@@ -53,12 +53,12 @@ local function xpRecoveryLoc(bot, nEnemyCreeps, hp)
 		if d > 1 then
 			local back = hp < 0.42 and 1050 or 850
 			local loc = Vector(cen.x + (dx/d)*back, cen.y + (dy/d)*back, cen.z)
-			if not enemyTowerNearLoc(loc, 260) then return loc end
+			if not enemyTowerNearLoc(loc, 260) then return loc, "xp" end
 		end
 	end
 	local front = GetLaneFrontLocation(bot:GetTeam(), LANE_MID, hp < 0.42 and -900 or -650)
-	if front ~= nil and not enemyTowerNearLoc(front, 260) then return front end
-	return AIBUtils.SafeRetreatTowerLoc(bot)
+	if front ~= nil and not enemyTowerNearLoc(front, 260) then return front, "xp" end
+	return AIBUtils.SafeRetreatTowerLoc(bot), "safe"
 end
 
 local function hasFountainAura(bot)
@@ -78,6 +78,10 @@ local function recoveryPlan(bot, action, reason, detail, sec)
 	local text = "action=" .. tostring(action) .. " reason=" .. tostring(reason)
 	if detail ~= nil and detail ~= "" then text = text .. " " .. detail end
 	Style.Intent(bot, "recovery-plan", text, sec or 2.0)
+end
+
+local function stateIntent(bot, name, detail, sec)
+	Style.Intent(bot, "state-" .. tostring(name), detail or "", sec or 2.0)
 end
 
 local function itemCost(name)
@@ -343,6 +347,7 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 				bot.aib_bottleRuneStarted = now
 				bot.aib_bottleRuneLast = now
 				recoveryPlan(bot, "rune", "retarget", string.format("source=%s dist=%.0f", diagKey, retargetDist), 2.0)
+				stateIntent(bot, "rune-commit", string.format("source=%s ttl=30 reason=retarget dist=%.0f", diagKey, retargetDist), 2.0)
 				Style.Intent(bot, diagKey, string.format("dist=%.0f reason=retarget", retargetDist), 2.0)
 				bot:Action_MoveToLocation(retargetLoc)
 				return true
@@ -355,6 +360,7 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 		local targetDist = GetUnitToLocationDistance(bot, bot.aib_bottleRuneTarget)
 		if bot.aib_bottleRuneId ~= nil and targetDist <= 260 then
 			recoveryPlan(bot, "rune", "pickup", string.format("source=%s dist=%.0f", diagKey, targetDist), 1.0)
+			stateIntent(bot, "rune-commit", string.format("source=%s ttl=30 reason=pickup dist=%.0f", diagKey, targetDist), 1.0)
 			runeResult(bot, diagKey, "pickup_attempt", string.format("dist=%.0f age=%.0f", targetDist, now - bot.aib_bottleRuneStarted), 2.0)
 			Style.Intent(bot, diagKey, string.format("dist=%.0f age=%.0f reason=pickup", targetDist, now - bot.aib_bottleRuneStarted), 1.0)
 			if bot.Action_PickUpRune ~= nil then
@@ -366,11 +372,13 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 		end
 		if targetDist > 90 then
 			recoveryPlan(bot, "rune", "commit", string.format("source=%s dist=%.0f", diagKey, targetDist), 2.0)
+			stateIntent(bot, "rune-commit", string.format("source=%s ttl=30 reason=commit dist=%.0f", diagKey, targetDist), 2.0)
 			Style.Intent(bot, diagKey, string.format("dist=%.0f age=%.0f reason=commit", targetDist, now - bot.aib_bottleRuneStarted), 2.0)
 			bot:Action_MoveToLocation(bot.aib_bottleRuneTarget)
 			return true
 		end
 		recoveryPlan(bot, "rune", "hold", string.format("source=%s dist=%.0f", diagKey, targetDist), 1.0)
+		stateIntent(bot, "rune-commit", string.format("source=%s ttl=30 reason=hold dist=%.0f", diagKey, targetDist), 1.0)
 		Style.Intent(bot, diagKey, string.format("dist=%.0f age=%.0f reason=hold", targetDist, now - bot.aib_bottleRuneStarted), 1.0)
 		bot:Action_MoveToLocation(bot.aib_bottleRuneTarget + RandomVector(25))
 		return true
@@ -412,11 +420,13 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 					if followDist > 90 and (bot.aib_bottleRuneStageFollowLast == nil or now - bot.aib_bottleRuneStageFollowLast >= 1.0) then
 						bot.aib_bottleRuneStageFollowLast = now
 						recoveryPlan(bot, "rune_stage", "follow", string.format("source=%s dist=%.0f eta=%.0f", diagKey, followDist, secsToSpawn), 1.5)
+						stateIntent(bot, "rune-commit", string.format("source=%s ttl=%.0f reason=stage_follow dist=%.0f", diagKey, math.max(0, secsToSpawn), followDist), 1.5)
 						bot:Action_MoveToLocation(bot.aib_bottleRuneStageTarget)
 						return true
 					end
 					if followDist <= 90 then
 						recoveryPlan(bot, "rune_stage", "hold", string.format("source=%s dist=%.0f eta=%.0f", diagKey, followDist, secsToSpawn), 1.5)
+						stateIntent(bot, "rune-commit", string.format("source=%s ttl=%.0f reason=stage_hold dist=%.0f", diagKey, math.max(0, secsToSpawn), followDist), 1.5)
 						bot:Action_MoveToLocation(bot.aib_bottleRuneStageTarget + RandomVector(20))
 						return true
 					end
@@ -445,6 +455,7 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 						bot.aib_bottleRuneId = checkRune
 						bot.aib_bottleRuneLast = now
 						recoveryPlan(bot, "rune", "stage_commit", string.format("source=%s dist=%.0f", diagKey, checkDist), 2.0)
+						stateIntent(bot, "rune-commit", string.format("source=%s ttl=30 reason=stage_commit dist=%.0f", diagKey, checkDist), 2.0)
 						Style.Intent(bot, diagKey, string.format("dist=%.0f reason=stage_commit", checkDist), 2.0)
 						bot:Action_MoveToLocation(checkLoc)
 						return true
@@ -467,6 +478,7 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 				bot.aib_bottleRuneStageTarget = stageLoc
 				bot.aib_bottleRuneStageFollowLast = now
 				recoveryPlan(bot, "rune_stage", spawnKind or "upcoming", string.format("source=%s dist=%.0f eta=%.0f", diagKey, stageDist, secsToSpawn), 2.0)
+				stateIntent(bot, "rune-commit", string.format("source=%s ttl=%.0f reason=stage dist=%.0f", diagKey, math.max(0, secsToSpawn), stageDist), 2.0)
 				Style.Intent(bot, diagKey, string.format("dist=%.0f eta=%.0f reason=stage", stageDist, secsToSpawn), 2.0)
 				Style.Diag(bot, diagKey)
 				if stageDist > 120 then
@@ -528,6 +540,7 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 	bot.aib_bottleRuneStageTarget = nil
 	bot.aib_bottleRuneStageFollowLast = nil
 	recoveryPlan(bot, "rune", "start", string.format("source=%s dist=%.0f hp=%.0f mana=%.0f", diagKey, bestDist, hp*100, mana*100), 2.0)
+	stateIntent(bot, "rune-commit", string.format("source=%s ttl=30 reason=start dist=%.0f hp=%.0f mana=%.0f", diagKey, bestDist, hp*100, mana*100), 2.0)
 	Style.Intent(bot, diagKey, string.format("dist=%.0f hp=%.0f mana=%.0f reason=start", bestDist, hp*100, mana*100), 2.0)
 	Style.Diag(bot, diagKey)
 	bot:Action_MoveToLocation(bestLoc)
@@ -714,11 +727,15 @@ local function regenLane(bot, dials, nEnemyCreeps)
 	local near = bot:GetNearbyHeroes(900, true, BOT_MODE_NONE)
 	if not (near and #near > 0 and near[1]:IsAlive()) then return false end
 
-	local back = xpRecoveryLoc(bot, nEnemyCreeps, J.GetHP(bot))
+	local hp = J.GetHP(bot)
+	local back, backKind = xpRecoveryLoc(bot, nEnemyCreeps, hp)
 	if back == nil or GetUnitToLocationDistance(bot, back) <= 200 then return false end
 
 	if bot.aib_regenMoveLast == nil or DotaTime() - bot.aib_regenMoveLast >= 1.5 then
 		bot.aib_regenMoveLast = DotaTime()
+		Style.Diag(bot, backKind == "xp" and "recover-xp" or "recover-safe")
+		stateIntent(bot, backKind == "xp" and "recover-xp" or "recover-safe",
+			string.format("ttl=2 reason=regen_lane hp=%.0f dist=%.0f", hp*100, GetUnitToLocationDistance(bot, back)), 2.0)
 		Style.Diag(bot, "regen-walk")
 		bot:Action_MoveToLocation(back)
 	end
@@ -797,11 +814,14 @@ local function recovery(bot, dials, nEnemyCreeps)
 			and bot:WasRecentlyDamagedByAnyHero(8.0)
 			and not bot:HasModifier("modifier_tango_heal")
 			and not tangoWalk then
-			local back = xpRecoveryLoc(bot, nEnemyCreeps, hp)
+			local back, backKind = xpRecoveryLoc(bot, nEnemyCreeps, hp)
 			if back then
 				if bot.aib_recMoveLast == nil or DotaTime() - bot.aib_recMoveLast >= 5.0 then
 					bot.aib_recMoveLast = DotaTime()
 					recoveryPlan(bot, "back", "post_fight_regen", string.format("hp=%.0f", hp*100), 2.0)
+					Style.Diag(bot, backKind == "xp" and "recover-xp" or "recover-safe")
+					stateIntent(bot, backKind == "xp" and "recover-xp" or "recover-safe",
+						string.format("ttl=5 reason=post_fight_regen hp=%.0f dist=%.0f", hp*100, GetUnitToLocationDistance(bot, back)), 2.0)
 					Style.Diag(bot, "recovery-regen")
 					bot:Action_MoveToLocation(back)
 				end
@@ -878,12 +898,15 @@ local function recovery(bot, dials, nEnemyCreeps)
 	end
 
 	-- e. Stand near tower (passive regen) -- 30s cap to prevent indefinite AFK when items exhausted.
-	local back = xpRecoveryLoc(bot, nEnemyCreeps, hp)
+	local back, backKind = xpRecoveryLoc(bot, nEnemyCreeps, hp)
 	if back then
 		if bot.aib_recWaitStart == nil then bot.aib_recWaitStart = DotaTime() end
 		if DotaTime() - bot.aib_recWaitStart < 10.0 then
 			if bot.aib_recMoveLast == nil or DotaTime() - bot.aib_recMoveLast >= 5.0 then
 				bot.aib_recMoveLast = DotaTime(); Style.Diag(bot, "recovery-wait")
+				Style.Diag(bot, backKind == "xp" and "recover-xp" or "recover-safe")
+				stateIntent(bot, backKind == "xp" and "recover-xp" or "recover-safe",
+					string.format("ttl=5 reason=no_resources hp=%.0f dist=%.0f", hp*100, GetUnitToLocationDistance(bot, back)), 2.0)
 				recoveryPlan(bot, "wait_safe", "no_resources", string.format("hp=%.0f", hp*100), 2.0)
 				bot:Action_MoveToLocation(back)
 			end
