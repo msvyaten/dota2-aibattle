@@ -717,9 +717,9 @@ local function AIB_CreepHitReactStep()
 	end
 
 	bot.aib_creepReactLast = now
-	local repeatedDamage = (bot.aib_creepReactCount or 0) >= 2
-	local safeToTrade = hp >= 0.70 and not repeatedDamage
-		and dist <= range + 25 and AIB_EnemyTowerDanger() == nil
+	local repeatedDamage = (bot.aib_creepReactCount or 0) >= 3
+	local safeToTrade = hp >= 0.55
+		and dist <= range + 80 and AIB_EnemyTowerDanger() == nil
 	if safeToTrade then
 		Style.Intent(bot, "creep-hit-react", string.format("dist=%.0f hp=%.0f hits=%d reason=attack", dist, hp * 100, bot.aib_creepReactCount or 0), 1.5)
 		bot:Action_AttackUnit(creep, true)
@@ -727,10 +727,18 @@ local function AIB_CreepHitReactStep()
 		return true
 	end
 
-	local safe = AIBUtils.SafeRetreatTowerLoc(bot)
+	if hp >= 0.45 and dist <= range + 160 and AIB_EnemyTowerDanger() == nil then
+		Style.Intent(bot, "creep-hit-react", string.format("dist=%.0f hp=%.0f hits=%d reason=edge_attack", dist, hp * 100, bot.aib_creepReactCount or 0), 1.5)
+		return AIB_MoveToAttackEdgeOf(creep, "creep-hit-react-step", 35)
+	end
+
+	local safe = nil
+	if hp < 0.32 or repeatedDamage then
+		safe = AIBUtils.SafeRetreatTowerLoc(bot)
+	end
 	if safe == nil then
 		local cen = AIB_EnemyCreepCentroid(nEnemyCreeps)
-		if cen ~= nil then safe = AIB_MoveAwayFrom(bot:GetLocation(), cen, 360) end
+		if cen ~= nil then safe = AIB_MoveAwayFrom(bot:GetLocation(), cen, 180) end
 	end
 	if safe ~= nil then
 		bot.aib_creepReliefLast = now
@@ -940,49 +948,6 @@ local function AIB_VisualHoldHeartbeatStep()
 		string.format("held=%.1f hp=%.0f", now - bot.aib_holdAnchorTime, J.GetHP(bot) * 100), 2.0)
 
 	bot.aib_holdLast = now
-	if enemy ~= nil and enemyDist <= range + 40 and J.GetHP(bot) >= 0.30 and not AIB_UphillMiss(enemy) then
-		bot:Action_AttackUnit(enemy, false)
-		AIB_Diag("visual-hold-hero")
-		bot.aib_holdAnchorLoc = loc; bot.aib_holdAnchorTime = now
-		return true
-	end
-	if creep ~= nil and creepDist <= range + 45 then
-		bot:Action_AttackUnit(creep, true)
-		AIB_Diag("visual-hold-creep")
-		bot.aib_holdAnchorLoc = loc; bot.aib_holdAnchorTime = now
-		return true
-	end
-	if bot:WasRecentlyDamagedByCreep(2.0) and AIB_RangedMeleePackSpacingStep() then
-		AIB_Diag("visual-hold-dmg")
-		bot.aib_holdAnchorLoc = loc; bot.aib_holdAnchorTime = now
-		return true
-	end
-	if reason == "empty" then
-		local dest = GetLaneFrontLocation(GetTeam(), botAssignedLane, 0)
-		if dest == nil then
-			local twr = GetTower(GetOpposingTeam(), TOWER_MID_1)
-			if twr ~= nil and twr:IsAlive() then dest = twr:GetLocation() end
-		end
-		if dest ~= nil and GetUnitToLocationDistance(bot, dest) > 260 then
-			bot:Action_MoveToLocation(dest)
-			AIB_Diag("visual-hold-lane")
-			bot.aib_holdAnchorLoc = loc; bot.aib_holdAnchorTime = now
-			return true
-		elseif dest ~= nil then
-			local twr = GetTower(GetOpposingTeam(), TOWER_MID_1)
-			local push = twr ~= nil and twr:IsAlive() and twr:GetLocation() or dest
-			local nudge = AIB_MoveAwayFrom(loc, J.GetTeamFountain(), 320)
-			if push ~= nil then
-				local dx, dy = push.x - loc.x, push.y - loc.y
-				local d = math.sqrt(dx*dx + dy*dy)
-				if d > 1 then nudge = Vector(loc.x + (dx/d)*320, loc.y + (dy/d)*320, loc.z) end
-			end
-			bot:Action_MoveToLocation(nudge)
-			AIB_Diag("visual-hold-nudge")
-			bot.aib_holdAnchorLoc = loc; bot.aib_holdAnchorTime = now
-			return true
-		end
-	end
 	return false
 end
 
@@ -1160,9 +1125,16 @@ local function AIB_PreWaveDuelStep(rules)
 	if J.GetHP(bot) < 0.35 or AIB_UphillMiss(enemy) or AIB_EnemyTowerDanger() ~= nil then return false end
 	if Style.AbilityExecute(bot, enemy) then return true end
 	if Style.AbilityHarass(bot, enemy) then return true end
-	bot:Action_AttackUnit(enemy, false)
-	AIB_Diag("prewave-duel")
-	return true
+	if dist <= range + 80 then
+		bot:Action_AttackUnit(enemy, false)
+		AIB_Diag("prewave-duel")
+		return true
+	end
+	if J.GetHP(bot) >= 0.45 and dist <= range + 260 then
+		return AIB_MoveToAttackEdgeOf(enemy, "prewave-duel-step", 0)
+	end
+	AIB_WantBlocked("prewave-duel", "too_far", string.format("dist=%.0f", dist), 3.0)
+	return false
 end
 
 local function AIB_PreCreepStandoffStep()
@@ -1651,20 +1623,44 @@ local function ThinkLaningCore(dials, rules)
 	local csDist = csAllowed and needMove and (csDistNow or GetUnitToUnitDistance(bot, hitCreep))
 	if csAllowed and needMove and csDist <= botAttackRange * 1.5 then
 		if csSoon == true and csDist <= botAttackRange - 35 then
-			Style.DiagRL(bot, "cs-wait", 2)
+			local now = DotaTime()
+			if bot.aib_csWaitStart == nil or bot.aib_csWaitTarget ~= hitCreep then
+				bot.aib_csWaitStart = now
+				bot.aib_csWaitTarget = hitCreep
+			end
+			if now - bot.aib_csWaitStart < 0.8 then
+				Style.DiagRL(bot, "cs-wait", 2)
+				return
+			end
+			bot:SetTarget(hitCreep)
+			bot:Action_AttackUnit(hitCreep, true)
+			AIB_Diag("cs-wait-release")
 			return
 		end
+		bot.aib_csWaitStart = nil
+		bot.aib_csWaitTarget = nil
 		AIB_Diag("cs-walk")
 		AIB_MoveToAttackEdgeOf(hitCreep, nil, 20)
 		return
 	end
+	bot.aib_csWaitStart = nil
+	bot.aib_csWaitTarget = nil
 	if AIB_RangedMeleePackSpacingStep() then return end
 	if AIB_LastHitWatchdogStep() then return end
 
-	-- creep_wave_priority = push: attack any in-range enemy creep (not just last-hit window).
+	-- creep_wave_priority = push: attack non-CS creeps only after protecting the next last-hit.
 	-- Guard: only push when allied creeps are nearby (<500) so aggro is shared with the wave.
 	-- Without this, the bot pulls the entire enemy wave alone and takes constant creep damage.
 	if cwp == "push" and AIB_EnemyTowerDanger() == nil then
+		if csAllowed and csSoon == true and csDistNow ~= nil and csDistNow <= botAttackRange * 1.55 then
+			if csDistNow <= botAttackRange + 40 then
+				Style.DiagRL(bot, "cw-push-protect-cs", 2)
+				return
+			end
+			AIB_Diag("cw-push-cs-step")
+			AIB_MoveToAttackEdgeOf(hitCreep, nil, 20)
+			return
+		end
 		local allyNear = false
 		for _, a in pairs(nAllyCreeps or {}) do
 			if J.IsValid(a) and GetUnitToUnitDistance(bot, a) <= 500 then
@@ -1672,12 +1668,19 @@ local function ThinkLaningCore(dials, rules)
 			end
 		end
 		if allyNear then
+			local pushCreep, pushHp = nil, -1
 			for _, c in pairs(nEnemyCreeps or {}) do
 				if J.IsValid(c) and J.CanBeAttacked(c)
 					and GetUnitToUnitDistance(bot, c) <= botAttackRange then
-					bot:Action_AttackUnit(c, true)
-					AIB_Diag("cw-push"); return
+					local hp = c:GetHealth()
+					if (not csAllowed or c ~= hitCreep or csSoon ~= true) and hp > pushHp then
+						pushCreep, pushHp = c, hp
+					end
 				end
+			end
+			if pushCreep ~= nil then
+				bot:Action_AttackUnit(pushCreep, true)
+				AIB_Diag("cw-push"); return
 			end
 		end
 	end
