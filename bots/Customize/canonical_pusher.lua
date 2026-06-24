@@ -43,7 +43,7 @@ return {
 	},
 	rules = {
 		respawn_behavior    = "tp_to_lane",
-		pregame_behavior    = "safe_tower",
+		pregame_behavior    = "aggressive_mid",
 		dive_policy         = "finish_only",
 		low_hp_behavior     = "regen_lane",
 		healing_style       = "active",

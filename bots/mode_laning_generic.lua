@@ -360,7 +360,7 @@ local function ThinkAnnounce(dials)
 	if bot.aib_announced then return end
 	bot.aib_announced = true
 	bot:ActionImmediate_Chat("AIB[" .. AIB_SIDE .. "] build=" .. tostring(AIBBuild.sha or "unknown"), true)
-	bot:ActionImmediate_Chat("> " .. bot:GetName() .. " [" .. AIB_SIDE .. "]", false)
+	bot:ActionImmediate_Chat("> " .. bot:GetUnitName() .. " [" .. AIB_SIDE .. "]", false)
 	bot:ActionImmediate_Chat(string.format(
 		"AIB[%s] harass=%.2f farm=%.2f fwd=%.2f abil=%.2f rune=%.2f retreat=%.2f exec=%.2f gank=%.2f push=%.2f",
 		AIB_SIDE,
@@ -1067,6 +1067,24 @@ local function AIB_ContactHeroStep(rules)
 	return false
 end
 
+local function AIB_AbilityPressureStep()
+	if J.GetHP(bot) < 0.30 then return false end
+	local enemy, dist = AIB_NearestEnemyHero(900)
+	if enemy == nil or not enemy:IsAlive() then return false end
+	local twr = AIB_EnemyTowerDanger()
+	if twr ~= nil and AIB_TowerActuallyThreatening(twr) and not Style.MayDive(bot) then
+		AIB_WantBlocked("ability-pressure", "tower", string.format("dist=%.0f", dist), 3.0)
+		return false
+	end
+	if Style.AbilityExecute(bot, enemy) then return true end
+	if J.GetHP(enemy) - J.GetHP(bot) > 0.35 then
+		AIB_WantBlocked("ability-pressure", "hp_disadv", string.format("dist=%.0f hp=%.0f ehp=%.0f", dist, J.GetHP(bot)*100, J.GetHP(enemy)*100), 3.0)
+		return false
+	end
+	if Style.AbilityHarass(bot, enemy) then return true end
+	return false
+end
+
 local function AIB_PreCreepStandoffStep()
 	local now = DotaTime()
 	if now < 0 or now > 45 then return false end
@@ -1299,6 +1317,7 @@ local function ThinkLaningCore(dials, rules)
 	if AIBEngine.Resolve(urgentIntents, intentCtx) then return end
 
 	if AIB_PreCreepStandoffStep() then return end
+	if AIB_AbilityPressureStep() then return end
 	if AIB_ContactHeroStep(rules) then return end
 	if AIB_CreepHitReactStep() then return end
 	if AIB_DamageUnstuckStep() then return end
@@ -1496,7 +1515,12 @@ local function ThinkLaningCore(dials, rules)
 			if not shouldRegen then
 				local chase = bot:GetNearbyHeroes(1500, true, BOT_MODE_NONE)
 				if chase and #chase > 0 and chase[1]:IsAlive() then
-					AIB_MoveToAttackEdge(chase[1], "hero-prio-chase"); return
+					local chaseDist = GetUnitToUnitDistance(bot, chase[1])
+					local creepNear = AIB_HasAttackableEnemyCreep(botAttackRange + 120)
+					if chaseDist <= 950 and not csAllowed and not creepNear then
+						AIB_MoveToAttackEdge(chase[1], "hero-prio-chase"); return
+					end
+					AIB_WantBlocked("hero-prio-chase", "lane_work", string.format("dist=%.0f cs=%s creep=%s", chaseDist, tostring(csAllowed), tostring(creepNear)), 3.0)
 				end
 			end
 		end
