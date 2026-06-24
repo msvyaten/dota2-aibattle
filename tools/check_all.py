@@ -35,13 +35,16 @@ LIVE_CODE_FILES = [
     "FretBots/SettingsDefault.lua",
 ]
 
-# Files we hand-edit and deploy: a syntax slip here crashes the live match. Mirrors deploy.bat.
-SYNTAX_FILES = LIVE_CODE_FILES + [
-    "item_purchase_generic.lua",
+LIVE_PLAYSTYLE_FILES = [
     "Customize/canonical_pusher.lua",
     "Customize/canonical_ganker.lua",
     "Customize/playstyle_radiant.lua",
     "Customize/playstyle_dire.lua",
+]
+
+# Files we hand-edit and deploy: a syntax slip here crashes the live match. Mirrors deploy.bat.
+SYNTAX_FILES = LIVE_CODE_FILES + LIVE_PLAYSTYLE_FILES + [
+    "item_purchase_generic.lua",
 ]
 
 
@@ -196,7 +199,7 @@ def check_live_drift():
     print("[check] live file drift", flush=True)
     missing = []
     drift = []
-    for rel in LIVE_CODE_FILES:
+    for rel in LIVE_CODE_FILES + LIVE_PLAYSTYLE_FILES:
         src = ROOT / "bots" / rel
         dst = DOTA_BOTS_DIR / rel
         if not dst.exists():
