@@ -131,6 +131,45 @@ def test_timeline_default_truncates_long_runs():
     assert any("...+" in e for e in tl["R"])
 
 
+# --- debug_tree: desire -> state -> action/block -> symptom hierarchy ---
+
+def test_extract_intents_keeps_field_counts():
+    text = "\n".join([
+        "x 'AIB[R] intent=rune-result source=bottle-rune result=timeout age=30'",
+        "x 'AIB[R] intent=rune-result source=bottle-rune result=timeout age=30'",
+        "x 'AIB[R] intent=rune-result source=bottle-rune result=filled age=2'",
+    ])
+    intents = m.extract_intents(text)
+    assert intents["rune-result"]["R"]["fields"]["result"] == {"timeout": 2, "filled": 1}
+
+
+def test_debug_tree_groups_state_action_block_and_symptom():
+    diag = {
+        "pg-duel": {"R": 2},
+        "bottle-rune": {"R": 1},
+        "recovery-regen": {"R": 3},
+        "siege-step": {"R": 4},
+        "cs-walk": {"R": 5},
+    }
+    intents = {
+        "state-prewave-duel": {"R": {"count": 1, "last": "", "fields": {}}},
+        "state-rune-commit": {"R": {"count": 2, "last": "", "fields": {}}},
+        "tower-opportunity": {
+            "R": {"count": 2, "last": "", "fields": {"result": {"step": 2}}}
+        },
+    }
+    blocked = {
+        "siege": {"R": {"healing": {"count": 1, "last": ""}}},
+        "bottle-rune": {"R": {"no_close_rune": {"count": 3, "last": ""}}},
+    }
+    alerts = ["R: ignored-nearby-hero close_samples=4 hero_actions=0"]
+    lines = m.debug_tree_lines("R", diag, intents, blocked, alerts)
+    joined = "\n".join(lines)
+    assert "fight:" in joined and "state-prewave-duel=1" in joined and "pg-duel=2" in joined
+    assert "rune:" in joined and "bottle-rune=1" in joined and "blocked[bottle-rune=3]" in joined
+    assert "push:" in joined and "tower:step=2" in joined and "blocked[siege=1]" in joined
+
+
 # --- check_all.lua_structure_problems ---
 
 def test_lua_valid_code_has_no_problems():

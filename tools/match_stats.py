@@ -461,6 +461,160 @@ def intent_count(intents, name, side):
 def intent_field_counts(intents, name, side, field):
     return intents.get(name, {}).get(side, {}).get("fields", {}).get(field, {})
 
+def blocked_reason_counts(blocked, name, side):
+    reasons = blocked.get(name, {}).get(side, {})
+    return {reason: entry.get("count", 0) for reason, entry in reasons.items()}
+
+def _side_counts(source, keys, side):
+    out = {}
+    for key in keys:
+        n = side_count(source, key, side)
+        if n:
+            out[key] = n
+    return out
+
+def _intent_counts(intents, keys, side):
+    out = {}
+    for key in keys:
+        n = intent_count(intents, key, side)
+        if n:
+            out[key] = n
+    return out
+
+def _blocked_counts(blocked, keys, side):
+    out = {}
+    for key in keys:
+        total = sum(blocked_reason_counts(blocked, key, side).values())
+        if total:
+            out[key] = total
+    return out
+
+def _fmt_counts(counts, limit=5):
+    if not counts:
+        return ""
+    pairs = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+    bits = [f"{k}={v}" for k, v in pairs[:limit]]
+    if len(pairs) > limit:
+        bits.append(f"+{len(pairs) - limit}")
+    return " ".join(bits)
+
+def _side_symptoms(alerts, side, needles):
+    prefix = f"{side}: "
+    out = []
+    for alert in alerts:
+        if not alert.startswith(prefix):
+            continue
+        body = alert[len(prefix):]
+        if any(n in body for n in needles):
+            out.append(body.split()[0])
+    return out
+
+def debug_tree_lines(side, diag, intents, blocked, alerts):
+    """Build desire -> state -> action/block -> symptom summaries for one side."""
+    tree = []
+
+    fight_states = _intent_counts(intents, ["state-prewave-duel"], side)
+    fight_actions = _side_counts(diag, [
+        "pg-duel", "pg-duel-uphill", "pg-duel-step",
+        "prewave-duel", "prewave-duel-uphill", "prewave-duel-step",
+        "ability-harass", "execute", "execute-approach",
+        "hero-contact-atk", "hero-contact-chase", "hero-pass-atk", "hero-pass-chase",
+        "kill-lock-atk", "channel-interrupt-atk", "channel-interrupt-chase",
+    ], side)
+    fight_actions.update(_intent_counts(intents, [
+        "hero-contact", "kill-lock", "channel-interrupt", "heal-interrupt",
+    ], side))
+    fight_blocks = _blocked_counts(blocked, [
+        "prewave-duel", "hero-contact", "hero-prio-chase",
+        "ability-pressure", "kill-lock", "channel-interrupt",
+    ], side)
+    fight_symptoms = _side_symptoms(alerts, side, [
+        "ignored-nearby-hero", "enemy-healed-without-interrupt",
+    ])
+    _append_tree_line(tree, "fight", fight_states, fight_actions, fight_blocks, fight_symptoms)
+
+    rune_states = _intent_counts(intents, ["state-rune-commit"], side)
+    rune_actions = _side_counts(diag, [
+        "bottle-rune", "recovery-rune-bottle", "recovery-rune",
+    ], side)
+    rune_actions.update(_intent_counts(intents, [
+        "bottle-rune", "recovery-rune-bottle", "rune-result",
+    ], side))
+    rune_blocks = _blocked_counts(blocked, ["bottle-rune", "recovery-rune-bottle"], side)
+    rune_results = {f"result:{k}": v for k, v in intent_field_counts(intents, "rune-result", side, "result").items()}
+    rune_actions.update(rune_results)
+    rune_symptoms = _side_symptoms(alerts, side, ["bottle-no-rune-intent"])
+    _append_tree_line(tree, "rune", rune_states, rune_actions, rune_blocks, rune_symptoms)
+
+    recover_states = _intent_counts(intents, ["state-recover-xp", "state-recover-safe"], side)
+    recover_actions = _side_counts(diag, [
+        "recover-xp", "recover-safe", "regen-walk",
+        "recovery-bottle", "recovery-flask", "recovery-regen", "recovery-wait",
+        "recovery-tango", "recovery-buy", "recovery-tp", "recovery-walk",
+        "bottle-heal", "tango-heal", "heal-item", "mana-clarity",
+        "low-hp-back", "low-hp-nudge", "low-hp-safe-step", "low-hp-watch-step",
+        "fountain-bottle", "fountain-stabilize", "fountain-wait",
+    ], side)
+    recover_actions.update(_intent_counts(intents, ["recovery-plan"], side))
+    recover_blocks = _blocked_counts(blocked, ["recovery-buy"], side)
+    recover_symptoms = _side_symptoms(alerts, side, ["stationary-while-damaged"])
+    _append_tree_line(tree, "recover", recover_states, recover_actions, recover_blocks, recover_symptoms)
+
+    push_states = _intent_counts(intents, ["state-siege-window"], side)
+    push_actions = _side_counts(diag, [
+        "cw-push", "siege-creep", "siege-tower", "siege-step",
+        "siege-wave-tower", "siege-wave-step",
+        "siege-commit-tower", "siege-commit-step",
+    ], side)
+    push_actions.update({f"tower:{k}": v for k, v in intent_field_counts(intents, "tower-opportunity", side, "result").items()})
+    push_blocks = _blocked_counts(blocked, ["siege"], side)
+    _append_tree_line(tree, "push", push_states, push_actions, push_blocks, [])
+
+    lane_states = {}
+    lane_actions = _side_counts(diag, [
+        "cs-inrange", "cs-wait", "cs-wait-release", "cs-walk",
+        "cs-watchdog-atk", "cs-watchdog-step", "deny-act",
+        "creep-dmg", "creep-aggro-back", "creep-aggro-hit",
+        "creep-hit-react-atk", "creep-hit-react-kite", "creep-hit-react-step",
+        "fwd-position", "fwd-at-position", "fwd-hold",
+        "fwd-suppressed-hero", "fwd-suppressed-creep", "fwd-suppressed-lowhp",
+        "visual-hold",
+    ], side)
+    lane_actions.update(_intent_counts(intents, [
+        "cs-watchdog", "creep-aggro", "creep-hit-react", "arbiter",
+    ], side))
+    lane_blocks = _blocked_counts(blocked, [
+        "cs-watchdog", "creep-hit-react", "visual-hold",
+    ], side)
+    lane_symptoms = _side_symptoms(alerts, side, ["creep-dmg-without-relief"])
+    _append_tree_line(tree, "lane", lane_states, lane_actions, lane_blocks, lane_symptoms)
+
+    return tree
+
+def _append_tree_line(tree, name, states, actions, blocks, symptoms):
+    parts = []
+    s = _fmt_counts(states, 4)
+    a = _fmt_counts(actions, 6)
+    b = _fmt_counts(blocks, 4)
+    if s:
+        parts.append(f"state[{s}]")
+    if a:
+        parts.append(f"action[{a}]")
+    if b:
+        parts.append(f"blocked[{b}]")
+    if symptoms:
+        parts.append("symptom[" + " ".join(symptoms[:4]) + "]")
+    if parts:
+        tree.append(f"    {name}: " + " ".join(parts))
+
+def print_debug_tree(diag, intents, blocked, alerts):
+    for side in ["R", "D"]:
+        lines = debug_tree_lines(side, diag, intents, blocked, alerts)
+        if lines:
+            print(f"  debug_tree[{side}]:")
+            for line in lines:
+                print(line)
+
 def print_state_metrics(diag, intents):
     for side in ["R", "D"]:
         parts = []
@@ -675,6 +829,7 @@ def main():
             print("  alert:", alert)
         print_state_metrics(diag, intents)
         print_tower_opportunities(diag, intents, blocked)
+        print_debug_tree(diag, intents, blocked, alerts)
         for verdict in verdicts(diag, telemetry):
             print("  verdict:", verdict)
         def _pk(idx, key):
