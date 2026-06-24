@@ -262,7 +262,7 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 		return false
 	end
 	local enemyDeadWindow = bot.aib_eDeadSince ~= nil and now - bot.aib_eDeadSince < 45.0
-	if enemyDeadWindow and hp >= 0.35 then
+	if enemyDeadWindow and not forceEmptyBottle and hp >= 0.70 and mana >= 0.50 then
 		Style.Blocked(bot, diagKey, "enemy_dead_push", string.format("hp=%.0f", hp*100), 4.0)
 		runeResult(bot, diagKey, "abort", "reason=enemy_dead_push", 6.0)
 		clearRuneAttempt(bot)
@@ -437,7 +437,9 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 	if laneAware then
 		local laneDist = laneFrontDistance(bot)
 		local laneBudget = rules.bottle_rune_lane_budget or 1500
-		if laneDist > laneBudget and bestDist > 700 then
+		local needsRuneRecovery = forceEmptyBottle or hp < 0.65 or mana < 0.35
+		local closeEnoughRune = bestDist <= 1100
+		if laneDist > laneBudget and bestDist > 700 and not needsRuneRecovery and not closeEnoughRune then
 			Style.Blocked(bot, diagKey, "lane_budget", string.format("lane=%.0f max=%.0f rune=%.0f", laneDist, laneBudget, bestDist), 6.0)
 			return false
 		end

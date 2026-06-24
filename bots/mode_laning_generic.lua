@@ -1467,7 +1467,9 @@ local function ThinkLaningCore(dials, rules)
 	-- window -- that's a safe siege (fix #5), not an overextension.
 	do
 		local holdThresh = rules.low_hp_hold or 0.45
-		if not debugSkeleton and J.GetHP(bot) < holdThresh and not AIB_EnemyDeadRecently() then
+		local hpNow = J.GetHP(bot)
+		local enemyDeadSafeSiege = AIB_EnemyDeadRecently() and hpNow >= 0.35 and not AIB_HealingChannelActive()
+		if not debugSkeleton and hpNow < holdThresh and not enemyDeadSafeSiege then
 			local ownT1 = GetTower(GetTeam(), TOWER_MID_1)
 			local enmT1 = GetTower(GetOpposingTeam(), TOWER_MID_1)
 			if ownT1 ~= nil and enmT1 ~= nil
