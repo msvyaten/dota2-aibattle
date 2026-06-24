@@ -1331,6 +1331,7 @@ local function ThinkLaningCore(dials, rules)
 
 	if AIB_PreCreepStandoffStep() then return end
 	if AIB_AbilityPressureStep() then return end
+	if AIB_VisualHoldHeartbeatStep() then return end
 	if AIB_ContactHeroStep(rules) then return end
 	if AIB_CreepHitReactStep() then return end
 	if AIB_DamageUnstuckStep() then return end

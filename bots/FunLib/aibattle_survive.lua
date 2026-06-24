@@ -641,7 +641,7 @@ local function recovery(bot, dials)
 			local bItem = bot:GetItemInSlot(bSlot)
 			if bItem ~= nil then
 				if bot:HasModifier("modifier_bottle_regeneration") then
-					return true
+					Style.DiagRL(bot, "recovery-bottle-active", 3)
 				elseif (hp < 0.80 or mana < 0.50) and bItem:GetCurrentCharges() > 0 and bItem:IsFullyCastable()
 					and (bot.aib_recBottleLast == nil or DotaTime() - bot.aib_recBottleLast >= 3.0) then
 					bot.aib_recBottleLast = DotaTime()
