@@ -25,6 +25,42 @@ end
 
 local function forwardTowerLoc(bot) return AIBUtils.SafeRetreatTowerLoc(bot) end
 
+local function dist2D(a, b)
+	if a == nil or b == nil then return math.huge end
+	local dx, dy = a.x - b.x, a.y - b.y
+	return math.sqrt(dx*dx + dy*dy)
+end
+
+local function enemyTowerNearLoc(loc, extra)
+	if loc == nil then return false end
+	local opp = GetOpposingTeam()
+	for _, id in ipairs({ TOWER_MID_1, TOWER_MID_2, TOWER_TOP_1, TOWER_BOT_1, TOWER_MID_3 }) do
+		local twr = GetTower(opp, id)
+		if twr ~= nil and twr:IsAlive() and dist2D(loc, twr:GetLocation()) <= twr:GetAttackRange() + (extra or 180) then
+			return true
+		end
+	end
+	return false
+end
+
+local function xpRecoveryLoc(bot, nEnemyCreeps, hp)
+	if hp < 0.28 then return AIBUtils.SafeRetreatTowerLoc(bot) end
+	local fountain = J.GetTeamFountain()
+	local cen = AIBUtils.EnemyCreepCentroid(nEnemyCreeps)
+	if cen ~= nil and fountain ~= nil then
+		local dx, dy = fountain.x - cen.x, fountain.y - cen.y
+		local d = math.sqrt(dx*dx + dy*dy)
+		if d > 1 then
+			local back = hp < 0.42 and 1050 or 850
+			local loc = Vector(cen.x + (dx/d)*back, cen.y + (dy/d)*back, cen.z)
+			if not enemyTowerNearLoc(loc, 260) then return loc end
+		end
+	end
+	local front = GetLaneFrontLocation(bot:GetTeam(), LANE_MID, hp < 0.42 and -900 or -650)
+	if front ~= nil and not enemyTowerNearLoc(front, 260) then return front end
+	return AIBUtils.SafeRetreatTowerLoc(bot)
+end
+
 local function hasFountainAura(bot)
 	return bot:HasModifier("modifier_fountain_aura")
 		or bot:HasModifier("modifier_fountain_aura_buff")
@@ -385,6 +421,35 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 						return true
 					end
 				end
+				if secsToSpawn <= 0 and secsToSpawn >= -12 then
+					local checkRune, checkLoc, checkDist, checkScore = nil, nil, math.huge, math.huge
+					for _, runeId in ipairs({ RUNE_POWERUP_1, RUNE_POWERUP_2 }) do
+						if GetRuneStatus(runeId) == RUNE_STATUS_AVAILABLE then
+							local loc = GetRuneSpawnLocation(runeId)
+							if loc ~= nil then
+								local dist = GetUnitToLocationDistance(bot, loc)
+								local runeType = GetRuneType(runeId)
+								local score = dist + ((runeType == RUNE_WATER) and 0 or 350)
+								if dist <= stageMaxDist and score < checkScore then
+									checkRune, checkLoc, checkDist, checkScore = runeId, loc, dist, score
+								end
+							end
+						end
+					end
+					if checkLoc ~= nil then
+						bot.aib_bottleRuneStageWindow = nil
+						bot.aib_bottleRuneStageUntil = nil
+						bot.aib_bottleRuneStageTarget = nil
+						bot.aib_bottleRuneStarted = now
+						bot.aib_bottleRuneTarget = checkLoc
+						bot.aib_bottleRuneId = checkRune
+						bot.aib_bottleRuneLast = now
+						recoveryPlan(bot, "rune", "stage_commit", string.format("source=%s dist=%.0f", diagKey, checkDist), 2.0)
+						Style.Intent(bot, diagKey, string.format("dist=%.0f reason=stage_commit", checkDist), 2.0)
+						bot:Action_MoveToLocation(checkLoc)
+						return true
+					end
+				end
 				Style.Blocked(bot, diagKey, "stage_done", string.format("eta=%.0f", secsToSpawn), 6.0)
 				return false
 			end
@@ -649,7 +714,7 @@ local function regenLane(bot, dials, nEnemyCreeps)
 	local near = bot:GetNearbyHeroes(900, true, BOT_MODE_NONE)
 	if not (near and #near > 0 and near[1]:IsAlive()) then return false end
 
-	local back = forwardTowerLoc(bot)
+	local back = xpRecoveryLoc(bot, nEnemyCreeps, J.GetHP(bot))
 	if back == nil or GetUnitToLocationDistance(bot, back) <= 200 then return false end
 
 	if bot.aib_regenMoveLast == nil or DotaTime() - bot.aib_regenMoveLast >= 1.5 then
@@ -664,7 +729,7 @@ end
 -- recovery: post-fight heal WITHOUT safety gates.
 -- Enemy is dead/gone -- no need to wait for "safe" windows.
 --
-local function recovery(bot, dials)
+local function recovery(bot, dials, nEnemyCreeps)
 	if Style.Get().rules.healing_style ~= "active" or not bot:IsAlive() then return false end
 
 	local hp      = J.GetHP(bot)
@@ -732,7 +797,7 @@ local function recovery(bot, dials)
 			and bot:WasRecentlyDamagedByAnyHero(8.0)
 			and not bot:HasModifier("modifier_tango_heal")
 			and not tangoWalk then
-			local back = forwardTowerLoc(bot)
+			local back = xpRecoveryLoc(bot, nEnemyCreeps, hp)
 			if back then
 				if bot.aib_recMoveLast == nil or DotaTime() - bot.aib_recMoveLast >= 5.0 then
 					bot.aib_recMoveLast = DotaTime()
@@ -813,7 +878,7 @@ local function recovery(bot, dials)
 	end
 
 	-- e. Stand near tower (passive regen) -- 30s cap to prevent indefinite AFK when items exhausted.
-	local back = forwardTowerLoc(bot)
+	local back = xpRecoveryLoc(bot, nEnemyCreeps, hp)
 	if back then
 		if bot.aib_recWaitStart == nil then bot.aib_recWaitStart = DotaTime() end
 		if DotaTime() - bot.aib_recWaitStart < 10.0 then
@@ -838,7 +903,7 @@ function M.Think(bot, dials, nEnemyCreeps)
 	if fountainRecovery(bot)              then return true end
 	if defensiveHeal(bot, dials)           then return true end
 	if regenLane(bot, dials, nEnemyCreeps) then return true end
-	if recovery(bot, dials)                then return true end
+	if recovery(bot, dials, nEnemyCreeps)  then return true end
 	return false
 end
 

@@ -964,10 +964,6 @@ local function AIB_SiegeIntent(dials, rules)
 		end
 	end
 	if twr == nil or AIB_TowerActuallyThreatening(twr) then return false end
-	if AIB_HealingChannelActive() and not AIB_EnemyDeadRecently() then
-		AIB_WantBlocked("siege", "healing", string.format("tower=%.0f", GetUnitToUnitDistance(bot, twr)), 4.0)
-		return false
-	end
 	local cwp = rules.creep_wave_priority or "last_hit_only"
 	local enemy, enemyDist = AIB_NearestEnemyHero(2200)
 	local enemyFarOrWeak = enemy == nil or enemyDist > 1300 or J.GetHP(enemy) < 0.28
@@ -1000,8 +996,15 @@ local function AIB_SiegeIntent(dials, rules)
 	end
 
 	local now = DotaTime()
+	local twrDist = GetUnitToUnitDistance(bot, twr)
+	local inTowerAttackRange = twrDist <= (botAttackRange or bot:GetAttackRange()) + 60
+	local safeHealingHit = alliedTank and inTowerAttackRange and J.GetHP(bot) >= 0.45
+	if AIB_HealingChannelActive() and not AIB_EnemyDeadRecently() and not safeHealingHit then
+		AIB_WantBlocked("siege", "healing", string.format("tower=%.0f tank=%s", twrDist, tostring(alliedTank)), 4.0)
+		return false
+	end
 	if bot.aib_siegeCommitUntil ~= nil and now <= bot.aib_siegeCommitUntil then
-		if GetUnitToUnitDistance(bot, twr) <= (botAttackRange or bot:GetAttackRange()) + 60 then
+		if twrDist <= (botAttackRange or bot:GetAttackRange()) + 60 then
 			bot:Action_AttackUnit(twr, true)
 			AIB_Diag("siege-commit-tower")
 			return true
@@ -1010,7 +1013,7 @@ local function AIB_SiegeIntent(dials, rules)
 	end
 
 	if strongWaveAtTower and (cwp == "push" or AIB_EnemyDeadRecently() or enemyFarOrWeak) then
-		if GetUnitToUnitDistance(bot, twr) <= (botAttackRange or bot:GetAttackRange()) + 60 then
+		if twrDist <= (botAttackRange or bot:GetAttackRange()) + 60 then
 			bot.aib_siegeCommitUntil = now + 2.2
 			bot:Action_AttackUnit(twr, true)
 			AIB_Diag("siege-wave-tower")
@@ -1029,7 +1032,7 @@ local function AIB_SiegeIntent(dials, rules)
 			return true
 		end
 	end
-	if GetUnitToUnitDistance(bot, twr) <= (botAttackRange or bot:GetAttackRange()) + 60 then
+	if twrDist <= (botAttackRange or bot:GetAttackRange()) + 60 then
 		bot.aib_siegeCommitUntil = now + 1.6
 		bot:Action_AttackUnit(twr, true)
 		AIB_Diag("siege-tower")
@@ -1122,12 +1125,12 @@ local function AIB_PreWaveDuelStep(rules)
 	local range = botAttackRange or bot:GetAttackRange()
 	local enemy, dist = AIB_NearestEnemyHero(range + 140)
 	if enemy == nil or not enemy:IsAlive() then return false end
-	if J.GetHP(bot) < 0.35 or AIB_UphillMiss(enemy) or AIB_EnemyTowerDanger() ~= nil then return false end
+	if J.GetHP(bot) < 0.35 or AIB_EnemyTowerDanger() ~= nil then return false end
 	if Style.AbilityExecute(bot, enemy) then return true end
 	if Style.AbilityHarass(bot, enemy) then return true end
 	if dist <= range + 80 then
 		bot:Action_AttackUnit(enemy, false)
-		AIB_Diag("prewave-duel")
+		AIB_Diag(AIB_UphillMiss(enemy) and "prewave-duel-uphill" or "prewave-duel")
 		return true
 	end
 	if J.GetHP(bot) >= 0.45 and dist <= range + 260 then
@@ -1234,7 +1237,13 @@ end
 local function ThinkDivePolicy()
 	local twr = AIB_EnemyTowerDanger()
 	if twr == nil then return false end
-	if AIB_HealingChannelActive() and GetUnitToUnitDistance(bot, twr) <= twr:GetAttackRange() + 420 then
+	local twrDist = GetUnitToUnitDistance(bot, twr)
+	local healingSafeHit = AIB_HealingChannelActive()
+		and J.GetHP(bot) >= 0.45
+		and not AIB_TowerActuallyThreatening(twr)
+		and AIB_AlliedCreepsAtTower(twr, twr:GetAttackRange() + 120) >= 1
+		and twrDist <= (botAttackRange or bot:GetAttackRange()) + 80
+	if AIB_HealingChannelActive() and not healingSafeHit and twrDist <= twr:GetAttackRange() + 420 then
 		AIB_Diag("heal-no-dive")
 		bot:Action_MoveToLocation(J.VectorAway(bot:GetLocation(), twr:GetLocation(), 420))
 		return true
