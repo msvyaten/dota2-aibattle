@@ -224,6 +224,7 @@ Recent local commits:
   - seen-empty rune spots are remembered until the next 2-minute spawn tick;
   - visual-hold now issues a fallback action (hero attack, creep attack, or lane step) instead of only logging the hold;
   - low-HP recovery yields to a safe in-range last-hit before leaving lane.
+  - bottle rune route distances are internal engine guards, not LLM-facing rules.
 - `89d2b65 codex: tighten lane decision states` - deployed live; latest behavior package:
   - engine can continue after an intent action explicitly returns `false`;
   - prewave duel is now approach/trade/space/disengage instead of a single attack gate;

@@ -10,6 +10,11 @@ local AIBUtils = require(GetScriptDirectory()..'/FunLib/aibattle_utils')
 
 local TANGO_CD = 10.0  -- shared across all tango calls; guards re-issue while CD / modifier active
 local FLASK_CD = 3.0   -- laning flask (defensiveHeal); recovery uses aib_recFlaskLast at 8s (separate context)
+local BOTTLE_RUNE_MAX_DIST = 1900.0
+local BOTTLE_RUNE_STAGE_MAX_DIST = 3600.0
+local BOTTLE_RUNE_LANE_BUDGET = 1500.0
+local RECOVERY_RUNE_MAX_DIST = 3600.0
+local RECOVERY_RUNE_STAGE_MAX_DIST = 4200.0
 
 local function getItem(bot, name)
 	local slot = bot:FindItemSlot(name)
@@ -538,7 +543,7 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 
 	if laneAware then
 		local laneDist = laneFrontDistance(bot)
-		local laneBudget = rules.bottle_rune_lane_budget or 1500
+		local laneBudget = BOTTLE_RUNE_LANE_BUDGET
 		local needsRuneRecovery = forceEmptyBottle or hp < 0.65 or mana < 0.35
 		local closeEnoughRune = bestDist <= 1100
 		if laneDist > laneBudget and bestDist > 700 and not needsRuneRecovery and not closeEnoughRune then
@@ -629,12 +634,11 @@ local function defensiveHeal(bot, dials)
 		end
 	end
 
-	local rules = Style.Get().rules
-	if seekBottleRune(bot, hp, mana, "bottle-rune", rules.bottle_rune_max_dist or 1900, {
+	if seekBottleRune(bot, hp, mana, "bottle-rune", BOTTLE_RUNE_MAX_DIST, {
 		lane_aware = true,
 		stage_upcoming = true,
 		stage_window = 18.0,
-		stage_max_dist = 3600,
+		stage_max_dist = BOTTLE_RUNE_STAGE_MAX_DIST,
 	}) then return true end
 
 	if Style.Get().rules.healing_style ~= "active" then return false end
@@ -798,12 +802,12 @@ local function recovery(bot, dials, nEnemyCreeps)
 					recoveryPlan(bot, "bottle", "charges", string.format("hp=%.0f mana=%.0f charges=%d", hp*100, mana*100, bItem:GetCurrentCharges()), 2.0)
 					Style.Diag(bot, "recovery-bottle"); bot:Action_UseAbility(bItem); return true
 				elseif bItem:GetCurrentCharges() == 0 then
-					if seekBottleRune(bot, hp, mana, "recovery-rune-bottle", 3600, {
+					if seekBottleRune(bot, hp, mana, "recovery-rune-bottle", RECOVERY_RUNE_MAX_DIST, {
 						lane_aware = false,
 						force_empty_bottle = true,
 						stage_upcoming = true,
 						stage_window = 24.0,
-						stage_max_dist = 4200,
+						stage_max_dist = RECOVERY_RUNE_STAGE_MAX_DIST,
 					}) then return true end
 					recoveryPlan(bot, "lane", "empty_bottle_no_rune", string.format("hp=%.0f mana=%.0f", hp*100, mana*100), 8.0)
 					if hp >= 0.24 then bot.aib_recWaitStart = nil end
