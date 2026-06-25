@@ -334,6 +334,15 @@ local function runeResult(bot, diagKey, result, detail, cooldown)
 	end
 end
 
+local function runeTxn(bot, action, phase, diagKey, detail, ttl, sec)
+	local text = "source=" .. tostring(diagKey) .. " phase=" .. tostring(phase)
+	if ttl ~= nil then text = text .. string.format(" ttl=%.0f", ttl) end
+	if detail ~= nil and detail ~= "" then text = text .. " " .. detail end
+	recoveryPlan(bot, action or "rune", phase, "source=" .. tostring(diagKey) .. " " .. (detail or ""), sec or 2.0)
+	stateIntent(bot, "rune-commit", text, sec or 2.0)
+	Style.Intent(bot, "rune-transaction", text, sec or 2.0)
+end
+
 local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 	opts = opts or {}
 	local rules = Style.Get().rules
@@ -383,8 +392,7 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 					bot.aib_bottleRunePickupUntil = now + 2.5
 				end
 				if now <= bot.aib_bottleRunePickupUntil then
-					recoveryPlan(bot, "rune", "pickup_confirm", string.format("source=%s dist=%.0f", diagKey, targetDist), 1.0)
-					stateIntent(bot, "rune-commit", string.format("source=%s ttl=2 reason=pickup_confirm dist=%.0f", diagKey, targetDist), 1.0)
+					runeTxn(bot, "rune", "pickup_confirm", diagKey, string.format("dist=%.0f", targetDist), 2, 1.0)
 					runeResult(bot, diagKey, "pickup_confirm", string.format("dist=%.0f age=%.0f", targetDist, now - bot.aib_bottleRuneStarted), 2.0)
 					if bot.Action_PickUpRune ~= nil then
 						bot:Action_PickUpRune(bot.aib_bottleRuneId)
@@ -399,8 +407,7 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 					bot.aib_bottleRuneGoneGraceUntil = now + 3.0
 				end
 				if now <= bot.aib_bottleRuneGoneGraceUntil then
-					recoveryPlan(bot, "rune", "gone_grace", string.format("source=%s dist=%.0f", diagKey, targetDist), 1.0)
-					stateIntent(bot, "rune-commit", string.format("source=%s ttl=2 reason=gone_grace dist=%.0f", diagKey, targetDist), 1.0)
+					runeTxn(bot, "rune", "gone_grace", diagKey, string.format("dist=%.0f", targetDist), 2, 1.0)
 					bot:Action_MoveToLocation(bot.aib_bottleRuneTarget)
 					return true
 				end
@@ -426,8 +433,7 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 				bot.aib_bottleRuneTarget = retargetLoc
 				bot.aib_bottleRuneStarted = now
 				bot.aib_bottleRuneLast = now
-				recoveryPlan(bot, "rune", "retarget", string.format("source=%s dist=%.0f", diagKey, retargetDist), 2.0)
-				stateIntent(bot, "rune-commit", string.format("source=%s ttl=30 reason=retarget dist=%.0f", diagKey, retargetDist), 2.0)
+				runeTxn(bot, "rune", "retarget", diagKey, string.format("dist=%.0f", retargetDist), 30, 2.0)
 				Style.Intent(bot, diagKey, string.format("dist=%.0f reason=retarget", retargetDist), 2.0)
 				bot:Action_MoveToLocation(retargetLoc)
 				return true
@@ -440,16 +446,14 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 		end
 		bot.aib_bottleRunePickupUntil = nil
 		if targetDist > 95 then
-			recoveryPlan(bot, "rune", "commit", string.format("source=%s dist=%.0f", diagKey, targetDist), 2.0)
-			stateIntent(bot, "rune-commit", string.format("source=%s ttl=30 reason=commit dist=%.0f", diagKey, targetDist), 2.0)
+			runeTxn(bot, "rune", "commit", diagKey, string.format("dist=%.0f", targetDist), 30, 2.0)
 			Style.Intent(bot, diagKey, string.format("dist=%.0f age=%.0f reason=commit", targetDist, now - bot.aib_bottleRuneStarted), 2.0)
 			bot:Action_MoveToLocation(bot.aib_bottleRuneTarget)
 			return true
 		end
 		bot.aib_bottleRuneGoneGraceUntil = nil
 		if bot.aib_bottleRuneId ~= nil then
-			recoveryPlan(bot, "rune", "pickup", string.format("source=%s dist=%.0f", diagKey, targetDist), 1.0)
-			stateIntent(bot, "rune-commit", string.format("source=%s ttl=30 reason=pickup dist=%.0f", diagKey, targetDist), 1.0)
+			runeTxn(bot, "rune", "pickup", diagKey, string.format("dist=%.0f", targetDist), 30, 1.0)
 			runeResult(bot, diagKey, "pickup_attempt", string.format("dist=%.0f age=%.0f", targetDist, now - bot.aib_bottleRuneStarted), 2.0)
 			Style.Intent(bot, diagKey, string.format("dist=%.0f age=%.0f reason=pickup", targetDist, now - bot.aib_bottleRuneStarted), 1.0)
 			if bot.Action_PickUpRune ~= nil then
@@ -459,8 +463,7 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 			end
 			return true
 		end
-		recoveryPlan(bot, "rune", "hold", string.format("source=%s dist=%.0f", diagKey, targetDist), 1.0)
-		stateIntent(bot, "rune-commit", string.format("source=%s ttl=30 reason=hold dist=%.0f", diagKey, targetDist), 1.0)
+		runeTxn(bot, "rune", "hold", diagKey, string.format("dist=%.0f", targetDist), 30, 1.0)
 		Style.Intent(bot, diagKey, string.format("dist=%.0f age=%.0f reason=hold", targetDist, now - bot.aib_bottleRuneStarted), 1.0)
 		bot:Action_MoveToLocation(bot.aib_bottleRuneTarget)
 		return true
@@ -515,14 +518,12 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 					local followDist = GetUnitToLocationDistance(bot, bot.aib_bottleRuneStageTarget)
 					if followDist > 120 and (bot.aib_bottleRuneStageFollowLast == nil or now - bot.aib_bottleRuneStageFollowLast >= 1.0) then
 						bot.aib_bottleRuneStageFollowLast = now
-						recoveryPlan(bot, "rune_stage", "follow", string.format("source=%s dist=%.0f eta=%.0f", diagKey, followDist, secsToSpawn), 1.5)
-						stateIntent(bot, "rune-commit", string.format("source=%s ttl=%.0f reason=stage_follow dist=%.0f", diagKey, math.max(0, secsToSpawn), followDist), 1.5)
+						runeTxn(bot, "rune_stage", "stage_follow", diagKey, string.format("dist=%.0f eta=%.0f", followDist, secsToSpawn), math.max(0, secsToSpawn), 1.5)
 						bot:Action_MoveToLocation(bot.aib_bottleRuneStageTarget)
 						return true
 					end
 					if followDist <= 120 then
-						recoveryPlan(bot, "rune_stage", "hold", string.format("source=%s dist=%.0f eta=%.0f", diagKey, followDist, secsToSpawn), 1.5)
-						stateIntent(bot, "rune-commit", string.format("source=%s ttl=%.0f reason=stage_hold dist=%.0f", diagKey, math.max(0, secsToSpawn), followDist), 1.5)
+						runeTxn(bot, "rune_stage", "stage_hold", diagKey, string.format("dist=%.0f eta=%.0f", followDist, secsToSpawn), math.max(0, secsToSpawn), 1.5)
 						bot:Action_MoveToLocation(bot.aib_bottleRuneStageTarget)
 						return true
 					end
@@ -552,8 +553,7 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 						bot.aib_bottleRuneLast = now
 						bot.aib_bottleRuneStageBlockedWindow = nil
 						bot.aib_bottleRuneStageBlockedUntil = nil
-						recoveryPlan(bot, "rune", "stage_commit", string.format("source=%s dist=%.0f", diagKey, checkDist), 2.0)
-						stateIntent(bot, "rune-commit", string.format("source=%s ttl=30 reason=stage_commit dist=%.0f", diagKey, checkDist), 2.0)
+						runeTxn(bot, "rune", "stage_commit", diagKey, string.format("dist=%.0f", checkDist), 30, 2.0)
 						Style.Intent(bot, diagKey, string.format("dist=%.0f reason=stage_commit", checkDist), 2.0)
 						bot:Action_MoveToLocation(checkLoc)
 						return true
@@ -579,8 +579,7 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 				bot.aib_bottleRuneStageFollowLast = now
 				bot.aib_bottleRuneStageBlockedWindow = nil
 				bot.aib_bottleRuneStageBlockedUntil = nil
-				recoveryPlan(bot, "rune_stage", spawnKind or "upcoming", string.format("source=%s dist=%.0f eta=%.0f", diagKey, stageDist, secsToSpawn), 2.0)
-				stateIntent(bot, "rune-commit", string.format("source=%s ttl=%.0f reason=stage dist=%.0f", diagKey, math.max(0, secsToSpawn), stageDist), 2.0)
+				runeTxn(bot, "rune_stage", spawnKind or "upcoming", diagKey, string.format("dist=%.0f eta=%.0f", stageDist, secsToSpawn), math.max(0, secsToSpawn), 2.0)
 				Style.Intent(bot, diagKey, string.format("dist=%.0f eta=%.0f reason=stage", stageDist, secsToSpawn), 2.0)
 				Style.Diag(bot, diagKey)
 				if stageDist > 120 then
@@ -649,8 +648,7 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 	bot.aib_bottleRuneStageUntil = nil
 	bot.aib_bottleRuneStageTarget = nil
 	bot.aib_bottleRuneStageFollowLast = nil
-	recoveryPlan(bot, "rune", "start", string.format("source=%s dist=%.0f hp=%.0f mana=%.0f", diagKey, bestDist, hp*100, mana*100), 2.0)
-	stateIntent(bot, "rune-commit", string.format("source=%s ttl=30 reason=start dist=%.0f hp=%.0f mana=%.0f", diagKey, bestDist, hp*100, mana*100), 2.0)
+	runeTxn(bot, "rune", "start", diagKey, string.format("dist=%.0f hp=%.0f mana=%.0f", bestDist, hp*100, mana*100), 30, 2.0)
 	Style.Intent(bot, diagKey, string.format("dist=%.0f hp=%.0f mana=%.0f reason=start", bestDist, hp*100, mana*100), 2.0)
 	Style.Diag(bot, diagKey)
 	bot:Action_MoveToLocation(bestLoc)

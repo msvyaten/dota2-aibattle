@@ -933,21 +933,30 @@ local function AIB_ActiveLowHpStep()
 end
 
 local function AIB_ShouldYieldRecoveryToKill(dials)
-	local hp = J.GetHP(bot)
-	if hp < 0.14 then return false end
-	local range = botAttackRange or bot:GetAttackRange()
-	local enemy, dist = AIB_NearestEnemyHero(math.max(900, range + 360))
-	if enemy == nil or not enemy:IsAlive() then return false end
-	if AIB_TowerActuallyThreatening(AIB_EnemyTowerDanger()) or AIB_UphillMiss(enemy) then return false end
-	local ehp = J.GetHP(enemy)
-	local exec = (dials and dials.execute_threshold) or 0
-	local executeWindow = exec > 0 and ehp <= math.max(exec, 0.24) and dist <= range + 360
-	local mutualLowWindow = ehp <= 0.35 and hp <= 0.38 and dist <= math.max(700, range + 260)
-	if executeWindow or mutualLowWindow then
-		Style.Intent(bot, "recovery-yield-kill", string.format("dist=%.0f hp=%.0f ehp=%.0f exec=%s mutual=%s", dist, hp*100, ehp*100, tostring(executeWindow), tostring(mutualLowWindow)), 1.5)
+	local policy = AIBEngine.RecoveryPolicy({
+		bot = bot,
+		dials = dials,
+		rules = GetRules(),
+		attackRange = botAttackRange or bot:GetAttackRange(),
+	})
+	local win = policy.killWindow
+	if policy.action == "yield_kill" and win ~= nil
+		and not AIB_TowerActuallyThreatening(AIB_EnemyTowerDanger())
+		and not AIB_UphillMiss(win.enemy) then
+		Style.Intent(bot, "recovery-yield-kill", policy.detail, 1.5)
 		return true
 	end
 	return false
+end
+
+local function AIB_RecoveryThinkIfAllowed(dials, hpThreshold, diagKey)
+	if J.GetHP(bot) >= hpThreshold then return false end
+	if AIB_ShouldYieldRecoveryToKill(dials) then
+		Style.Blocked(bot, "recovery-policy", "yield_kill", string.format("hp=%.0f gate=%.0f source=%s", J.GetHP(bot)*100, hpThreshold*100, diagKey or "unknown"), 1.5)
+		return false
+	end
+	Style.Intent(bot, "recovery-policy", string.format("action=recover hp=%.0f gate=%.0f source=%s", J.GetHP(bot)*100, hpThreshold*100, diagKey or "unknown"), 2.0)
+	return AIBSurvive.Think(bot, dials, nEnemyCreeps)
 end
 
 local function AIB_CriticalRecoveryLockStep()
@@ -1304,7 +1313,7 @@ local function AIB_PreCreepStandoffStep()
 	if hasNearbyLaneCreep(nEnemyCreeps) or hasNearbyLaneCreep(nAllyCreeps) then return false end
 
 	local range = botAttackRange or bot:GetAttackRange()
-	local enemy, dist = AIB_NearestEnemyHero(range + 160)
+	local enemy, dist = AIB_NearestEnemyHero(math.max(900, range + 320))
 	local preMode = GetRules().pregame_behavior or "default"
 	if preMode == "aggressive_mid" and enemy ~= nil and dist <= range + 20
 		and not AIB_UphillMiss(enemy) and J.GetHP(bot) >= 0.70 then
@@ -1317,6 +1326,18 @@ local function AIB_PreCreepStandoffStep()
 		bot:Action_AttackUnit(enemy, false)
 		AIB_Diag("precreep-contact")
 		return true
+	end
+	if enemy ~= nil and dist <= math.max(820, range + 280)
+		and not AIB_UphillMiss(enemy) and J.GetHP(bot) >= 0.48 then
+		if dist < range * 0.62 and J.GetHP(bot) < 0.65 then
+			local back = AIB_TowardFountainFrom(bot:GetLocation(), 220)
+			if back ~= nil then
+				bot:Action_MoveToLocation(back)
+				AIB_Diag("precreep-space")
+				return true
+			end
+		end
+		if AIB_MoveToAttackEdgeOf(enemy, "precreep-close", 0) then return true end
 	end
 
 	local ownT1 = GetTower(GetTeam(), TOWER_MID_1)
@@ -1536,16 +1557,17 @@ local function ThinkLaningCore(dials, rules)
 		AIB_ClearRecoveryState()
 		AIB_State("post-horn-reset", "reason=laning-start", 2.0)
 	end
-	if J.GetHP(bot) < 0.22 and AIBSurvive.Think(bot, dials, nEnemyCreeps) then return end
+	if J.GetHP(bot) < 0.14 and AIBSurvive.Think(bot, dials, nEnemyCreeps) then return end
+	if AIB_RecoveryThinkIfAllowed(dials, 0.22, "emergency-low") then return end
 	local urgentIntents = {}
+	intentCtx.arbiter = "urgent"
 	local urgentKill = AIBLaneTrade.KillLock(intentCtx)
 	if urgentKill ~= nil then urgentIntents[#urgentIntents + 1] = urgentKill end
 	local urgentInterrupt = AIBLaneTrade.HealInterrupt(intentCtx)
 	if urgentInterrupt ~= nil then urgentIntents[#urgentIntents + 1] = urgentInterrupt end
 	if AIBEngine.Resolve(urgentIntents, intentCtx) then return end
 
-	if J.GetHP(bot) < 0.35 and not AIB_ShouldYieldRecoveryToKill(dials)
-		and AIBSurvive.Think(bot, dials, nEnemyCreeps) then return end
+	if AIB_RecoveryThinkIfAllowed(dials, 0.35, "early-low") then return end
 	if AIB_CriticalRecoveryLockStep() then return end
 	if AIB_PreWaveDuelStep(rules) then return end
 	if AIB_PreCreepStandoffStep() then return end
@@ -1568,9 +1590,9 @@ local function ThinkLaningCore(dials, rules)
 			return
 		end
 	end
-	if J.GetHP(bot) < 0.55 and not AIB_ShouldYieldRecoveryToKill(dials)
-		and AIBSurvive.Think(bot, dials, nEnemyCreeps) then return end
+	if AIB_RecoveryThinkIfAllowed(dials, 0.55, "lane-low") then return end
 	local intents = {}
+	intentCtx.arbiter = "fight"
 	local killIntent = AIBLaneTrade.KillLock(intentCtx)
 	if killIntent ~= nil then intents[#intents + 1] = killIntent end
 	local creepIntent = AIBLaneSurvival.CreepAggroRelief(intentCtx)

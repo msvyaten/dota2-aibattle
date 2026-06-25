@@ -58,8 +58,9 @@ function M.Resolve(intents, ctx)
 							if #losers >= 4 then break end
 						end
 					end
-					Style.Intent(bot, "arbiter", string.format("winner=%s:%s losers=%s",
-						tostring(intent.name), tostring(intent.priority or 0), table.concat(losers, ",")), 1.5)
+					local family = (ctx and (ctx.arbiter or ctx.family or ctx.phase)) or "generic"
+					Style.Intent(bot, "arbiter", string.format("family=%s winner=%s:%s losers=%s",
+						tostring(family), tostring(intent.name), tostring(intent.priority or 0), table.concat(losers, ",")), 1.5)
 				end
 				Style.Intent(bot, intent.name, intentDetail(intent), intent.sec)
 				local handled = intent.action(ctx)
@@ -72,6 +73,68 @@ function M.Resolve(intents, ctx)
 		end
 	end
 	return false, nil
+end
+
+function M.KillWindow(ctx)
+	if ctx == nil or ctx.bot == nil then return nil end
+	local bot = ctx.bot
+	local dials = ctx.dials or {}
+	local range = ctx.attackRange or bot:GetAttackRange()
+	local scan = ctx.scanRange or math.max(900, range + 520)
+	local enemies = bot:GetNearbyHeroes(scan, true, BOT_MODE_NONE)
+	if not (enemies and #enemies > 0) then return nil end
+
+	for _, enemy in ipairs(enemies) do
+		if enemy ~= nil and enemy:IsAlive() then
+			local hp = J.GetHP(bot)
+			local ehp = J.GetHP(enemy)
+			local dist = GetUnitToUnitDistance(bot, enemy)
+			local exec = dials.execute_threshold or 0
+			local attackKill = enemy:GetHealth() <= bot:GetAttackDamage() * (ctx.attackDamageMult or 3.0)
+			local execute = exec > 0 and ehp <= math.max(exec, ctx.minExecuteHp or 0.24)
+			local mutualLow = ehp <= (ctx.mutualEnemyHp or 0.35)
+				and hp <= (ctx.mutualSelfHp or 0.38)
+				and hp >= (ctx.minSelfHp or 0.14)
+			local hpAdv = hp >= ehp + (ctx.hpAdvantage or 0.14)
+			local lowFarmAlways = (dials.farm_focus or 0.5) < 0.25
+				and ((ctx.rules or {}).hero_priority or "default") == "always"
+			local maxDist = range + 360
+			if mutualLow then maxDist = math.max(maxDist, math.max(700, range + 260)) end
+			if lowFarmAlways or hpAdv then maxDist = math.max(maxDist, range + 520) end
+			if execute or attackKill or mutualLow or (lowFarmAlways and ehp <= 0.78 and hp >= 0.34 and hpAdv) then
+				return {
+					enemy = enemy,
+					hp = hp,
+					ehp = ehp,
+					dist = dist,
+					range = range,
+					execute = execute,
+					attackKill = attackKill,
+					mutualLow = mutualLow,
+					hpAdv = hpAdv,
+					lowFarmAlways = lowFarmAlways,
+					inRange = dist <= range + 80,
+					inCommitRange = dist <= maxDist,
+					maxDist = maxDist,
+				}
+			end
+		end
+	end
+	return nil
+end
+
+function M.RecoveryPolicy(ctx)
+	local win = M.KillWindow(ctx)
+	if win ~= nil and win.inCommitRange == true then
+		return {
+			action = "yield_kill",
+			killWindow = win,
+			detail = string.format("dist=%.0f hp=%.0f ehp=%.0f exec=%s atk=%s mutual=%s",
+				win.dist, win.hp * 100, win.ehp * 100, tostring(win.execute),
+				tostring(win.attackKill), tostring(win.mutualLow)),
+		}
+	end
+	return { action = "recover" }
 end
 
 function M.Run(stages, ctx)

@@ -59,54 +59,37 @@ end
 
 function M.KillLock(ctx)
 	local bot = ctx.bot
-	local dials = ctx.dials or {}
 	local range = ctx.attackRange or bot:GetAttackRange()
-	local enemies = bot:GetNearbyHeroes(math.max(900, range + 520), true, BOT_MODE_NONE)
-	if not (enemies and #enemies > 0) then return nil end
-
-	for _, enemy in ipairs(enemies) do
-		if enemy:IsAlive() then
-			local hp = J.GetHP(bot)
-			local ehp = J.GetHP(enemy)
-			local dist = GetUnitToUnitDistance(bot, enemy)
-			if ehp <= 0.35 and hp <= 0.38 and hp >= 0.14
-				and dist <= math.max(700, range + 260)
-				and not towerThreat(ctx)
-				and not AIBUtils.UphillMiss(bot, enemy) then
-				return Engine.Intent("kill-lock", 145, "mutual_low_finish", function()
-					if Style.AbilityExecute(bot, enemy) then return end
-					if dist <= range + 80 then
-						bot:Action_AttackUnit(enemy, true)
-						Style.Diag(bot, "mutual-low-finish-atk")
-					else
-						moveToAttackEdge(bot, enemy, range)
-						Style.Diag(bot, "mutual-low-finish-chase")
-					end
-				end, string.format("dist=%.0f ehp=%.0f hp=%.0f", dist, ehp*100, hp*100))
-			end
-			if isKillable(bot, enemy, dials) then
-				if hp < 0.30 and dist > range + 60 then
-					return Engine.Blocked("kill-lock", 120, "self_critical", string.format("dist=%.0f hp=%.0f", dist, hp*100))
-				end
-				if dist <= range + 60 then
-					return Engine.Intent("kill-lock", 135, "killable_enemy", function()
-						if Style.AbilityExecute(bot, enemy) then return end
-						bot:Action_AttackUnit(enemy, true)
-						Style.Diag(bot, "kill-lock-atk")
-					end, string.format("dist=%.0f ehp=%.0f hp=%.0f", dist, J.GetHP(enemy)*100, hp*100))
-				end
-				if dist <= range + 520 and not towerThreat(ctx) and not AIBUtils.UphillMiss(bot, enemy) then
-					return Engine.Intent("kill-lock", 125, "killable_enemy", function()
-						if Style.AbilityExecute(bot, enemy) then return end
-						moveToAttackEdge(bot, enemy, range)
-						Style.Diag(bot, "kill-lock-chase")
-					end, string.format("dist=%.0f ehp=%.0f hp=%.0f", dist, J.GetHP(enemy)*100, hp*100))
-				end
-				return Engine.Blocked("kill-lock", 90, "unsafe", string.format("dist=%.0f hp=%.0f", dist, hp*100))
-			end
-		end
+	local win = Engine.KillWindow(ctx)
+	if win == nil then return nil end
+	local enemy = win.enemy
+	if enemy == nil or not enemy:IsAlive() then return nil end
+	if win.hp < 0.30 and win.dist > range + 60 and not win.mutualLow then
+		return Engine.Blocked("kill-lock", 120, "self_critical", string.format("dist=%.0f hp=%.0f", win.dist, win.hp*100))
 	end
-	return nil
+	if towerThreat(ctx) then
+		return Engine.Blocked("kill-lock", 90, "tower", string.format("dist=%.0f hp=%.0f", win.dist, win.hp*100))
+	end
+	if AIBUtils.UphillMiss(bot, enemy) then
+		return Engine.Blocked("kill-lock", 90, "uphill", string.format("dist=%.0f hp=%.0f", win.dist, win.hp*100))
+	end
+	if not win.inCommitRange then
+		return Engine.Blocked("kill-lock", 90, "far", string.format("dist=%.0f max=%.0f hp=%.0f", win.dist, win.maxDist, win.hp*100))
+	end
+
+	local reason = win.mutualLow and "mutual_low_finish" or "killable_enemy"
+	local priority = win.mutualLow and 145 or (win.inRange and 135 or 125)
+	return Engine.Intent("kill-lock", priority, reason, function()
+		if Style.AbilityExecute(bot, enemy) then return end
+		if win.dist <= range + 80 then
+			bot:Action_AttackUnit(enemy, true)
+			Style.Diag(bot, win.mutualLow and "mutual-low-finish-atk" or "kill-lock-atk")
+		else
+			moveToAttackEdge(bot, enemy, range)
+			Style.Diag(bot, win.mutualLow and "mutual-low-finish-chase" or "kill-lock-chase")
+		end
+	end, string.format("dist=%.0f ehp=%.0f hp=%.0f exec=%s atk=%s mutual=%s",
+		win.dist, win.ehp*100, win.hp*100, tostring(win.execute), tostring(win.attackKill), tostring(win.mutualLow)))
 end
 
 function M.HealInterrupt(ctx)
