@@ -152,6 +152,7 @@ function M.Reset(bot)
 	bot.aib_bottleRuneStarted = nil
 	bot.aib_bottleRuneTarget = nil
 	bot.aib_bottleRuneId = nil
+	bot.aib_bottleRunePickupUntil = nil
 	bot.aib_bottleRuneCooldownUntil = nil
 	bot.aib_bottleRuneStageWindow = nil
 	bot.aib_bottleRuneStageUntil = nil
@@ -316,6 +317,7 @@ local function clearRuneAttempt(bot)
 	bot.aib_bottleRuneTarget = nil
 	bot.aib_bottleRuneStarted = nil
 	bot.aib_bottleRuneId = nil
+	bot.aib_bottleRunePickupUntil = nil
 end
 
 local function runeResult(bot, diagKey, result, detail, cooldown)
@@ -369,8 +371,25 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 			clearRuneAttempt(bot)
 			return false
 		end
+		local targetDist = GetUnitToLocationDistance(bot, bot.aib_bottleRuneTarget)
 		if bot.aib_bottleRuneId ~= nil
 			and GetRuneStatus(bot.aib_bottleRuneId) ~= RUNE_STATUS_AVAILABLE then
+			if targetDist <= 520 then
+				if bot.aib_bottleRunePickupUntil == nil then
+					bot.aib_bottleRunePickupUntil = now + 2.5
+				end
+				if now <= bot.aib_bottleRunePickupUntil then
+					recoveryPlan(bot, "rune", "pickup_confirm", string.format("source=%s dist=%.0f", diagKey, targetDist), 1.0)
+					stateIntent(bot, "rune-commit", string.format("source=%s ttl=2 reason=pickup_confirm dist=%.0f", diagKey, targetDist), 1.0)
+					runeResult(bot, diagKey, "pickup_confirm", string.format("dist=%.0f age=%.0f", targetDist, now - bot.aib_bottleRuneStarted), 2.0)
+					if bot.Action_PickUpRune ~= nil then
+						bot:Action_PickUpRune(bot.aib_bottleRuneId)
+					else
+						bot:Action_MoveToLocation(bot.aib_bottleRuneTarget)
+					end
+					return true
+				end
+			end
 			local retargetRune, retargetLoc, retargetDist, retargetScore = nil, nil, math.huge, math.huge
 			local retargetMax = math.max(maxDist or 2600, opts.stage_max_dist or 2600)
 			for _, runeId in ipairs({ RUNE_POWERUP_1, RUNE_POWERUP_2 }) do
@@ -404,7 +423,7 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 			clearRuneAttempt(bot)
 			return false
 		end
-		local targetDist = GetUnitToLocationDistance(bot, bot.aib_bottleRuneTarget)
+		bot.aib_bottleRunePickupUntil = nil
 		if targetDist > 180 then
 			recoveryPlan(bot, "rune", "commit", string.format("source=%s dist=%.0f", diagKey, targetDist), 2.0)
 			stateIntent(bot, "rune-commit", string.format("source=%s ttl=30 reason=commit dist=%.0f", diagKey, targetDist), 2.0)
@@ -985,6 +1004,7 @@ local function recovery(bot, dials, nEnemyCreeps)
 				bot:Action_MoveToLocation(back)
 				return true
 			end
+			Style.DiagRL(bot, "recovery-yield", 5)
 			return false
 		end
 		-- Timeout elapsed with no items: go to lane at reduced HP rather than staying AFK.

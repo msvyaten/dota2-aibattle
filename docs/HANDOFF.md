@@ -498,6 +498,9 @@ return {
 - `recovery-yield`: no-resource recovery reached its XP/safe point and yielded back to laning instead of consuming the tick as passive regen.
 - `state-post-horn-reset`: one-time cleanup after horn so pregame duel/recovery state cannot strand the bot near its tower.
 - Water-rune recovery now has a wider mid-water corridor (`4300` water leash, mid context required); normal power-rune trips keep the tighter route budget.
+- `visual-hold-hero-step` / `visual-hold-creep-step` / `visual-hold-creep-back` / `visual-hold-safe`: visual-hold now converts stale standing into visible action.
+- `rune-result result=pickup_confirm`: bot is close to the rune and briefly confirms pickup/charges before calling it gone.
+- `blocked=hero-prio-chase ... lane_override=`: chase gate now reports whether the wider 1v1 lane override would allow pursuit.
 
 Что смотреть в следующем матче:
 - Вместо одного `creep-dmg` должны появляться `creep-aggro-back`.

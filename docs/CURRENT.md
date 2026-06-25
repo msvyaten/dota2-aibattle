@@ -235,6 +235,11 @@ Recent local commits:
   - no-resource recovery no longer treats passive regen as a terminal action once the bot has reached XP/safe position;
   - post-horn recovery state is cleared once, and pre-creep standoff can keep acting until lane creeps arrive;
   - water-rune recovery uses a wider mid-water corridor while normal power-rune pickup keeps the tighter route budget.
+- Current behavior package in progress:
+  - visual-hold now escalates to hero step, creep step/back, safe step, or lane step instead of remaining a blocked-only symptom;
+  - close rune attempts get a short `pickup_confirm` lock before marking a rune gone;
+  - hero-priority chase can override lane work at wider safe distances when HP/kill pressure supports it;
+  - no-resource recovery yields between movement refreshes instead of holding the tick.
 - `89d2b65 codex: tighten lane decision states` - deployed live; latest behavior package:
   - engine can continue after an intent action explicitly returns `false`;
   - prewave duel is now approach/trade/space/disengage instead of a single attack gate;

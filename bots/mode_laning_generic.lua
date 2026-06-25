@@ -956,8 +956,8 @@ local function AIB_VisualHoldHeartbeatStep()
 	if bot.aib_holdLast ~= nil and now - bot.aib_holdLast < 1.0 then return false end
 
 	local range = botAttackRange or bot:GetAttackRange()
-	local enemy, enemyDist = AIB_NearestEnemyHero(range + 70)
-	local creep, creepDist = AIB_NearestAttackableEnemyCreep(range + 70)
+	local enemy, enemyDist = AIB_NearestEnemyHero(range + 140)
+	local creep, creepDist = AIB_NearestAttackableEnemyCreep(range + 140)
 	local reason = "empty"
 	if bot:WasRecentlyDamagedByCreep(2.0) then reason = "creep_damage"
 	elseif enemy ~= nil then reason = "hero_in_range"
@@ -968,24 +968,40 @@ local function AIB_VisualHoldHeartbeatStep()
 		string.format("held=%.1f hp=%.0f", now - bot.aib_holdAnchorTime, J.GetHP(bot) * 100), 2.0)
 
 	bot.aib_holdLast = now
-	if reason == "hero_in_range" and enemy ~= nil and J.GetHP(bot) >= 0.35
+	if enemy ~= nil and J.GetHP(bot) >= 0.35
 		and AIB_EnemyTowerDanger() == nil and not AIB_UphillMiss(enemy) then
-		bot:Action_AttackUnit(enemy, false)
-		AIB_Diag("visual-hold-hero")
-		return true
-	end
-	if (reason == "creep_damage" or reason == "creep_in_range") and creep ~= nil then
-		bot:Action_AttackUnit(creep, true)
-		AIB_Diag("visual-hold-creep")
-		return true
-	end
-	if reason == "empty" then
-		local front = GetLaneFrontLocation(GetTeam(), LANE_MID, 0)
-		if front ~= nil then
-			bot:Action_MoveToLocation(front + RandomVector(35))
-			AIB_Diag("visual-hold-lane")
+		if enemyDist <= range + 80 then
+			bot:Action_AttackUnit(enemy, false)
+			AIB_Diag("visual-hold-hero")
 			return true
 		end
+		if enemyDist <= range + 180 then
+			return AIB_MoveToAttackEdgeOf(enemy, "visual-hold-hero-step", 0)
+		end
+	end
+	if (reason == "creep_damage" or reason == "creep_in_range") and creep ~= nil then
+		if creepDist <= range + 45 then
+			bot:Action_AttackUnit(creep, true)
+			AIB_Diag("visual-hold-creep")
+			return true
+		end
+		return AIB_MoveToAttackEdgeOf(creep, "visual-hold-creep-step", 35)
+	end
+	if reason == "creep_damage" then
+		local cen = AIB_EnemyCreepCentroid(nEnemyCreeps)
+		if cen ~= nil then
+			bot:Action_MoveToLocation(AIB_MoveAwayFrom(loc, cen, 260))
+			AIB_Diag("visual-hold-creep-back")
+			return true
+		end
+	end
+	local front = GetLaneFrontLocation(GetTeam(), LANE_MID, 0)
+	if front ~= nil then
+		local offset = (reason == "tower" or J.GetHP(bot) < 0.38) and -420 or 0
+		local dest = GetLaneFrontLocation(GetTeam(), LANE_MID, offset) or front
+		bot:Action_MoveToLocation(dest + RandomVector(35))
+		AIB_Diag(reason == "tower" and "visual-hold-safe" or "visual-hold-lane")
+		return true
 	end
 	return false
 end
@@ -1629,24 +1645,27 @@ local function ThinkLaningCore(dials, rules)
 				if chase and #chase > 0 and chase[1]:IsAlive() then
 					local chaseDist = GetUnitToUnitDistance(bot, chase[1])
 					local creepNear = AIB_HasAttackableEnemyCreep(botAttackRange + 120)
-					local hpAdvChase = chaseDist <= 700
+					local chaseSafe = AIB_EnemyTowerDanger() == nil and not AIB_UphillMiss(chase[1])
+					local hpAdvChase = chaseDist <= 950
 						and J.GetHP(bot) >= J.GetHP(chase[1]) + 0.08
 						and J.GetHP(bot) >= 0.45
-						and AIB_EnemyTowerDanger() == nil
-						and not AIB_UphillMiss(chase[1])
-					local killPressureChase = chaseDist <= 850
+						and chaseSafe
+					local killPressureChase = chaseDist <= 1050
 						and J.GetHP(chase[1]) <= 0.55
 						and J.GetHP(bot) >= 0.38
-						and AIB_EnemyTowerDanger() == nil
-						and not AIB_UphillMiss(chase[1])
-					local closeVisibleChase = chaseDist <= 760
+						and chaseSafe
+					local closeVisibleChase = chaseDist <= 900
 						and J.GetHP(bot) >= 0.52
-						and AIB_EnemyTowerDanger() == nil
-						and not AIB_UphillMiss(chase[1])
-					if hpAdvChase or killPressureChase or closeVisibleChase or (chaseDist <= 950 and not csAllowed and not creepNear) then
+						and chaseSafe
+					local laneOverrideChase = chaseDist <= 1180
+						and J.GetHP(bot) >= 0.58
+						and J.GetHP(chase[1]) <= 0.78
+						and chaseSafe
+						and (not creepNear or not csAllowed)
+					if hpAdvChase or killPressureChase or closeVisibleChase or laneOverrideChase or (chaseDist <= 950 and not csAllowed and not creepNear) then
 						AIB_MoveToAttackEdge(chase[1], "hero-prio-chase"); return
 					end
-					AIB_WantBlocked("hero-prio-chase", "lane_work", string.format("dist=%.0f cs=%s creep=%s hp_adv=%s kill_pressure=%s close=%s", chaseDist, tostring(csAllowed), tostring(creepNear), tostring(hpAdvChase), tostring(killPressureChase), tostring(closeVisibleChase)), 3.0)
+					AIB_WantBlocked("hero-prio-chase", "lane_work", string.format("dist=%.0f cs=%s creep=%s hp_adv=%s kill_pressure=%s close=%s lane_override=%s", chaseDist, tostring(csAllowed), tostring(creepNear), tostring(hpAdvChase), tostring(killPressureChase), tostring(closeVisibleChase), tostring(laneOverrideChase)), 3.0)
 				end
 			end
 		end
