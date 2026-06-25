@@ -541,6 +541,14 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 		return false
 	end
 
+	local visibleEnemies = bot:GetNearbyHeroes(1150, true, BOT_MODE_NONE)
+	local routeEnemy = (visibleEnemies and #visibleEnemies > 0 and visibleEnemies[1]:IsAlive()) and visibleEnemies[1] or nil
+	if bestDist > 700 and routeEnemy ~= nil and hp < 0.55
+		and (AIBUtils.UphillMiss(bot, routeEnemy) or bot:WasRecentlyDamagedByAnyHero(2.0)) then
+		Style.Blocked(bot, diagKey, "route_unsafe", string.format("enemy=%.0f rune=%.0f hp=%.0f", GetUnitToUnitDistance(bot, routeEnemy), bestDist, hp*100), 6.0)
+		return false
+	end
+
 	local near = bot:GetNearbyHeroes(650, true, BOT_MODE_NONE)
 	local enemyTooClose = near and #near > 0 and near[1]:IsAlive()
 		and GetUnitToUnitDistance(bot, near[1]) <= bot:GetAttackRange() + 120

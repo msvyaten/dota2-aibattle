@@ -226,6 +226,11 @@ Recent local commits:
   - low-HP recovery yields to a safe in-range last-hit before leaving lane.
   - bottle rune route distances are internal engine guards, not LLM-facing rules.
   - low-resource water-rune recovery may use a wider mid-only leash so a bot under its own tower can still refill instead of being blocked by normal lane rune distance.
+- Current behavior package in progress:
+  - close visible enemies get a wider contact/chase window when tower/uphill safety allows it;
+  - active DD/Haste/Arcane creates `rune-pressure` so the bot spends the rune on hero pressure or creep damage;
+  - long rune trips are blocked by `route_unsafe` when a weak bot would walk through enemy high-ground pressure;
+  - siege can explicitly choose an attackable enemy hero under tower instead of only stepping/hitting tower/creeps.
 - `89d2b65 codex: tighten lane decision states` - deployed live; latest behavior package:
   - engine can continue after an intent action explicitly returns `false`;
   - prewave duel is now approach/trade/space/disengage instead of a single attack gate;

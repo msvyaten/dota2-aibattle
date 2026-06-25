@@ -70,6 +70,21 @@ function M.Think(ctx)
 		return false
 	end
 
+	if enemy ~= nil and enemy:IsAlive() and enemyDist <= attackRange + 80
+		and J.GetHP(bot) >= 0.45
+		and (ctx.uphillMiss == nil or not ctx.uphillMiss(enemy)) then
+		local hasDamageRune = bot:HasModifier("modifier_rune_doubledamage")
+		local hpAdv = J.GetHP(bot) >= J.GetHP(enemy) + 0.08
+		local killWindow = J.GetHP(enemy) <= 0.60
+		if hasDamageRune or hpAdv or killWindow or (rules.hero_priority or "default") == "always" then
+			bot.aib_siegeCommitUntil = now + 1.2
+			bot:Action_AttackUnit(enemy, false)
+			ctx.towerOpportunity("hit", string.format("phase=hero wave=%d hero=%.0f ehp=%.0f", waveCount, enemyDist, J.GetHP(enemy) * 100), 2.0)
+			ctx.diag("siege-hero")
+			return true
+		end
+	end
+
 	if bot.aib_siegeCommitUntil ~= nil and now <= bot.aib_siegeCommitUntil then
 		if twrDist <= attackRange + 60 then
 			bot:Action_AttackUnit(twr, true)

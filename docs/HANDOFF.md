@@ -492,6 +492,9 @@ return {
 - `bottle-rune` теперь lane-aware: в лейнинге действуют внутренние route guards (`max_dist=1900`, `lane_budget=1500`), не уходит в rune-trip во время last-hit окна и пишет `blocked=bottle-rune reason=...`. Это не LLM-facing rules.
 - `recovery-rune-bottle` остаётся шире (`max_dist=3600`, `stage_max_dist=4200`, без lane-budget), потому что это уже post-fight восстановление, а не бросание мида ради далёкой воды.
 - Water-rune recovery has a wider mid-only leash (`3600`) when HP/MP is actually low, so a bot under its own mid tower can still go to river water rune without allowing arbitrary map roaming.
+- `rune-pressure`: while DD/Haste/Arcane is active, laning tries to convert the buff into hero pressure; DD can also force creep damage if no safe hero is visible.
+- `route_unsafe`: long rune trips are blocked when a low-HP bot is under enemy high-ground pressure or recent hero damage.
+- `siege-hero`: during a siege window, an attackable nearby enemy hero can be chosen explicitly before tower/creep pressure.
 
 Что смотреть в следующем матче:
 - Вместо одного `creep-dmg` должны появляться `creep-aggro-back`.

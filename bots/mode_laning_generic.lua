@@ -1011,6 +1011,7 @@ local function AIB_LaningModuleCtx(dials, rules)
 		nearestEnemyHero = AIB_NearestEnemyHero,
 		moveToAttackEdge = AIB_MoveToAttackEdgeOf,
 		towardFountain = AIB_TowardFountainFrom,
+		uphillMiss = AIB_UphillMiss,
 		diag = AIB_Diag,
 		blocked = AIB_WantBlocked,
 		state = AIB_State,
@@ -1027,7 +1028,7 @@ local function AIB_ContactHeroStep(rules)
 	if (rules.hero_priority or "default") == "never" then return false end
 
 	local range = botAttackRange or bot:GetAttackRange()
-	local enemy, dist = AIB_NearestEnemyHero(math.max(range + 140, 650))
+	local enemy, dist = AIB_NearestEnemyHero(math.max(range + 260, 780))
 	if enemy == nil then return false end
 
 	local now = DotaTime()
@@ -1087,6 +1088,38 @@ local function AIB_AbilityPressureStep()
 		return false
 	end
 	if Style.AbilityHarass(bot, enemy) then return true end
+	return false
+end
+
+local function AIB_RunePowerPressureStep()
+	local hasDamageRune = bot:HasModifier("modifier_rune_doubledamage")
+	local hasHasteRune = bot:HasModifier("modifier_rune_haste")
+	local hasArcaneRune = bot:HasModifier("modifier_rune_arcane")
+	if not (hasDamageRune or hasHasteRune or hasArcaneRune) then return false end
+	if J.GetHP(bot) < 0.38 then return false end
+	local range = botAttackRange or bot:GetAttackRange()
+	local enemy, dist = AIB_NearestEnemyHero(hasHasteRune and 1150 or 950)
+	if enemy ~= nil and enemy:IsAlive()
+		and AIB_EnemyTowerDanger() == nil
+		and not AIB_UphillMiss(enemy) then
+		Style.Intent(bot, "rune-pressure", string.format("dist=%.0f hp=%.0f dd=%s haste=%s arcane=%s", dist, J.GetHP(bot) * 100, tostring(hasDamageRune), tostring(hasHasteRune), tostring(hasArcaneRune)), 2.0)
+		if Style.AbilityExecute(bot, enemy) then return true end
+		if hasArcaneRune and Style.AbilityHarass(bot, enemy) then return true end
+		if dist <= range + 80 then
+			bot:Action_AttackUnit(enemy, false)
+			AIB_Diag("rune-pressure-atk")
+			return true
+		end
+		return AIB_MoveToAttackEdgeOf(enemy, "rune-pressure-chase", 0)
+	end
+	if hasDamageRune then
+		local creep = AIB_NearestAttackableEnemyCreep(range + 80)
+		if creep ~= nil then
+			bot:Action_AttackUnit(creep, true)
+			AIB_Diag("rune-pressure-creep")
+			return true
+		end
+	end
 	return false
 end
 
@@ -1345,6 +1378,7 @@ local function ThinkLaningCore(dials, rules)
 	if AIB_PreWaveDuelStep(rules) then return end
 	if AIB_PreCreepStandoffStep() then return end
 	if AIB_AbilityPressureStep() then return end
+	if AIB_RunePowerPressureStep() then return end
 	if AIB_VisualHoldHeartbeatStep() then return end
 	if AIB_VisualAFKStep(rules) then return end
 	if AIB_ContactHeroStep(rules) then return end
@@ -1589,10 +1623,14 @@ local function ThinkLaningCore(dials, rules)
 						and J.GetHP(bot) >= 0.38
 						and AIB_EnemyTowerDanger() == nil
 						and not AIB_UphillMiss(chase[1])
-					if hpAdvChase or killPressureChase or (chaseDist <= 950 and not csAllowed and not creepNear) then
+					local closeVisibleChase = chaseDist <= 760
+						and J.GetHP(bot) >= 0.52
+						and AIB_EnemyTowerDanger() == nil
+						and not AIB_UphillMiss(chase[1])
+					if hpAdvChase or killPressureChase or closeVisibleChase or (chaseDist <= 950 and not csAllowed and not creepNear) then
 						AIB_MoveToAttackEdge(chase[1], "hero-prio-chase"); return
 					end
-					AIB_WantBlocked("hero-prio-chase", "lane_work", string.format("dist=%.0f cs=%s creep=%s hp_adv=%s kill_pressure=%s", chaseDist, tostring(csAllowed), tostring(creepNear), tostring(hpAdvChase), tostring(killPressureChase)), 3.0)
+					AIB_WantBlocked("hero-prio-chase", "lane_work", string.format("dist=%.0f cs=%s creep=%s hp_adv=%s kill_pressure=%s close=%s", chaseDist, tostring(csAllowed), tostring(creepNear), tostring(hpAdvChase), tostring(killPressureChase), tostring(closeVisibleChase)), 3.0)
 				end
 			end
 		end
