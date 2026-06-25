@@ -123,6 +123,17 @@ local DEFAULT_HERO_PRIORITY = "default"
 local DENY_POLICY_VALUES = { always = true, default = true, never = true }
 local DEFAULT_DENY_POLICY = "default"
 
+local DEFAULT_RUNE_USE_POLICY = {
+    double_damage = {
+        hero_pressure = 0.75,
+        tower_pressure = 0.70,
+        creep_pressure = 0.45,
+        min_hp_fight = 0.42,
+        max_chase = 950,
+        use_for_tower_with_wave = true,
+    },
+}
+
 local RULE_NUMBERS = {
     low_hp_hold = { default = 0.45, min = 0.25, max = 0.70 },
     creep_aggro_relief_hp = { default = 0.55, min = 0.45, max = 0.90 },
@@ -205,6 +216,41 @@ local function parseItemRules(rawItemRules)
     return item_rules
 end
 
+local function cloneRuneUsePolicy()
+    local out = {}
+    for rune, cfg in pairs(DEFAULT_RUNE_USE_POLICY) do
+        out[rune] = {}
+        for k, v in pairs(cfg) do out[rune][k] = v end
+    end
+    return out
+end
+
+local function clampRuleNum(v, default, minValue, maxValue)
+    local n = tonumber(v)
+    if n == nil then return default end
+    if n < minValue then return minValue end
+    if n > maxValue then return maxValue end
+    return n
+end
+
+local function parseRuneUsePolicy(rawPolicy)
+    local out = cloneRuneUsePolicy()
+    if type(rawPolicy) ~= "table" then return out end
+    local rawDD = rawPolicy.double_damage
+    if type(rawDD) == "table" then
+        local dd = out.double_damage
+        dd.hero_pressure = clampRuleNum(rawDD.hero_pressure, dd.hero_pressure, 0.0, 1.0)
+        dd.tower_pressure = clampRuleNum(rawDD.tower_pressure, dd.tower_pressure, 0.0, 1.0)
+        dd.creep_pressure = clampRuleNum(rawDD.creep_pressure, dd.creep_pressure, 0.0, 1.0)
+        dd.min_hp_fight = clampRuleNum(rawDD.min_hp_fight, dd.min_hp_fight, 0.20, 0.85)
+        dd.max_chase = clampRuleNum(rawDD.max_chase, dd.max_chase, 450, 1400)
+        if type(rawDD.use_for_tower_with_wave) == "boolean" then
+            dd.use_for_tower_with_wave = rawDD.use_for_tower_with_wave
+        end
+    end
+    return out
+end
+
 local function buildStyle(raw)
     local rawDials = (type(raw) == "table" and type(raw.dials) == "table") and raw.dials or {}
     local dials = parseDials(rawDials)
@@ -282,6 +328,7 @@ local function buildStyle(raw)
 
     local denp = rawRules.deny_policy
     local deny_policy = (type(denp) == "string" and DENY_POLICY_VALUES[denp]) and denp or DEFAULT_DENY_POLICY
+    local rune_use_policy = parseRuneUsePolicy(rawRules.rune_use_policy)
 
     local low_hp_hold = ruleNumber(rawRules, "low_hp_hold")
     local creep_aggro_relief_hp = ruleNumber(rawRules, "creep_aggro_relief_hp")
@@ -297,6 +344,7 @@ local function buildStyle(raw)
         healing_style = healing_style, ability_usage = ability_usage,
         creep_wave_priority = creep_wave_priority, ability_timing = ability_timing,
         hero_priority = hero_priority, deny_policy = deny_policy,
+        rune_use_policy = rune_use_policy,
         low_hp_hold = low_hp_hold,
         creep_aggro_relief_hp = creep_aggro_relief_hp,
         debug_disable_forwardness_fallbacks = debug_disable_forwardness_fallbacks,

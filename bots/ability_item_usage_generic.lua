@@ -13,6 +13,7 @@ local BotBuild = dofile( GetScriptDirectory().."/BotLib/"..string.gsub( botName,
 local Localization = require( GetScriptDirectory()..'/FunLib/localization' )
 local Customize = require(GetScriptDirectory()..'/Customize/general')
 local AIBStyle = require(GetScriptDirectory()..'/FunLib/aibattle_style')
+local AIBEngine = require(GetScriptDirectory()..'/FunLib/aibattle_engine')
 Customize.ThinkLess = Customize.Enable and Customize.ThinkLess or 1
 if GAMEMODE_TURBO == nil then GAMEMODE_TURBO = 23 end
 if GAMEMODE_ARDM == nil then GAMEMODE_ARDM = 20 end
@@ -2175,7 +2176,31 @@ X.ConsiderItemDesire["item_enchanted_mango"] = function( hItem )
 	local hEffectTarget = nil
 	local sCastMotive = nil
 
-	if bot:GetMana() < 150
+	local mana = bot:GetMana()
+	local abilitySoon = false
+	for i = 0, 5 do
+		local ab = bot:GetAbilityInSlot(i)
+		if ab ~= nil and ab:GetLevel() > 0 and not ab:IsPassive() then
+			local cost = ab:GetManaCost()
+			local cd = ab:GetCooldownTimeRemaining()
+			if cost > mana and mana + 100 >= cost and cd <= 3.0 then
+				abilitySoon = true
+				break
+			end
+		end
+	end
+	local killWindow = false
+	local style = AIBStyle.Get()
+	local exec = (style ~= nil and style.dials ~= nil and style.dials.execute_threshold) or 0
+	if exec > 0 then
+		local enemies = bot:GetNearbyHeroes(900, true, BOT_MODE_NONE)
+		if enemies and #enemies > 0 and J.IsValidHero(enemies[1])
+			and J.GetHP(enemies[1]) <= math.min(0.65, exec + 0.08) then
+			killWindow = true
+		end
+	end
+
+	if AIBEngine.ShouldUseMango(bot, { abilitySoon = abilitySoon, killWindow = killWindow })
 	then
 		hEffectTarget = bot
 		sCastMotive = '自己吃'

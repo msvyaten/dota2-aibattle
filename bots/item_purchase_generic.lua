@@ -266,6 +266,19 @@ local function HasSufficientTp()
 		or (tCharges >= 1 and Item.HasItem( bot, 'item_travel_boots_2' ))
 end
 
+local function AIBShouldDelaySpareTpPurchase()
+	if GetGameMode() ~= GAMEMODE_1V1MID then return false end
+	local lastTp = bot.aib_fountainTpCast or bot.aib_tpCastTime
+	if lastTp == nil then return false end
+	local since = DotaTime() - lastTp
+	if since < 0 or since > 75 then return false end
+	if bot:GetGold() >= 1200 and Item.GetItemCharges(bot, 'item_tpscroll') <= 0 then return false end
+	if okAIB and type(AIBStyle) == 'table' and AIBStyle.Blocked ~= nil then
+		AIBStyle.Blocked(bot, 'buy-tp', 'recent_tp', string.format('since=%.0f', since), 8.0)
+	end
+	return true
+end
+
 local function ClearCurrBuyingBasicItemList()
 	-- NOTE: despite its name, this function was used as "pop last component";
 	-- keep behavior to avoid regressions.
@@ -1100,6 +1113,7 @@ function ItemPurchaseThink()
 		and botCourierValue <= 100
 		and botGold >= tpCost
 		and not HasSufficientTp()
+		and not AIBShouldDelaySpareTpPurchase()
 		and botName ~= "npc_dota_hero_meepo" -- don't let meepo buy tp
 		and botName ~= "npc_dota_hero_lone_druid_bear"
 	then

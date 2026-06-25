@@ -153,6 +153,7 @@ function M.Reset(bot)
 	bot.aib_bottleRuneTarget = nil
 	bot.aib_bottleRuneId = nil
 	bot.aib_bottleRunePickupUntil = nil
+	bot.aib_bottleRuneGoneGraceUntil = nil
 	bot.aib_bottleRuneCooldownUntil = nil
 	bot.aib_bottleRuneStageWindow = nil
 	bot.aib_bottleRuneStageUntil = nil
@@ -320,6 +321,7 @@ local function clearRuneAttempt(bot)
 	bot.aib_bottleRuneStarted = nil
 	bot.aib_bottleRuneId = nil
 	bot.aib_bottleRunePickupUntil = nil
+	bot.aib_bottleRuneGoneGraceUntil = nil
 end
 
 local function runeResult(bot, diagKey, result, detail, cooldown)
@@ -376,7 +378,7 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 		local targetDist = GetUnitToLocationDistance(bot, bot.aib_bottleRuneTarget)
 		if bot.aib_bottleRuneId ~= nil
 			and GetRuneStatus(bot.aib_bottleRuneId) ~= RUNE_STATUS_AVAILABLE then
-			if targetDist <= 520 then
+			if targetDist <= 120 then
 				if bot.aib_bottleRunePickupUntil == nil then
 					bot.aib_bottleRunePickupUntil = now + 2.5
 				end
@@ -389,6 +391,17 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 					else
 						bot:Action_MoveToLocation(bot.aib_bottleRuneTarget)
 					end
+					return true
+				end
+			end
+			if targetDist <= 260 then
+				if bot.aib_bottleRuneGoneGraceUntil == nil then
+					bot.aib_bottleRuneGoneGraceUntil = now + 3.0
+				end
+				if now <= bot.aib_bottleRuneGoneGraceUntil then
+					recoveryPlan(bot, "rune", "gone_grace", string.format("source=%s dist=%.0f", diagKey, targetDist), 1.0)
+					stateIntent(bot, "rune-commit", string.format("source=%s ttl=2 reason=gone_grace dist=%.0f", diagKey, targetDist), 1.0)
+					bot:Action_MoveToLocation(bot.aib_bottleRuneTarget)
 					return true
 				end
 			end
@@ -426,13 +439,14 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 			return false
 		end
 		bot.aib_bottleRunePickupUntil = nil
-		if targetDist > 180 then
+		if targetDist > 95 then
 			recoveryPlan(bot, "rune", "commit", string.format("source=%s dist=%.0f", diagKey, targetDist), 2.0)
 			stateIntent(bot, "rune-commit", string.format("source=%s ttl=30 reason=commit dist=%.0f", diagKey, targetDist), 2.0)
 			Style.Intent(bot, diagKey, string.format("dist=%.0f age=%.0f reason=commit", targetDist, now - bot.aib_bottleRuneStarted), 2.0)
 			bot:Action_MoveToLocation(bot.aib_bottleRuneTarget)
 			return true
 		end
+		bot.aib_bottleRuneGoneGraceUntil = nil
 		if bot.aib_bottleRuneId ~= nil then
 			recoveryPlan(bot, "rune", "pickup", string.format("source=%s dist=%.0f", diagKey, targetDist), 1.0)
 			stateIntent(bot, "rune-commit", string.format("source=%s ttl=30 reason=pickup dist=%.0f", diagKey, targetDist), 1.0)

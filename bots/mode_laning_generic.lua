@@ -124,6 +124,19 @@ local function AIB_MeleeCreepCentroid(creeps, maxDist)
 	return Vector(sx / n, sy / n, sz / n), n
 end
 
+local function AIB_MeleeCreepCentroidAround(loc, maxDist)
+	if loc == nil then return nil, 0 end
+	local sx, sy, sz, n = 0, 0, 0, 0
+	for _, creep in pairs(nEnemyCreeps or {}) do
+		if AIB_IsMeleeCreep(creep) and GetUnitToLocationDistance(creep, loc) <= (maxDist or 360) then
+			local cLoc = creep:GetLocation()
+			sx = sx + cLoc.x; sy = sy + cLoc.y; sz = sz + cLoc.z; n = n + 1
+		end
+	end
+	if n == 0 then return nil, 0 end
+	return Vector(sx / n, sy / n, sz / n), n
+end
+
 -- AIBattle: tower aggro drop cooldown (per bot instance)
 local aib_lastAggroDrop = 0
 
@@ -616,6 +629,17 @@ local function AIB_AttackEdgeLocation(target, extraBack)
 	if range <= 300 then return target:GetLocation() end
 	local tl = target:GetLocation()
 	local bl = bot:GetLocation()
+	local packCen, packCount = AIB_MeleeCreepCentroidAround(tl, 380)
+	if packCen ~= nil and packCount >= 2 then
+		local ownT1 = GetTower(GetTeam(), TOWER_MID_1)
+		local home = ownT1 ~= nil and ownT1:GetLocation() or bl
+		local hx, hy = home.x - packCen.x, home.y - packCen.y
+		local hd = math.sqrt(hx*hx + hy*hy)
+		if hd > 1 then
+			local safe = math.max(420, range - 60 + (extraBack or 0))
+			return Vector(packCen.x + (hx/hd)*safe, packCen.y + (hy/hd)*safe, packCen.z)
+		end
+	end
 	local dx, dy = bl.x - tl.x, bl.y - tl.y
 	local d = math.sqrt(dx*dx + dy*dy)
 	if d < 1 then return bl + RandomVector(160) end
@@ -1173,17 +1197,21 @@ local function AIB_AbilityPressureStep()
 end
 
 local function AIB_RunePowerPressureStep()
-	local hasDamageRune = bot:HasModifier("modifier_rune_doubledamage")
-	local hasHasteRune = bot:HasModifier("modifier_rune_haste")
-	local hasArcaneRune = bot:HasModifier("modifier_rune_arcane")
+	local style = Style.Get()
+	local policy = AIBEngine.RuneUsePolicy(bot, style.dials, style.rules)
+	if policy == nil then return false end
+	local hasDamageRune = policy.name == "double_damage"
+	local hasHasteRune = policy.name == "haste"
+	local hasArcaneRune = policy.name == "arcane"
 	if not (hasDamageRune or hasHasteRune or hasArcaneRune) then return false end
-	if J.GetHP(bot) < 0.38 then return false end
+	if J.GetHP(bot) < (policy.minFightHp or 0.38) then return false end
 	local range = botAttackRange or bot:GetAttackRange()
-	local enemy, dist = AIB_NearestEnemyHero(hasHasteRune and 1150 or 950)
+	local enemy, dist = AIB_NearestEnemyHero(policy.maxChase or (hasHasteRune and 1150 or 950))
 	if enemy ~= nil and enemy:IsAlive()
 		and AIB_EnemyTowerDanger() == nil
-		and not AIB_UphillMiss(enemy) then
-		Style.Intent(bot, "rune-pressure", string.format("dist=%.0f hp=%.0f dd=%s haste=%s arcane=%s", dist, J.GetHP(bot) * 100, tostring(hasDamageRune), tostring(hasHasteRune), tostring(hasArcaneRune)), 2.0)
+		and not AIB_UphillMiss(enemy)
+		and ((policy.heroPressure or 0.5) >= 0.45 or J.GetHP(enemy) <= 0.45) then
+		Style.Intent(bot, "rune-pressure", string.format("rune=%s target=hero dist=%.0f hp=%.0f", policy.name, dist, J.GetHP(bot) * 100), 2.0)
 		if Style.AbilityExecute(bot, enemy) then return true end
 		if hasArcaneRune and Style.AbilityHarass(bot, enemy) then return true end
 		if dist <= range + 80 then
@@ -1193,9 +1221,23 @@ local function AIB_RunePowerPressureStep()
 		end
 		return AIB_MoveToAttackEdgeOf(enemy, "rune-pressure-chase", 0)
 	end
-	if hasDamageRune then
+	if policy.useForTowerWithWave == true and (policy.towerPressure or 0.5) >= 0.45 then
+		local twr = AIB_EnemyTowerDanger()
+		if twr ~= nil and not AIB_TowerActuallyThreatening(twr)
+			and AIB_AlliedCreepsAtTower(twr, twr:GetAttackRange() + 160) >= 1 then
+			Style.Intent(bot, "rune-pressure", string.format("rune=%s target=tower tower=%.0f", policy.name, GetUnitToUnitDistance(bot, twr)), 2.0)
+			if GetUnitToUnitDistance(bot, twr) <= range + 160 then
+				bot:Action_AttackUnit(twr, true)
+				AIB_Diag("rune-pressure-tower")
+				return true
+			end
+			return AIB_MoveToAttackEdgeOf(twr, "rune-pressure-tower-step", 20)
+		end
+	end
+	if hasDamageRune and (policy.creepPressure or 0.5) >= 0.35 then
 		local creep = AIB_NearestAttackableEnemyCreep(range + 80)
 		if creep ~= nil then
+			Style.Intent(bot, "rune-pressure", string.format("rune=%s target=creep", policy.name), 2.0)
 			bot:Action_AttackUnit(creep, true)
 			AIB_Diag("rune-pressure-creep")
 			return true

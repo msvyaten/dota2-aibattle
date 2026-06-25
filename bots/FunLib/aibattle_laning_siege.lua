@@ -5,6 +5,7 @@
 local M = {}
 
 local J = require(GetScriptDirectory()..'/FunLib/jmz_func')
+local AIBEngine = require(GetScriptDirectory()..'/FunLib/aibattle_engine')
 
 function M.Think(ctx)
 	local bot = ctx.bot
@@ -70,6 +71,15 @@ function M.Think(ctx)
 		return false
 	end
 
+	if alliedTank and waveAtTower and twrDist <= attackRange + 180
+		and J.GetHP(bot) >= (ctx.enemyDeadRecently() and 0.26 or 0.34) then
+		bot.aib_siegeCommitUntil = now + 2.4
+		bot:Action_AttackUnit(twr, true)
+		ctx.towerOpportunity("hit", string.format("phase=terminal wave=%d tower=%.0f", waveCount, twrDist), 2.0)
+		ctx.diag("siege-terminal-tower")
+		return true
+	end
+
 	if enemy ~= nil and enemy:IsAlive() and enemyDist <= attackRange + 80
 		and J.GetHP(bot) >= 0.45
 		and (ctx.uphillMiss == nil or not ctx.uphillMiss(enemy)) then
@@ -86,14 +96,8 @@ function M.Think(ctx)
 	end
 
 	if bot.aib_siegeCommitUntil ~= nil and now <= bot.aib_siegeCommitUntil then
-		if twrDist <= attackRange + 60 then
-			bot:Action_AttackUnit(twr, true)
-			ctx.towerOpportunity("hit", string.format("phase=commit wave=%d tower=%.0f", waveCount, twrDist), 2.0)
-			ctx.diag("siege-commit-tower")
-			return true
-		end
-		ctx.towerOpportunity("step", string.format("phase=commit wave=%d tower=%.0f", waveCount, twrDist), 2.0)
-		return ctx.moveToAttackEdge(twr, "siege-commit-step", 30)
+		ctx.towerOpportunity(twrDist <= attackRange + 180 and "hit" or "step", string.format("phase=commit wave=%d tower=%.0f", waveCount, twrDist), 2.0)
+		return AIBEngine.AttackOrMoveToBand(ctx, twr, "siege-commit-tower", 30)
 	end
 
 	if strongWaveAtTower and (cwp == "push" or ctx.enemyDeadRecently() or enemyFarOrWeak) then
