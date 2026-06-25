@@ -231,6 +231,10 @@ Recent local commits:
   - active DD/Haste/Arcane creates `rune-pressure` so the bot spends the rune on hero pressure or creep damage;
   - long rune trips are blocked by `route_unsafe` when a weak bot would walk through enemy high-ground pressure;
   - siege can explicitly choose an attackable enemy hero under tower instead of only stepping/hitting tower/creeps.
+- Current behavior package in progress:
+  - no-resource recovery no longer treats passive regen as a terminal action once the bot has reached XP/safe position;
+  - post-horn recovery state is cleared once, and pre-creep standoff can keep acting until lane creeps arrive;
+  - water-rune recovery uses a wider mid-water corridor while normal power-rune pickup keeps the tighter route budget.
 - `89d2b65 codex: tighten lane decision states` - deployed live; latest behavior package:
   - engine can continue after an intent action explicitly returns `false`;
   - prewave duel is now approach/trade/space/disengage instead of a single attack gate;

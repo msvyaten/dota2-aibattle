@@ -495,6 +495,9 @@ return {
 - `rune-pressure`: while DD/Haste/Arcane is active, laning tries to convert the buff into hero pressure; DD can also force creep damage if no safe hero is visible.
 - `route_unsafe`: long rune trips are blocked when a low-HP bot is under enemy high-ground pressure or recent hero damage.
 - `siege-hero`: during a siege window, an attackable nearby enemy hero can be chosen explicitly before tower/creep pressure.
+- `recovery-yield`: no-resource recovery reached its XP/safe point and yielded back to laning instead of consuming the tick as passive regen.
+- `state-post-horn-reset`: one-time cleanup after horn so pregame duel/recovery state cannot strand the bot near its tower.
+- Water-rune recovery now has a wider mid-water corridor (`4300` water leash, mid context required); normal power-rune trips keep the tighter route budget.
 
 Что смотреть в следующем матче:
 - Вместо одного `creep-dmg` должны появляться `creep-aggro-back`.

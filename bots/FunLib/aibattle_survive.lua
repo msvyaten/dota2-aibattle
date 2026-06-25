@@ -13,9 +13,10 @@ local FLASK_CD = 3.0   -- laning flask (defensiveHeal); recovery uses aib_recFla
 local BOTTLE_RUNE_MAX_DIST = 1900.0
 local BOTTLE_RUNE_STAGE_MAX_DIST = 3600.0
 local BOTTLE_RUNE_LANE_BUDGET = 1500.0
-local WATER_RECOVERY_RUNE_MAX_DIST = 3600.0
+local WATER_RECOVERY_RUNE_MAX_DIST = 4300.0
 local RECOVERY_RUNE_MAX_DIST = 3600.0
 local RECOVERY_RUNE_STAGE_MAX_DIST = 4200.0
+local WATER_RUNE_MID_CONTEXT_MAX = 3200.0
 
 local function getItem(bot, name)
 	local slot = bot:FindItemSlot(name)
@@ -264,7 +265,7 @@ end
 local function waterRecoveryAllowed(bot, hp, mana, dist, forceEmptyBottle)
 	if dist == nil or dist > WATER_RECOVERY_RUNE_MAX_DIST then return false end
 	if not forceEmptyBottle and hp >= 0.65 and mana >= 0.35 then return false end
-	return midContextDistance(bot) <= 2600
+	return midContextDistance(bot) <= WATER_RUNE_MID_CONTEXT_MAX
 end
 
 local nextBottleRuneSpawn
@@ -964,22 +965,29 @@ local function recovery(bot, dials, nEnemyCreeps)
 		end
 	end
 
-	-- e. Stand near tower (passive regen) -- 30s cap to prevent indefinite AFK when items exhausted.
+	-- e. No-resource recovery: move toward XP/safety once, then yield back to laning.
+	-- Passive regen is context, not a terminal action; standing still here looks like AFK.
 	local back, backKind = xpRecoveryLoc(bot, nEnemyCreeps, hp)
 	if back then
 		if bot.aib_recWaitStart == nil then bot.aib_recWaitStart = DotaTime() end
 		if DotaTime() - bot.aib_recWaitStart < 10.0 then
-			if bot.aib_recMoveLast == nil or DotaTime() - bot.aib_recMoveLast >= 5.0 then
+			local backDist = GetUnitToLocationDistance(bot, back)
+			if backDist <= 220 then
+				Style.DiagRL(bot, "recovery-yield", 5)
+				return false
+			end
+			if bot.aib_recMoveLast == nil or DotaTime() - bot.aib_recMoveLast >= 1.5 then
 				bot.aib_recMoveLast = DotaTime(); Style.Diag(bot, "recovery-wait")
 				Style.Diag(bot, backKind == "xp" and "recover-xp" or "recover-safe")
 				stateIntent(bot, backKind == "xp" and "recover-xp" or "recover-safe",
-					string.format("ttl=5 reason=no_resources hp=%.0f dist=%.0f", hp*100, GetUnitToLocationDistance(bot, back)), 2.0)
+					string.format("ttl=2 reason=no_resources hp=%.0f dist=%.0f", hp*100, backDist), 2.0)
 				recoveryPlan(bot, "wait_safe", "no_resources", string.format("hp=%.0f", hp*100), 2.0)
 				bot:Action_MoveToLocation(back)
+				return true
 			end
-			return true
+			return false
 		end
-		-- 30s elapsed with no items: go to lane at reduced HP rather than staying AFK.
+		-- Timeout elapsed with no items: go to lane at reduced HP rather than staying AFK.
 		bot.aib_recWaitStart = nil
 		Style.DiagRL(bot, "recovery-timeout", 10)
 	end

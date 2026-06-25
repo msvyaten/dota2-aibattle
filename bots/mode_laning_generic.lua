@@ -1133,7 +1133,12 @@ end
 
 local function AIB_PreCreepStandoffStep()
 	local now = DotaTime()
-	if now >= 0 then return false end
+	if now > 25 then return false end
+	if now >= 0 and not bot.aib_postHornRecoveryReset then
+		bot.aib_postHornRecoveryReset = true
+		AIB_ClearRecoveryState()
+		AIB_State("post-horn-reset", "reason=precreep", 2.0)
+	end
 	local function hasNearbyLaneCreep(list)
 		for _, creep in pairs(list or {}) do
 			if J.IsValid(creep) and GetUnitToUnitDistance(bot, creep) <= 900 then
@@ -1145,12 +1150,18 @@ local function AIB_PreCreepStandoffStep()
 	if hasNearbyLaneCreep(nEnemyCreeps) or hasNearbyLaneCreep(nAllyCreeps) then return false end
 
 	local range = botAttackRange or bot:GetAttackRange()
-	local enemy, dist = AIB_NearestEnemyHero(range + 80)
+	local enemy, dist = AIB_NearestEnemyHero(range + 160)
 	local preMode = GetRules().pregame_behavior or "default"
 	if preMode == "aggressive_mid" and enemy ~= nil and dist <= range + 20
 		and not AIB_UphillMiss(enemy) and J.GetHP(bot) >= 0.70 then
 		bot:Action_AttackUnit(enemy, false)
 		AIB_Diag("precreep-trade")
+		return true
+	end
+	if enemy ~= nil and dist <= range + 120
+		and not AIB_UphillMiss(enemy) and J.GetHP(bot) >= 0.55 then
+		bot:Action_AttackUnit(enemy, false)
+		AIB_Diag("precreep-contact")
 		return true
 	end
 
@@ -1366,6 +1377,11 @@ local function ThinkLaningCore(dials, rules)
 		assignedLane = botAssignedLane,
 		attackRange = botAttackRange,
 	}
+	if DotaTime() >= 0 and DotaTime() <= 25 and not bot.aib_postHornRecoveryReset then
+		bot.aib_postHornRecoveryReset = true
+		AIB_ClearRecoveryState()
+		AIB_State("post-horn-reset", "reason=laning-start", 2.0)
+	end
 	if J.GetHP(bot) < 0.22 and AIBSurvive.Think(bot, dials, nEnemyCreeps) then return end
 	local urgentIntents = {}
 	local urgentKill = AIBLaneTrade.KillLock(intentCtx)
