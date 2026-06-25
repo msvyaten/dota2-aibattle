@@ -101,7 +101,7 @@ function M.KillWindow(ctx)
 			local maxDist = range + 360
 			if mutualLow then maxDist = math.max(maxDist, math.max(700, range + 260)) end
 			if lowFarmAlways or hpAdv then maxDist = math.max(maxDist, range + 520) end
-			if execute or attackKill or mutualLow or (lowFarmAlways and ehp <= 0.78 and hp >= 0.34 and hpAdv) then
+			if execute or attackKill or mutualLow or (lowFarmAlways and ehp <= 0.60 and hp >= 0.34 and hpAdv) then
 				return {
 					enemy = enemy,
 					hp = hp,

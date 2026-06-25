@@ -272,6 +272,14 @@ local function waterRecoveryAllowed(bot, hp, mana, dist, forceEmptyBottle)
 	return midContextDistance(bot) <= WATER_RUNE_MID_CONTEXT_MAX
 end
 
+local function waterRuneEmergency(bot, hp, mana, dist, spawnKind, forceEmptyBottle)
+	if spawnKind ~= "water" then return false end
+	if not waterRecoveryAllowed(bot, hp, mana, dist, forceEmptyBottle) then return false end
+	local now = DotaTime()
+	local emptyFor = now - (bot.aib_emptyBottleSince or now)
+	return forceEmptyBottle or hp < 0.65 or mana < 0.35 or emptyFor >= 20.0
+end
+
 local nextBottleRuneSpawn
 
 local function runeMemoryUntil(now)
@@ -348,14 +356,18 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 	local rules = Style.Get().rules
 	local laneAware = opts.lane_aware ~= false
 	local forceEmptyBottle = opts.force_empty_bottle == true
-	if hp >= 0.78 and mana >= 0.45 and not forceEmptyBottle then return false end
 
 	local bSlot = bot:FindItemSlot("item_bottle")
 	if bSlot < 0 then return false end
 	local bottle = bot:GetItemInSlot(bSlot)
-	if bottle == nil or bottle:GetCurrentCharges() ~= 0 then return false end
-
 	local now = DotaTime()
+	if bottle == nil then return false end
+	if bottle:GetCurrentCharges() ~= 0 then
+		bot.aib_emptyBottleSince = nil
+		return false
+	end
+	bot.aib_emptyBottleSince = bot.aib_emptyBottleSince or now
+	if hp >= 0.78 and mana >= 0.45 and not forceEmptyBottle then return false end
 	if bot.aib_bottleRuneCooldownUntil ~= nil and now < bot.aib_bottleRuneCooldownUntil then
 		Style.Blocked(bot, diagKey, "cooldown", string.format("left=%.0f", bot.aib_bottleRuneCooldownUntil - now), 4.0)
 		return false
@@ -502,8 +514,14 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 			if bot.aib_bottleRuneStageBlockedWindow == nextSpawnAt
 				and bot.aib_bottleRuneStageBlockedUntil ~= nil
 				and now < bot.aib_bottleRuneStageBlockedUntil then
-				Style.Blocked(bot, diagKey, "stage_cooldown", string.format("eta=%.0f", secsToSpawn), 4.0)
-				return false
+				if waterRuneEmergency(bot, hp, mana, stageDist, spawnKind, forceEmptyBottle) then
+					bot.aib_bottleRuneStageBlockedWindow = nil
+					bot.aib_bottleRuneStageBlockedUntil = nil
+					Style.Intent(bot, "rune-stage-override", string.format("reason=water_emergency eta=%.0f dist=%.0f hp=%.0f mana=%.0f", secsToSpawn, stageDist, hp*100, mana*100), 2.0)
+				else
+					Style.Blocked(bot, diagKey, "stage_cooldown", string.format("eta=%.0f", secsToSpawn), 4.0)
+					return false
+				end
 			end
 			if hp < 0.24 and (secsToSpawn > 6 or stageDist > 900) then
 				Style.Blocked(bot, diagKey, "critical_no_stage", string.format("hp=%.0f rune=%.0f eta=%.0f", hp*100, stageDist, secsToSpawn), 4.0)

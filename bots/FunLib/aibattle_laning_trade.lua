@@ -113,9 +113,10 @@ function M.HealInterrupt(ctx)
 					Style.Diag(bot, "channel-interrupt-atk")
 				end, string.format("dist=%.0f hp=%.0f kind=%s", dist, hp*100, channelKey))
 			end
+			local chaseMinHp = isHeal and 0.32 or 0.45
 			if dist <= math.max(isHeal and 1050 or 900, range + (isHeal and 560 or 300))
 				and not AIBUtils.UphillMiss(bot, enemy)
-				and (hp >= (isHeal and 0.24 or 0.45) or not bot:WasRecentlyDamagedByAnyHero(1.0))
+				and hp >= chaseMinHp
 				and (not towerIsThreat or (isHeal and hp >= 0.45)) then
 				return Engine.Intent("channel-interrupt", isHeal and 138 or 118, "enemy_" .. channelKey, function()
 					moveToAttackEdge(bot, enemy, range)
