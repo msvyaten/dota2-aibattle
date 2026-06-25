@@ -243,6 +243,12 @@ Recent local commits:
 - Current behavior package in progress:
   - kill-lock chase is blocked earlier at self-critical HP so low-HP recovery is not interrupted by distant kill windows;
   - empty-bottle rune staging is blocked by `critical_no_stage` when HP is critical and the rune/spawn is too far.
+- Current behavior package in progress:
+  - critical HP now has a short `critical-recovery` lock so recovery does not oscillate between lane/rune/chase every tick;
+  - repeated visual-hold reasons escalate into hard actions (`visual-hold-hard-creep`, tower hit/step, safe/lane step);
+  - rune staging remembers completed/blocked spawn windows via `stage_cooldown`;
+  - empty bottle with healthy HP/MP emits `empty-bottle-ok` instead of repeatedly planning lane recovery;
+  - creep-damage relief, creep-hit-react, and damage-unstuck share short cooldowns to reduce action conflicts.
 - `89d2b65 codex: tighten lane decision states` - deployed live; latest behavior package:
   - engine can continue after an intent action explicitly returns `false`;
   - prewave duel is now approach/trade/space/disengage instead of a single attack gate;

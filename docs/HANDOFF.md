@@ -503,6 +503,10 @@ return {
 - `blocked=hero-prio-chase ... lane_override=`: chase gate now reports whether the wider 1v1 lane override would allow pursuit.
 - `blocked=recovery-rune-bottle reason=critical_no_stage`: HP is too low to wander toward a far/upcoming rune; recovery should hold one safe plan instead.
 - `blocked=kill-lock reason=self_critical`: low-HP chase is suppressed earlier unless the enemy is already attackable.
+- `intent=critical-recovery` / `critical-recover-lock`: short low-HP plan lock; watch this instead of lane/rune/chase oscillation.
+- `blocked=bottle-rune|recovery-rune-bottle reason=stage_cooldown`: the current rune spawn window was already completed/blocked.
+- `empty-bottle-ok`: empty bottle is noted but HP/MP are healthy enough that recovery should not spam lane plans.
+- `visual-hold-hard-creep`, `visual-hold-tower`, `visual-hold-tower-step`: repeated hold/tower cases now force visible actions.
 
 Что смотреть в следующем матче:
 - Вместо одного `creep-dmg` должны появляться `creep-aggro-back`.

@@ -708,6 +708,7 @@ local function AIB_CreepHitReactStep()
 	local now = DotaTime()
 	if now <= 0 or bot:HasModifier("modifier_teleporting") then return false end
 	if not bot:WasRecentlyDamagedByCreep(1.2) then return false end
+	if bot.aib_creepReliefLast ~= nil and now - bot.aib_creepReliefLast < 1.2 then return false end
 	if bot.aib_creepReactLast ~= nil and now - bot.aib_creepReactLast < 0.75 then return false end
 
 	local hp = J.GetHP(bot)
@@ -794,6 +795,8 @@ local function AIB_DamageUnstuckStep()
 	local hpDrop = (bot.aib_damageAnchorHp or hpPct) - hpPct
 	if elapsed < 4.0 or hpDrop < 6.0 then return false end
 	if bot.aib_damageUnstuckLast ~= nil and now - bot.aib_damageUnstuckLast < 3.0 then return false end
+	if bot:WasRecentlyDamagedByCreep(1.5)
+		and bot.aib_creepReliefLast ~= nil and now - bot.aib_creepReliefLast < 1.6 then return false end
 
 	if AIB_BottleIfUseful(0.72, 0.35, "damage-unstuck-bottle") then
 		bot.aib_damageUnstuckLast = now
@@ -905,6 +908,42 @@ local function AIB_ActiveLowHpStep()
 	return false
 end
 
+local function AIB_CriticalRecoveryLockStep()
+	local now = DotaTime()
+	local hp = J.GetHP(bot)
+	if hp >= 0.34 then
+		bot.aib_criticalRecoverUntil = nil
+		bot.aib_criticalRecoverDest = nil
+		return false
+	end
+	if hp >= 0.30 and bot.aib_criticalRecoverUntil == nil then return false end
+	if AIB_BottleIfUseful(0.70, 0.35, "critical-recover-bottle") then
+		bot.aib_criticalRecoverUntil = now + 3.0
+		return true
+	end
+
+	local dest = bot.aib_criticalRecoverDest
+	if bot.aib_criticalRecoverUntil == nil or now > bot.aib_criticalRecoverUntil or dest == nil then
+		dest = AIBUtils.SafeRetreatTowerLoc(bot)
+			or AIB_TowardFountainFrom(bot:GetLocation(), 520)
+			or GetLaneFrontLocation(GetTeam(), LANE_MID, -900)
+		bot.aib_criticalRecoverDest = dest
+		bot.aib_criticalRecoverUntil = now + 4.0
+	end
+	if dest == nil then return false end
+	if GetUnitToLocationDistance(bot, dest) < 220 then
+		dest = AIB_TowardFountainFrom(bot:GetLocation(), 360) or (dest + RandomVector(180))
+		bot.aib_criticalRecoverDest = dest
+	end
+	if bot.aib_criticalRecoverLast == nil or now - bot.aib_criticalRecoverLast >= 0.8 then
+		bot.aib_criticalRecoverLast = now
+		Style.Intent(bot, "critical-recovery", string.format("hp=%.0f dist=%.0f ttl=%.0f", hp * 100, GetUnitToLocationDistance(bot, dest), bot.aib_criticalRecoverUntil - now), 2.0)
+		bot:Action_MoveToLocation(dest)
+		AIB_Diag("critical-recover-lock")
+	end
+	return true
+end
+
 local function AIB_LastHitWatchdogStep()
 	local now = DotaTime()
 	if now < 65 or now > 8 * 60 then return false end
@@ -964,10 +1003,30 @@ local function AIB_VisualHoldHeartbeatStep()
 	elseif creep ~= nil then reason = "creep_in_range"
 	elseif AIB_EnemyTowerDanger() ~= nil then reason = "tower"
 	end
+	if bot.aib_holdLastReason == reason then
+		bot.aib_holdRepeat = (bot.aib_holdRepeat or 0) + 1
+	else
+		bot.aib_holdLastReason = reason
+		bot.aib_holdRepeat = 1
+	end
+	local hardHold = (bot.aib_holdRepeat or 0) >= 3 or (now - bot.aib_holdAnchorTime) >= 5.0
 	Style.Blocked(bot, "visual-hold", reason,
-		string.format("held=%.1f hp=%.0f", now - bot.aib_holdAnchorTime, J.GetHP(bot) * 100), 2.0)
+		string.format("held=%.1f hp=%.0f repeat=%d hard=%s", now - bot.aib_holdAnchorTime, J.GetHP(bot) * 100, bot.aib_holdRepeat or 0, tostring(hardHold)), 2.0)
 
 	bot.aib_holdLast = now
+	if reason == "tower" then
+		local twr = AIB_EnemyTowerDanger()
+		if twr ~= nil and not AIB_TowerActuallyThreatening(twr)
+			and AIB_AlliedCreepsAtTower(twr, twr:GetAttackRange() + 120) >= 1
+			and J.GetHP(bot) >= 0.35 then
+			if GetUnitToUnitDistance(bot, twr) <= range + 60 then
+				bot:Action_AttackUnit(twr, true)
+				AIB_Diag("visual-hold-tower")
+				return true
+			end
+			if AIB_MoveToAttackEdgeOf(twr, "visual-hold-tower-step", 30) then return true end
+		end
+	end
 	if enemy ~= nil and J.GetHP(bot) >= 0.35
 		and AIB_EnemyTowerDanger() == nil and not AIB_UphillMiss(enemy) then
 		if enemyDist <= range + 80 then
@@ -980,12 +1039,18 @@ local function AIB_VisualHoldHeartbeatStep()
 		end
 	end
 	if (reason == "creep_damage" or reason == "creep_in_range") and creep ~= nil then
-		if creepDist <= range + 45 then
+		if creepDist <= range + (hardHold and 100 or 45) then
 			bot:Action_AttackUnit(creep, true)
 			AIB_Diag("visual-hold-creep")
 			return true
 		end
 		return AIB_MoveToAttackEdgeOf(creep, "visual-hold-creep-step", 35)
+	end
+	if hardHold and (reason == "creep_damage" or reason == "creep_in_range" or reason == "empty") then
+		local weakCreep = AIB_WeakestAttackableEnemyCreep(range * 1.8)
+		if weakCreep ~= nil then
+			return AIB_MoveToAttackEdgeOf(weakCreep, "visual-hold-hard-creep", 35)
+		end
 	end
 	if reason == "creep_damage" then
 		local cen = AIB_EnemyCreepCentroid(nEnemyCreeps)
@@ -1407,6 +1472,7 @@ local function ThinkLaningCore(dials, rules)
 	if AIBEngine.Resolve(urgentIntents, intentCtx) then return end
 
 	if J.GetHP(bot) < 0.35 and AIBSurvive.Think(bot, dials, nEnemyCreeps) then return end
+	if AIB_CriticalRecoveryLockStep() then return end
 	if AIB_PreWaveDuelStep(rules) then return end
 	if AIB_PreCreepStandoffStep() then return end
 	if AIB_AbilityPressureStep() then return end

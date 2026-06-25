@@ -158,6 +158,8 @@ function M.Reset(bot)
 	bot.aib_bottleRuneStageUntil = nil
 	bot.aib_bottleRuneStageTarget = nil
 	bot.aib_bottleRuneStageFollowLast = nil
+	bot.aib_bottleRuneStageBlockedWindow = nil
+	bot.aib_bottleRuneStageBlockedUntil = nil
 	-- Flask budget is per-life, not per-game: a bot that's behind and respawning still needs
 	-- sustain (match 8862516153: stomped Dire hit the 2-flask cap and couldn't buy at 10% HP).
 	bot.aib_recBuyCount = nil
@@ -480,8 +482,16 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 			local stageWindow = opts.stage_window or 16.0
 			local stageRune, stageLoc, stageDist = nearestRuneSpot(bot, now)
 			local stageMaxDist = opts.stage_max_dist or math.max(maxDist or 2600, 2600)
+			if bot.aib_bottleRuneStageBlockedWindow == nextSpawnAt
+				and bot.aib_bottleRuneStageBlockedUntil ~= nil
+				and now < bot.aib_bottleRuneStageBlockedUntil then
+				Style.Blocked(bot, diagKey, "stage_cooldown", string.format("eta=%.0f", secsToSpawn), 4.0)
+				return false
+			end
 			if hp < 0.24 and (secsToSpawn > 6 or stageDist > 900) then
 				Style.Blocked(bot, diagKey, "critical_no_stage", string.format("hp=%.0f rune=%.0f eta=%.0f", hp*100, stageDist, secsToSpawn), 4.0)
+				bot.aib_bottleRuneStageBlockedWindow = nextSpawnAt
+				bot.aib_bottleRuneStageBlockedUntil = now + 3.0
 				return false
 			end
 			local sameStageWindow = bot.aib_bottleRuneStageWindow == nextSpawnAt
@@ -526,6 +536,8 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 						bot.aib_bottleRuneTarget = checkLoc
 						bot.aib_bottleRuneId = checkRune
 						bot.aib_bottleRuneLast = now
+						bot.aib_bottleRuneStageBlockedWindow = nil
+						bot.aib_bottleRuneStageBlockedUntil = nil
 						recoveryPlan(bot, "rune", "stage_commit", string.format("source=%s dist=%.0f", diagKey, checkDist), 2.0)
 						stateIntent(bot, "rune-commit", string.format("source=%s ttl=30 reason=stage_commit dist=%.0f", diagKey, checkDist), 2.0)
 						Style.Intent(bot, diagKey, string.format("dist=%.0f reason=stage_commit", checkDist), 2.0)
@@ -534,6 +546,8 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 					end
 				end
 				Style.Blocked(bot, diagKey, "stage_done", string.format("eta=%.0f", secsToSpawn), 6.0)
+				bot.aib_bottleRuneStageBlockedWindow = nextSpawnAt
+				bot.aib_bottleRuneStageBlockedUntil = now + math.max(3.0, math.min(8.0, secsToSpawn + 1.0))
 				return false
 			end
 			if stageRune ~= nil and stageLoc ~= nil and secsToSpawn >= 0 and secsToSpawn <= stageWindow and stageDist <= stageMaxDist then
@@ -549,6 +563,8 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 				bot.aib_bottleRuneStageUntil = nextSpawnAt + 7.0
 				bot.aib_bottleRuneStageTarget = stageLoc
 				bot.aib_bottleRuneStageFollowLast = now
+				bot.aib_bottleRuneStageBlockedWindow = nil
+				bot.aib_bottleRuneStageBlockedUntil = nil
 				recoveryPlan(bot, "rune_stage", spawnKind or "upcoming", string.format("source=%s dist=%.0f eta=%.0f", diagKey, stageDist, secsToSpawn), 2.0)
 				stateIntent(bot, "rune-commit", string.format("source=%s ttl=%.0f reason=stage dist=%.0f", diagKey, math.max(0, secsToSpawn), stageDist), 2.0)
 				Style.Intent(bot, diagKey, string.format("dist=%.0f eta=%.0f reason=stage", stageDist, secsToSpawn), 2.0)
@@ -859,7 +875,11 @@ local function recovery(bot, dials, nEnemyCreeps)
 						stage_window = 24.0,
 						stage_max_dist = RECOVERY_RUNE_STAGE_MAX_DIST,
 					}) then return true end
-					recoveryPlan(bot, "lane", "empty_bottle_no_rune", string.format("hp=%.0f mana=%.0f", hp*100, mana*100), 8.0)
+					if hp < 0.65 or mana < 0.45 then
+						recoveryPlan(bot, "lane", "empty_bottle_no_rune", string.format("hp=%.0f mana=%.0f", hp*100, mana*100), 8.0)
+					else
+						Style.DiagRL(bot, "empty-bottle-ok", 8)
+					end
 					if hp >= 0.24 then bot.aib_recWaitStart = nil end
 				end
 			end
