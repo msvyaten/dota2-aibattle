@@ -68,7 +68,7 @@ function M.KillLock(ctx)
 		if enemy:IsAlive() and isKillable(bot, enemy, dials) then
 			local hp = J.GetHP(bot)
 			local dist = GetUnitToUnitDistance(bot, enemy)
-			if hp < 0.18 and dist > range + 60 then
+			if hp < 0.30 and dist > range + 60 then
 				return Engine.Blocked("kill-lock", 120, "self_critical", string.format("dist=%.0f hp=%.0f", dist, hp*100))
 			end
 			if dist <= range + 60 then

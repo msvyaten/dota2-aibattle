@@ -501,6 +501,8 @@ return {
 - `visual-hold-hero-step` / `visual-hold-creep-step` / `visual-hold-creep-back` / `visual-hold-safe`: visual-hold now converts stale standing into visible action.
 - `rune-result result=pickup_confirm`: bot is close to the rune and briefly confirms pickup/charges before calling it gone.
 - `blocked=hero-prio-chase ... lane_override=`: chase gate now reports whether the wider 1v1 lane override would allow pursuit.
+- `blocked=recovery-rune-bottle reason=critical_no_stage`: HP is too low to wander toward a far/upcoming rune; recovery should hold one safe plan instead.
+- `blocked=kill-lock reason=self_critical`: low-HP chase is suppressed earlier unless the enemy is already attackable.
 
 Что смотреть в следующем матче:
 - Вместо одного `creep-dmg` должны появляться `creep-aggro-back`.

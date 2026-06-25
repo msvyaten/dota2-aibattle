@@ -240,6 +240,9 @@ Recent local commits:
   - close rune attempts get a short `pickup_confirm` lock before marking a rune gone;
   - hero-priority chase can override lane work at wider safe distances when HP/kill pressure supports it;
   - no-resource recovery yields between movement refreshes instead of holding the tick.
+- Current behavior package in progress:
+  - kill-lock chase is blocked earlier at self-critical HP so low-HP recovery is not interrupted by distant kill windows;
+  - empty-bottle rune staging is blocked by `critical_no_stage` when HP is critical and the rune/spawn is too far.
 - `89d2b65 codex: tighten lane decision states` - deployed live; latest behavior package:
   - engine can continue after an intent action explicitly returns `false`;
   - prewave duel is now approach/trade/space/disengage instead of a single attack gate;

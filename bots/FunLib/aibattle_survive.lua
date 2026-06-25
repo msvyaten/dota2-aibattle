@@ -480,6 +480,10 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 			local stageWindow = opts.stage_window or 16.0
 			local stageRune, stageLoc, stageDist = nearestRuneSpot(bot, now)
 			local stageMaxDist = opts.stage_max_dist or math.max(maxDist or 2600, 2600)
+			if hp < 0.24 and (secsToSpawn > 6 or stageDist > 900) then
+				Style.Blocked(bot, diagKey, "critical_no_stage", string.format("hp=%.0f rune=%.0f eta=%.0f", hp*100, stageDist, secsToSpawn), 4.0)
+				return false
+			end
 			local sameStageWindow = bot.aib_bottleRuneStageWindow == nextSpawnAt
 			if sameStageWindow then
 				if bot.aib_bottleRuneStageUntil ~= nil and now <= bot.aib_bottleRuneStageUntil
