@@ -2183,7 +2183,7 @@ X.ConsiderItemDesire["item_enchanted_mango"] = function( hItem )
 		if ab ~= nil and ab:GetLevel() > 0 and not ab:IsPassive() then
 			local cost = ab:GetManaCost()
 			local cd = ab:GetCooldownTimeRemaining()
-			if cost > mana and mana + 100 >= cost and cd <= 3.0 then
+			if cost > mana and mana + 75 >= cost and cd <= 3.0 then
 				abilitySoon = true
 				break
 			end

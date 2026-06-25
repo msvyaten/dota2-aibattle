@@ -932,6 +932,24 @@ local function AIB_ActiveLowHpStep()
 	return false
 end
 
+local function AIB_ShouldYieldRecoveryToKill(dials)
+	local hp = J.GetHP(bot)
+	if hp < 0.14 then return false end
+	local range = botAttackRange or bot:GetAttackRange()
+	local enemy, dist = AIB_NearestEnemyHero(math.max(900, range + 360))
+	if enemy == nil or not enemy:IsAlive() then return false end
+	if AIB_TowerActuallyThreatening(AIB_EnemyTowerDanger()) or AIB_UphillMiss(enemy) then return false end
+	local ehp = J.GetHP(enemy)
+	local exec = (dials and dials.execute_threshold) or 0
+	local executeWindow = exec > 0 and ehp <= math.max(exec, 0.24) and dist <= range + 360
+	local mutualLowWindow = ehp <= 0.35 and hp <= 0.38 and dist <= math.max(700, range + 260)
+	if executeWindow or mutualLowWindow then
+		Style.Intent(bot, "recovery-yield-kill", string.format("dist=%.0f hp=%.0f ehp=%.0f exec=%s mutual=%s", dist, hp*100, ehp*100, tostring(executeWindow), tostring(mutualLowWindow)), 1.5)
+		return true
+	end
+	return false
+end
+
 local function AIB_CriticalRecoveryLockStep()
 	local now = DotaTime()
 	local hp = J.GetHP(bot)
@@ -940,7 +958,12 @@ local function AIB_CriticalRecoveryLockStep()
 	if combatRune and hp >= 0.30 then
 		bot.aib_criticalRecoverUntil = nil
 		bot.aib_criticalRecoverDest = nil
-		Style.Intent(bot, "critical-recovery", string.format("reason=power_rune_yield rune=%s hp=%.0f", powerRune, hp * 100), 2.0)
+		Style.Intent(bot, "power-rune-yield", string.format("rune=%s hp=%.0f", powerRune, hp * 100), 2.0)
+		return false
+	end
+	if AIB_ShouldYieldRecoveryToKill(Style.Get().dials) then
+		bot.aib_criticalRecoverUntil = nil
+		bot.aib_criticalRecoverDest = nil
 		return false
 	end
 	if hp >= 0.34 then
@@ -1521,7 +1544,8 @@ local function ThinkLaningCore(dials, rules)
 	if urgentInterrupt ~= nil then urgentIntents[#urgentIntents + 1] = urgentInterrupt end
 	if AIBEngine.Resolve(urgentIntents, intentCtx) then return end
 
-	if J.GetHP(bot) < 0.35 and AIBSurvive.Think(bot, dials, nEnemyCreeps) then return end
+	if J.GetHP(bot) < 0.35 and not AIB_ShouldYieldRecoveryToKill(dials)
+		and AIBSurvive.Think(bot, dials, nEnemyCreeps) then return end
 	if AIB_CriticalRecoveryLockStep() then return end
 	if AIB_PreWaveDuelStep(rules) then return end
 	if AIB_PreCreepStandoffStep() then return end
@@ -1544,7 +1568,8 @@ local function ThinkLaningCore(dials, rules)
 			return
 		end
 	end
-	if J.GetHP(bot) < 0.55 and AIBSurvive.Think(bot, dials, nEnemyCreeps) then return end
+	if J.GetHP(bot) < 0.55 and not AIB_ShouldYieldRecoveryToKill(dials)
+		and AIBSurvive.Think(bot, dials, nEnemyCreeps) then return end
 	local intents = {}
 	local killIntent = AIBLaneTrade.KillLock(intentCtx)
 	if killIntent ~= nil then intents[#intents + 1] = killIntent end
@@ -1773,16 +1798,22 @@ local function ThinkLaningCore(dials, rules)
 					local closeVisibleChase = chaseDist <= 900
 						and J.GetHP(bot) >= 0.52
 						and chaseSafe
+					local lowFarmHeroChase = chaseDist <= 1150
+						and (dials.farm_focus or 0.5) < 0.25
+						and (rules.hero_priority or "default") == "always"
+						and J.GetHP(bot) >= 0.42
+						and J.GetHP(chase[1]) <= 0.70
+						and chaseSafe
 					local laneOverrideChase = chaseDist <= 950
 						and J.GetHP(bot) >= 0.58
 						and J.GetHP(chase[1]) <= 0.62
 						and ((rules.hero_priority or "default") == "always" or J.GetHP(bot) >= J.GetHP(chase[1]) + 0.15)
 						and chaseSafe
 						and (not creepNear or not csAllowed)
-					if hpAdvChase or killPressureChase or closeVisibleChase or laneOverrideChase or (chaseDist <= 950 and not csAllowed and not creepNear) then
+					if hpAdvChase or killPressureChase or closeVisibleChase or lowFarmHeroChase or laneOverrideChase or (chaseDist <= 950 and not csAllowed and not creepNear) then
 						AIB_MoveToAttackEdge(chase[1], "hero-prio-chase"); return
 					end
-					AIB_WantBlocked("hero-prio-chase", "lane_work", string.format("dist=%.0f cs=%s creep=%s hp_adv=%s kill_pressure=%s close=%s lane_override=%s", chaseDist, tostring(csAllowed), tostring(creepNear), tostring(hpAdvChase), tostring(killPressureChase), tostring(closeVisibleChase), tostring(laneOverrideChase)), 3.0)
+					AIB_WantBlocked("hero-prio-chase", "lane_work", string.format("dist=%.0f cs=%s creep=%s hp_adv=%s kill_pressure=%s close=%s low_farm=%s lane_override=%s", chaseDist, tostring(csAllowed), tostring(creepNear), tostring(hpAdvChase), tostring(killPressureChase), tostring(closeVisibleChase), tostring(lowFarmHeroChase), tostring(laneOverrideChase)), 3.0)
 				end
 			end
 		end

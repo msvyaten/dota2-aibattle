@@ -123,7 +123,7 @@ function M.RuneUsePolicy(bot, dials, rules)
 			towerPressure = dials.push_desire or 0.5,
 			creepPressure = 0.30,
 			minFightHp = math.max(0.34, fightHp - 0.04),
-			maxChase = 1150,
+			maxChase = 1450,
 			useForTowerWithWave = false,
 		}
 	elseif rune == "arcane" then
