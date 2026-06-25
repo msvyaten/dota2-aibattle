@@ -968,6 +968,25 @@ local function AIB_VisualHoldHeartbeatStep()
 		string.format("held=%.1f hp=%.0f", now - bot.aib_holdAnchorTime, J.GetHP(bot) * 100), 2.0)
 
 	bot.aib_holdLast = now
+	if reason == "hero_in_range" and enemy ~= nil and J.GetHP(bot) >= 0.35
+		and AIB_EnemyTowerDanger() == nil and not AIB_UphillMiss(enemy) then
+		bot:Action_AttackUnit(enemy, false)
+		AIB_Diag("visual-hold-hero")
+		return true
+	end
+	if (reason == "creep_damage" or reason == "creep_in_range") and creep ~= nil then
+		bot:Action_AttackUnit(creep, true)
+		AIB_Diag("visual-hold-creep")
+		return true
+	end
+	if reason == "empty" then
+		local front = GetLaneFrontLocation(GetTeam(), LANE_MID, 0)
+		if front ~= nil then
+			bot:Action_MoveToLocation(front + RandomVector(35))
+			AIB_Diag("visual-hold-lane")
+			return true
+		end
+	end
 	return false
 end
 
@@ -1331,6 +1350,18 @@ local function ThinkLaningCore(dials, rules)
 	if AIB_ContactHeroStep(rules) then return end
 	if AIB_CreepHitReactStep() then return end
 	if AIB_DamageUnstuckStep() then return end
+	if J.GetHP(bot) >= 0.28 and J.GetHP(bot) < 0.55 then
+		local safeCs, safeCsSoon = GetBestLastHitCreep(nEnemyCreeps)
+		if J.IsValid(safeCs) and safeCsSoon ~= true
+			and GetUnitToUnitDistance(bot, safeCs) <= (botAttackRange or bot:GetAttackRange()) + 35
+			and not (bot:WasRecentlyDamagedByAnyHero(1.2) and J.GetHP(bot) < 0.40)
+			and not AIB_TowerActuallyThreatening(AIB_EnemyTowerDanger()) then
+			bot:SetTarget(safeCs)
+			bot:Action_AttackUnit(safeCs, true)
+			AIB_Diag("low-hp-cs")
+			return
+		end
+	end
 	if J.GetHP(bot) < 0.55 and AIBSurvive.Think(bot, dials, nEnemyCreeps) then return end
 	local intents = {}
 	local killIntent = AIBLaneTrade.KillLock(intentCtx)

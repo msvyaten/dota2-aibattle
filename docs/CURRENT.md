@@ -219,6 +219,11 @@ Recent local commits:
 - Next behavior package in progress:
   - after killing the enemy, siege can step toward tower even without allied tower tanking, but still will not hit tower under no-tank danger;
   - prewave duel low-HP disengage no longer consumes the tick; HP below 35% gets a survival chance before duel.
+- Current behavior package in progress:
+  - rune pickup attempts are only issued near the rune, not from ~400 units away;
+  - seen-empty rune spots are remembered until the next 2-minute spawn tick;
+  - visual-hold now issues a fallback action (hero attack, creep attack, or lane step) instead of only logging the hold;
+  - low-HP recovery yields to a safe in-range last-hit before leaving lane.
 - `89d2b65 codex: tighten lane decision states` - deployed live; latest behavior package:
   - engine can continue after an intent action explicitly returns `false`;
   - prewave duel is now approach/trade/space/disengage instead of a single attack gate;

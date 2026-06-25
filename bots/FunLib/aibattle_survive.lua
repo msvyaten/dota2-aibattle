@@ -246,11 +246,33 @@ local function laneFrontDistance(bot)
 	return GetUnitToLocationDistance(bot, front)
 end
 
-local function nearestRuneSpot(bot)
+local nextBottleRuneSpawn
+
+local function runeMemoryUntil(now)
+	local nextSpawnAt = nextBottleRuneSpawn(now)
+	if nextSpawnAt == nil then return nil end
+	return nextSpawnAt + 0.5
+end
+
+local function isRuneKnownEmpty(bot, runeId, now)
+	if runeId == nil or bot.aib_knownEmptyRunes == nil then return false end
+	local untilTime = bot.aib_knownEmptyRunes[runeId]
+	return untilTime ~= nil and now ~= nil and now < untilTime
+end
+
+local function markRuneKnownEmpty(bot, runeId, now)
+	if runeId == nil then return end
+	local untilTime = runeMemoryUntil(now)
+	if untilTime == nil then return end
+	bot.aib_knownEmptyRunes = bot.aib_knownEmptyRunes or {}
+	bot.aib_knownEmptyRunes[runeId] = untilTime
+end
+
+local function nearestRuneSpot(bot, now)
 	local bestRune, bestLoc, bestDist = nil, nil, math.huge
 	for _, runeId in ipairs({ RUNE_POWERUP_1, RUNE_POWERUP_2 }) do
 		local loc = GetRuneSpawnLocation(runeId)
-		if loc ~= nil then
+		if loc ~= nil and not isRuneKnownEmpty(bot, runeId, now) then
 			local dist = GetUnitToLocationDistance(bot, loc)
 			if dist < bestDist then
 				bestRune, bestLoc, bestDist = runeId, loc, dist
@@ -260,7 +282,7 @@ local function nearestRuneSpot(bot)
 	return bestRune, bestLoc, bestDist
 end
 
-local function nextBottleRuneSpawn(now)
+function nextBottleRuneSpawn(now)
 	if now == nil or now < 0 then return nil end
 	if now < 120 then return 120, "water" end
 	if now < 240 then return 240, "water" end
@@ -320,6 +342,7 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 		end
 		if bottleCharges(bot) ~= 0 then
 			Style.Intent(bot, diagKey, "reason=filled", 2.0)
+			markRuneKnownEmpty(bot, bot.aib_bottleRuneId, now)
 			runeResult(bot, diagKey, "filled", string.format("age=%.0f", now - bot.aib_bottleRuneStarted), 0)
 			clearRuneAttempt(bot)
 			return false
@@ -329,7 +352,8 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 			local retargetRune, retargetLoc, retargetDist, retargetScore = nil, nil, math.huge, math.huge
 			local retargetMax = math.max(maxDist or 2600, opts.stage_max_dist or 2600)
 			for _, runeId in ipairs({ RUNE_POWERUP_1, RUNE_POWERUP_2 }) do
-				if runeId ~= bot.aib_bottleRuneId and GetRuneStatus(runeId) == RUNE_STATUS_AVAILABLE then
+				if runeId ~= bot.aib_bottleRuneId and GetRuneStatus(runeId) == RUNE_STATUS_AVAILABLE
+					and not isRuneKnownEmpty(bot, runeId, now) then
 					local loc = GetRuneSpawnLocation(runeId)
 					if loc ~= nil then
 						local dist = GetUnitToLocationDistance(bot, loc)
@@ -353,12 +377,20 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 				return true
 			end
 			Style.Intent(bot, diagKey, "reason=gone", 2.0)
+			markRuneKnownEmpty(bot, bot.aib_bottleRuneId, now)
 			runeResult(bot, diagKey, "gone", string.format("age=%.0f", now - bot.aib_bottleRuneStarted), 6.0)
 			clearRuneAttempt(bot)
 			return false
 		end
 		local targetDist = GetUnitToLocationDistance(bot, bot.aib_bottleRuneTarget)
-		if bot.aib_bottleRuneId ~= nil and targetDist <= 420 then
+		if targetDist > 180 then
+			recoveryPlan(bot, "rune", "commit", string.format("source=%s dist=%.0f", diagKey, targetDist), 2.0)
+			stateIntent(bot, "rune-commit", string.format("source=%s ttl=30 reason=commit dist=%.0f", diagKey, targetDist), 2.0)
+			Style.Intent(bot, diagKey, string.format("dist=%.0f age=%.0f reason=commit", targetDist, now - bot.aib_bottleRuneStarted), 2.0)
+			bot:Action_MoveToLocation(bot.aib_bottleRuneTarget)
+			return true
+		end
+		if bot.aib_bottleRuneId ~= nil then
 			recoveryPlan(bot, "rune", "pickup", string.format("source=%s dist=%.0f", diagKey, targetDist), 1.0)
 			stateIntent(bot, "rune-commit", string.format("source=%s ttl=30 reason=pickup dist=%.0f", diagKey, targetDist), 1.0)
 			runeResult(bot, diagKey, "pickup_attempt", string.format("dist=%.0f age=%.0f", targetDist, now - bot.aib_bottleRuneStarted), 2.0)
@@ -368,13 +400,6 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 			else
 				bot:Action_MoveToLocation(bot.aib_bottleRuneTarget)
 			end
-			return true
-		end
-		if targetDist > 120 then
-			recoveryPlan(bot, "rune", "commit", string.format("source=%s dist=%.0f", diagKey, targetDist), 2.0)
-			stateIntent(bot, "rune-commit", string.format("source=%s ttl=30 reason=commit dist=%.0f", diagKey, targetDist), 2.0)
-			Style.Intent(bot, diagKey, string.format("dist=%.0f age=%.0f reason=commit", targetDist, now - bot.aib_bottleRuneStarted), 2.0)
-			bot:Action_MoveToLocation(bot.aib_bottleRuneTarget)
 			return true
 		end
 		recoveryPlan(bot, "rune", "hold", string.format("source=%s dist=%.0f", diagKey, targetDist), 1.0)
@@ -393,7 +418,7 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 
 	local bestRune, bestLoc, bestDist, bestScore = nil, nil, math.huge, math.huge
 	for _, runeId in ipairs({ RUNE_POWERUP_1, RUNE_POWERUP_2 }) do
-		if GetRuneStatus(runeId) == RUNE_STATUS_AVAILABLE then
+		if GetRuneStatus(runeId) == RUNE_STATUS_AVAILABLE and not isRuneKnownEmpty(bot, runeId, now) then
 			local loc = GetRuneSpawnLocation(runeId)
 			if loc ~= nil then
 				local dist = GetUnitToLocationDistance(bot, loc)
@@ -410,7 +435,7 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 			local nextSpawnAt, spawnKind = nextBottleRuneSpawn(now)
 			local secsToSpawn = nextSpawnAt ~= nil and (nextSpawnAt - now) or math.huge
 			local stageWindow = opts.stage_window or 16.0
-			local stageRune, stageLoc, stageDist = nearestRuneSpot(bot)
+			local stageRune, stageLoc, stageDist = nearestRuneSpot(bot, now)
 			local stageMaxDist = opts.stage_max_dist or math.max(maxDist or 2600, 2600)
 			local sameStageWindow = bot.aib_bottleRuneStageWindow == nextSpawnAt
 			if sameStageWindow then
@@ -434,7 +459,7 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 				if secsToSpawn <= 0 and secsToSpawn >= -12 then
 					local checkRune, checkLoc, checkDist, checkScore = nil, nil, math.huge, math.huge
 					for _, runeId in ipairs({ RUNE_POWERUP_1, RUNE_POWERUP_2 }) do
-						if GetRuneStatus(runeId) == RUNE_STATUS_AVAILABLE then
+						if GetRuneStatus(runeId) == RUNE_STATUS_AVAILABLE and not isRuneKnownEmpty(bot, runeId, now) then
 							local loc = GetRuneSpawnLocation(runeId)
 							if loc ~= nil then
 								local dist = GetUnitToLocationDistance(bot, loc)
