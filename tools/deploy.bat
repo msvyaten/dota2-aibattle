@@ -53,6 +53,8 @@ if "%DO_CODE%"=="1" (
 	call :copyfile "FunLib\aibattle_build.lua" || exit /b 1
 	call :copyfile "FunLib\aibattle_style.lua" || exit /b 1
 	call :copyfile "FunLib\aibattle_survive.lua" || exit /b 1
+	call :copyfile "FunLib\aibattle_laning_duel.lua" || exit /b 1
+	call :copyfile "FunLib\aibattle_laning_siege.lua" || exit /b 1
 	call :copyfile "FunLib\aibattle_laning_survival.lua" || exit /b 1
 	call :copyfile "FunLib\aibattle_laning_trade.lua" || exit /b 1
 	call :copyfile "FunLib\aibattle_utils.lua" || exit /b 1

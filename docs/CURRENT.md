@@ -1,8 +1,8 @@
 # AIBattle Current State
 
-Last updated by Codex on 2026-06-25 during the behavior/infrastructure follow-up.
-Current live bot build before the next deploy: `c7a5874`.
-Current repo HEAD before this work: `84e2937`.
+Last updated by Codex on 2026-06-25 during the laning architecture cleanup.
+Current live bot build before the next deploy: `89d2b65`.
+Current repo HEAD before this work: `89d2b65`.
 
 ## Goal
 
@@ -210,7 +210,13 @@ use `deploy.bat playstyle` or `deploy.bat all`. Match `8864152947` showed this t
 ## Latest State
 
 Recent local commits:
-- Next behavior package in progress:
+- Current architecture package in progress:
+  - no intentional behavior changes;
+  - prewave/pregame duel logic moved from `mode_laning_generic.lua` into `FunLib/aibattle_laning_duel.lua`;
+  - siege-window logic moved from `mode_laning_generic.lua` into `FunLib/aibattle_laning_siege.lua`;
+  - `mode_laning_generic.lua` should keep moving toward orchestration + sensors, not owning every behavior mode;
+  - deploy/check tooling must list every new runtime module, otherwise live Dota can miss required files.
+- `89d2b65 codex: tighten lane decision states` - deployed live; latest behavior package:
   - engine can continue after an intent action explicitly returns `false`;
   - prewave duel is now approach/trade/space/disengage instead of a single attack gate;
   - creep-damage response uses forced attack or short back-step instead of long kite;

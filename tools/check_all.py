@@ -25,6 +25,8 @@ LIVE_CODE_FILES = [
     "FunLib/aibattle_engine.lua",
     "FunLib/aibattle_style.lua",
     "FunLib/aibattle_survive.lua",
+    "FunLib/aibattle_laning_duel.lua",
+    "FunLib/aibattle_laning_siege.lua",
     "FunLib/aibattle_laning_survival.lua",
     "FunLib/aibattle_laning_trade.lua",
     "FunLib/aibattle_utils.lua",

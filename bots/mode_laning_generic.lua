@@ -44,6 +44,8 @@ local _healOk, _healResult = pcall(require, GetScriptDirectory()..'/FunLib/aibat
 local AIBSurvive = _healOk and _healResult or { Think = function() return false end }
 local AIBLaneSurvival = require(GetScriptDirectory()..'/FunLib/aibattle_laning_survival')
 local AIBLaneTrade = require(GetScriptDirectory()..'/FunLib/aibattle_laning_trade')
+local AIBLaneSiege = require(GetScriptDirectory()..'/FunLib/aibattle_laning_siege')
+local AIBLaneDuel = require(GetScriptDirectory()..'/FunLib/aibattle_laning_duel')
 
 local function AIB_ClearRecoveryState()
 	if AIBSurvive.Reset ~= nil then
@@ -973,114 +975,32 @@ local function AIB_EnemyDeadRecently()
 	return bot.aib_eDeadSince ~= nil and DotaTime() - bot.aib_eDeadSince < 45.0
 end
 
+local function AIB_LaningModuleCtx(dials, rules)
+	return {
+		bot = bot,
+		dials = dials or {},
+		rules = rules or GetRules(),
+		allyCreeps = nAllyCreeps,
+		enemyCreeps = nEnemyCreeps,
+		attackRange = botAttackRange or bot:GetAttackRange(),
+		enemyTowerDanger = AIB_EnemyTowerDanger,
+		towerThreatening = AIB_TowerActuallyThreatening,
+		alliedCreepsAtTower = AIB_AlliedCreepsAtTower,
+		enemyDeadRecently = AIB_EnemyDeadRecently,
+		healingChannelActive = AIB_HealingChannelActive,
+		nearestAttackableEnemyCreep = AIB_NearestAttackableEnemyCreep,
+		nearestEnemyHero = AIB_NearestEnemyHero,
+		moveToAttackEdge = AIB_MoveToAttackEdgeOf,
+		towardFountain = AIB_TowardFountainFrom,
+		diag = AIB_Diag,
+		blocked = AIB_WantBlocked,
+		state = AIB_State,
+		towerOpportunity = AIB_TowerOpportunity,
+	}
+end
+
 local function AIB_SiegeIntent(dials, rules)
-	local twr = AIB_EnemyTowerDanger()
-	if twr == nil then
-		local midT1 = GetTower(GetOpposingTeam(), TOWER_MID_1)
-		if midT1 ~= nil and midT1:IsAlive() and AIB_AlliedCreepsAtTower(midT1, midT1:GetAttackRange() + 220) >= 2 then
-			twr = midT1
-		end
-	end
-	if twr == nil or AIB_TowerActuallyThreatening(twr) then return false end
-	local cwp = rules.creep_wave_priority or "last_hit_only"
-	local enemy, enemyDist = AIB_NearestEnemyHero(2200)
-	local enemyFarOrWeak = enemy == nil or enemyDist > 1300 or J.GetHP(enemy) < 0.28
-	local waveCount = AIB_AlliedCreepsAtTower(twr, twr:GetAttackRange() + 180)
-	local waveAtTower = waveCount >= 1
-	local strongWaveAtTower = waveCount >= 3
-	local advantageSiege = AIB_EnemyDeadRecently() or (waveAtTower and enemyFarOrWeak)
-	local wantsSiege = cwp == "push" or advantageSiege or (dials.push_desire or 0.5) >= 0.65
-	-- When the enemy is dead the tower is undefended, so keep sieging at lower HP rather than
-	-- aborting and walking off (match 8862431491: pusher bailed mid-window and lost its own tower).
-	local siegeHpFloor = AIB_EnemyDeadRecently() and 0.22 or 0.35
-	if not wantsSiege or J.GetHP(bot) < siegeHpFloor then
-		AIB_WantBlocked("siege", "desire_or_hp", string.format("hp=%.0f adv=%s", J.GetHP(bot) * 100, tostring(advantageSiege)), 5.0)
-		AIB_TowerOpportunity("blocked_desire_or_hp", string.format("wave=%d hp=%.0f adv=%s", waveCount, J.GetHP(bot) * 100, tostring(advantageSiege)), 5.0)
-		return false
-	end
-
-	local alliedTank = false
-	local target = twr:GetAttackTarget()
-	if target ~= nil and target:GetTeam() == GetTeam() then alliedTank = true end
-	if not alliedTank then
-		for _, creep in pairs(nAllyCreeps or {}) do
-			if J.IsValid(creep) and GetUnitToUnitDistance(creep, twr) <= twr:GetAttackRange() + 120 then
-				alliedTank = true; break
-			end
-		end
-	end
-	if not alliedTank then
-		AIB_WantBlocked("siege", "no_allied_tank", string.format("tower=%.0f", GetUnitToUnitDistance(bot, twr)), 5.0)
-		AIB_TowerOpportunity("blocked_no_tank", string.format("wave=%d tower=%.0f", waveCount, GetUnitToUnitDistance(bot, twr)), 5.0)
-		return false
-	end
-
-	local now = DotaTime()
-	local twrDist = GetUnitToUnitDistance(bot, twr)
-	local inTowerAttackRange = twrDist <= (botAttackRange or bot:GetAttackRange()) + 60
-	AIB_State("siege-window", string.format("ttl=2 wave=%d tower=%.0f hp=%.0f adv=%s", waveCount, twrDist, J.GetHP(bot) * 100, tostring(advantageSiege)), 2.0)
-	local safeHealingHit = alliedTank and inTowerAttackRange and J.GetHP(bot) >= (AIB_EnemyDeadRecently() and 0.30 or 0.38)
-	if AIB_HealingChannelActive() and not AIB_EnemyDeadRecently() and not safeHealingHit then
-		AIB_WantBlocked("siege", "healing", string.format("tower=%.0f tank=%s", twrDist, tostring(alliedTank)), 4.0)
-		AIB_TowerOpportunity("blocked_healing", string.format("wave=%d tower=%.0f", waveCount, twrDist), 4.0)
-		return false
-	end
-	if bot.aib_siegeCommitUntil ~= nil and now <= bot.aib_siegeCommitUntil then
-		if twrDist <= (botAttackRange or bot:GetAttackRange()) + 60 then
-			bot:Action_AttackUnit(twr, true)
-			AIB_TowerOpportunity("hit", string.format("phase=commit wave=%d tower=%.0f", waveCount, twrDist), 2.0)
-			AIB_Diag("siege-commit-tower")
-			return true
-		end
-		AIB_TowerOpportunity("step", string.format("phase=commit wave=%d tower=%.0f", waveCount, twrDist), 2.0)
-		return AIB_MoveToAttackEdgeOf(twr, "siege-commit-step", 30)
-	end
-
-	if strongWaveAtTower and (cwp == "push" or AIB_EnemyDeadRecently() or enemyFarOrWeak) then
-		if twrDist <= (botAttackRange or bot:GetAttackRange()) + 60 then
-			bot.aib_siegeCommitUntil = now + 2.2
-			bot:Action_AttackUnit(twr, true)
-			AIB_TowerOpportunity("hit", string.format("phase=wave wave=%d tower=%.0f", waveCount, twrDist), 2.0)
-			AIB_Diag("siege-wave-tower")
-			return true
-		end
-		bot.aib_siegeCommitUntil = now + 2.2
-		AIB_TowerOpportunity("step", string.format("phase=wave wave=%d tower=%.0f", waveCount, twrDist), 2.0)
-		return AIB_MoveToAttackEdgeOf(twr, "siege-wave-step", 20)
-	end
-
-	for _, creep in pairs(nEnemyCreeps or {}) do
-		if J.IsValid(creep) and J.CanBeAttacked(creep)
-			and GetUnitToUnitDistance(bot, creep) <= (botAttackRange or bot:GetAttackRange()) + 40 then
-			bot.aib_siegeCommitUntil = now + 1.6
-			bot:Action_AttackUnit(creep, true)
-			AIB_Diag("siege-creep")
-			return true
-		end
-	end
-	if twrDist <= (botAttackRange or bot:GetAttackRange()) + 60 then
-		bot.aib_siegeCommitUntil = now + 1.6
-		bot:Action_AttackUnit(twr, true)
-		AIB_TowerOpportunity("hit", string.format("phase=default wave=%d tower=%.0f", waveCount, twrDist), 2.0)
-		AIB_Diag("siege-tower")
-		return true
-	end
-	if bot.aib_siegeLast == nil or now - bot.aib_siegeLast >= 1.0 then
-		bot.aib_siegeLast = now
-		bot.aib_siegeCommitUntil = now + 1.6
-		AIB_TowerOpportunity("step", string.format("phase=default wave=%d tower=%.0f", waveCount, twrDist), 2.0)
-		AIB_MoveToAttackEdgeOf(twr, "siege-step", 30)
-	else
-		local pushCreep = AIB_NearestAttackableEnemyCreep((botAttackRange or bot:GetAttackRange()) + 40)
-		if pushCreep ~= nil then
-			bot:Action_AttackUnit(pushCreep, true)
-			AIB_Diag("siege-hold-creep")
-		else
-			AIB_TowerOpportunity("step", string.format("phase=hold wave=%d tower=%.0f", waveCount, twrDist), 2.0)
-			AIB_MoveToAttackEdgeOf(twr, "siege-hold-step", 30)
-		end
-	end
-	return true
+	return AIBLaneSiege.Think(AIB_LaningModuleCtx(dials, rules))
 end
 
 local function AIB_ContactHeroStep(rules)
@@ -1151,67 +1071,12 @@ local function AIB_AbilityPressureStep()
 	return false
 end
 
-local function AIB_DuelStateStep(enemy, dist, phase, hpFloor, approachExtra)
-	if enemy == nil or not enemy:IsAlive() then return false end
-	local range = botAttackRange or bot:GetAttackRange()
-	local hp = J.GetHP(bot)
-	local keyPrefix = (phase == "pregame") and "pg-duel" or "prewave-duel"
-	AIB_State("prewave-duel", string.format("ttl=2 phase=%s dist=%.0f hp=%.0f", phase, dist, hp * 100), 2.0)
-
-	if hp < hpFloor then
-		local back = AIB_TowardFountainFrom(bot:GetLocation(), 260)
-		if back ~= nil then
-			bot:Action_MoveToLocation(back)
-			AIB_Diag(keyPrefix .. "-disengage")
-			return true
-		end
-		AIB_WantBlocked("prewave-duel", "low_hp", string.format("phase=%s dist=%.0f hp=%.0f", phase, dist, hp * 100), 3.0)
-		return false
-	end
-	if AIB_EnemyTowerDanger() ~= nil then
-		AIB_WantBlocked("prewave-duel", "tower", string.format("phase=%s dist=%.0f", phase, dist), 3.0)
-		return false
-	end
-	if dist > range and AIB_UphillMiss(enemy) then
-		AIB_WantBlocked("prewave-duel", "uphill", string.format("phase=%s dist=%.0f", phase, dist), 3.0)
-		return false
-	end
-	if Style.AbilityExecute(bot, enemy) then return true end
-	if Style.AbilityHarass(bot, enemy) then return true end
-
-	if (botAttackRange or bot:GetAttackRange()) > 350 and dist < range * 0.62 and hp < 0.80 then
-		if AIB_MoveToAttackEdgeOf(enemy, keyPrefix .. "-space", 30) then return true end
-	end
-	if dist <= range + 80 then
-		bot:Action_AttackUnit(enemy, false)
-		AIB_Diag(keyPrefix .. "-trade")
-		return true
-	end
-	if hp >= hpFloor + 0.10 and dist <= range + (approachExtra or 300) then
-		return AIB_MoveToAttackEdgeOf(enemy, keyPrefix .. "-approach", 0)
-	end
-	AIB_WantBlocked("prewave-duel", "too_far", string.format("phase=%s dist=%.0f", phase, dist), 3.0)
-	return false
-end
-
 local function AIB_PreWaveDuelStep(rules)
-	local now = DotaTime()
-	if now < 0 or now > 45 then return false end
-	rules = rules or {}
-	if (rules.hero_priority or "default") == "never" then return false end
-	if (rules.pregame_behavior or "default") ~= "aggressive_mid" then return false end
-	local range = botAttackRange or bot:GetAttackRange()
-	local enemy, dist = AIB_NearestEnemyHero(range + 360)
-	return AIB_DuelStateStep(enemy, dist, "post_horn", 0.35, 360)
+	return AIBLaneDuel.Prewave(AIB_LaningModuleCtx(nil, rules))
 end
 
 local function AIB_PregameDuelStep()
-	local rules = GetRules()
-	if (rules.hero_priority or "default") == "never" then return false end
-	if (rules.pregame_behavior or "default") ~= "aggressive_mid" then return false end
-	local range = botAttackRange or bot:GetAttackRange()
-	local enemy, dist = AIB_NearestEnemyHero(range + 420)
-	return AIB_DuelStateStep(enemy, dist, "pregame", 0.42, 420)
+	return AIBLaneDuel.Pregame(AIB_LaningModuleCtx(nil, GetRules()))
 end
 
 local function AIB_PreCreepStandoffStep()

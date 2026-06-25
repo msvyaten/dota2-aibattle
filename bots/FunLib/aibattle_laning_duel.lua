@@ -1,0 +1,74 @@
+-- AIBattle prewave duel state.
+-- Handles the short 1v1 interaction before and just after creeps arrive.
+
+local M = {}
+
+local J = require(GetScriptDirectory()..'/FunLib/jmz_func')
+local Style = require(GetScriptDirectory()..'/FunLib/aibattle_style')
+local AIBUtils = require(GetScriptDirectory()..'/FunLib/aibattle_utils')
+
+local function duelState(ctx, enemy, dist, phase, hpFloor, approachExtra)
+	local bot = ctx.bot
+	if enemy == nil or not enemy:IsAlive() then return false end
+	local range = ctx.attackRange or bot:GetAttackRange()
+	local hp = J.GetHP(bot)
+	local keyPrefix = (phase == "pregame") and "pg-duel" or "prewave-duel"
+	ctx.state("prewave-duel", string.format("ttl=2 phase=%s dist=%.0f hp=%.0f", phase, dist, hp * 100), 2.0)
+
+	if hp < hpFloor then
+		local back = ctx.towardFountain(bot:GetLocation(), 260)
+		if back ~= nil then
+			bot:Action_MoveToLocation(back)
+			ctx.diag(keyPrefix .. "-disengage")
+			return true
+		end
+		ctx.blocked("prewave-duel", "low_hp", string.format("phase=%s dist=%.0f hp=%.0f", phase, dist, hp * 100), 3.0)
+		return false
+	end
+	if ctx.enemyTowerDanger() ~= nil then
+		ctx.blocked("prewave-duel", "tower", string.format("phase=%s dist=%.0f", phase, dist), 3.0)
+		return false
+	end
+	if dist > range and AIBUtils.UphillMiss(bot, enemy) then
+		ctx.blocked("prewave-duel", "uphill", string.format("phase=%s dist=%.0f", phase, dist), 3.0)
+		return false
+	end
+	if Style.AbilityExecute(bot, enemy) then return true end
+	if Style.AbilityHarass(bot, enemy) then return true end
+
+	if range > 350 and dist < range * 0.62 and hp < 0.80 then
+		if ctx.moveToAttackEdge(enemy, keyPrefix .. "-space", 30) then return true end
+	end
+	if dist <= range + 80 then
+		bot:Action_AttackUnit(enemy, false)
+		ctx.diag(keyPrefix .. "-trade")
+		return true
+	end
+	if hp >= hpFloor + 0.10 and dist <= range + (approachExtra or 300) then
+		return ctx.moveToAttackEdge(enemy, keyPrefix .. "-approach", 0)
+	end
+	ctx.blocked("prewave-duel", "too_far", string.format("phase=%s dist=%.0f", phase, dist), 3.0)
+	return false
+end
+
+function M.Prewave(ctx)
+	local now = DotaTime()
+	if now < 0 or now > 45 then return false end
+	local rules = ctx.rules or {}
+	if (rules.hero_priority or "default") == "never" then return false end
+	if (rules.pregame_behavior or "default") ~= "aggressive_mid" then return false end
+	local range = ctx.attackRange or ctx.bot:GetAttackRange()
+	local enemy, dist = ctx.nearestEnemyHero(range + 360)
+	return duelState(ctx, enemy, dist, "post_horn", 0.35, 360)
+end
+
+function M.Pregame(ctx)
+	local rules = ctx.rules or {}
+	if (rules.hero_priority or "default") == "never" then return false end
+	if (rules.pregame_behavior or "default") ~= "aggressive_mid" then return false end
+	local range = ctx.attackRange or ctx.bot:GetAttackRange()
+	local enemy, dist = ctx.nearestEnemyHero(range + 420)
+	return duelState(ctx, enemy, dist, "pregame", 0.42, 420)
+end
+
+return M
