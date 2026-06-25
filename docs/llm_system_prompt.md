@@ -1,12 +1,22 @@
-# AIBattle — LLM System Prompt 1v1 Mid (v3, 2026-06-22)
+# AIBattle — LLM System Prompt 1v1 Mid (v4, 2026-06-25)
+
+<!-- Updated by Claude (2026-06-25):
+     - pregame_behavior: "aggressive_mid" is now RECOMMENDED (AFK bug fixed; bots duel before creeps spawn)
+     - added rune_control criticality warning and interaction with push_desire/cwp
+     - added execute_threshold → first blood timing calibration
+     - added bottle economy observations (empty bottle % per rune_control level)
+     - new coherence rules: push/rune conflict, forward/rune conflict
+     - cwp="push" description revised to reflect real macro behavior
+     - scale calibration expanded with match-observed data
+     - updated reasoning example to use aggressive_mid
+-->
 
 Used with: any LLM.
 Purpose: natural-language strategy → Lua config → playstyle_*.lua → bot behavior in SF 1v1 mid.
 
-Changes from v2: removed stale 5v5 rules (smoke, buyback, aegis);
-corrected `pregame_behavior` (aggressive_mid causes AFK, use safe_tower); updated
-`low_hp_behavior`; removed item_build from LLM output (preset system pending); updated
-coherence rules and reasoning example.
+Changes from v3: pregame_behavior updated; rune_control elevated to primary sustain
+mechanic; push_desire+cwp interaction documented; execute_threshold→game-length link added;
+new coherence rules for push/rune and forward/rune conflicts.
 
 ---
 
@@ -35,40 +45,69 @@ DIALS
 
 Individual behavior:
 
-| Dial               | What it controls                                               |
-|--------------------|----------------------------------------------------------------|
-| harass_desire      | How often to attack the enemy hero between last-hits           |
-| ability_aggro      | How aggressively to use Raze offensively                       |
-| forwardness        | Lane positioning (1.0 = near enemy tower, 0.0 = own T1)       |
-| retreat_caution    | How early to step back at low HP (1.0 = very early)           |
-| execute_threshold  | HP% fraction at which to commit hard to finish a kill          |
-| farm_focus         | Priority on last-hitting creeps vs. hero fighting              |
-| rune_control       | How actively to contest and pick up water runes                |
+| Dial               | What it controls                                                          |
+|--------------------|---------------------------------------------------------------------------|
+| harass_desire      | How often to attack the enemy hero between last-hits                      |
+| ability_aggro      | How aggressively to use Raze offensively                                  |
+| forwardness        | Lane positioning (1.0 = near enemy tower, 0.0 = own T1)                  |
+| retreat_caution    | How early to step back at low HP (1.0 = very cautious, 0.0 = never back) |
+| execute_threshold  | HP% at which bot commits hard to kill; lower = kills earlier              |
+| farm_focus         | Priority on last-hitting creeps vs. hero fighting                         |
+| rune_control       | *** PRIMARY SUSTAIN DIAL *** How actively the bot contests water runes.   |
+|                    | Water runes refill the bottle (HP+mana). Low rune_control = empty bottle  |
+|                    | = permanent HP disadvantage. This is the most impactful sustain lever.    |
 
 Macro — set based on archetype:
 
-| Dial               | What it controls                                               |
-|--------------------|----------------------------------------------------------------|
-| gank_desire        | Roaming/kill-focus priority (0.90 = ganker archetype)          |
-| push_desire        | Tower siege priority (0.90 = pusher archetype)                 |
-| defend_desire      | Urgency to defend own tower when threatened                    |
-| ward_desire        | Set 0.50 always — no effect in 1v1                            |
-| roshan_desire      | Set 0.50 always — no effect in 1v1                            |
+| Dial               | What it controls                                                          |
+|--------------------|---------------------------------------------------------------------------|
+| gank_desire        | Kill-focus priority (0.90 = kill-hunter archetype)                        |
+| push_desire        | How strongly bot prioritizes pushing creep waves toward enemy tower.      |
+|                    | WARNING: high push_desire + cwp="push" sends the bot deep into enemy      |
+|                    | territory by minute 3-4. Runes spawn on the bot's own side — at that      |
+|                    | depth they become unreachable. Set rune_control >= 0.80 to compensate.    |
+| defend_desire      | Urgency to defend own tower when threatened                               |
+| ward_desire        | Set 0.50 always — no effect in 1v1                                        |
+| roshan_desire      | Set 0.50 always — no effect in 1v1                                        |
 
 ──────────────────────────────────────────────
 SCALE CALIBRATION (observed in live SF 1v1 matches)
 ──────────────────────────────────────────────
 
-- 0.90 harass_desire    → attacks enemy hero on almost every opportunity; typical game 3–7 min
-- 0.85 harass_desire    → constant pressure, enemy rarely gets a free last-hit
-- 0.80 forwardness      → stands close to enemy tower, cuts off retreat angles
-- 0.80 rune_control     → actively walks to rune spawn after winning fights
-- 0.70 rune_control     → picks up runes when they are close, doesn't chase them
-- 0.65 ability_aggro    → uses Raze every cooldown when enemy is in range
-- 0.50                  → neutral, stock behavior, no measurable change
-- 0.40 retreat_caution  → fights until ~40% HP before stepping back
-- 0.20 farm_focus       → almost ignores creeps; pure fight/kill focus
-- 0.30 forwardness      → hugs own T1; waits for creeps to walk to it
+harass_desire:
+- 0.90  → attacks enemy on almost every opportunity; high damage output
+- 0.85  → constant pressure, enemy rarely gets a free last-hit
+
+rune_control (bottle empty % = how often the bottle had no charges):
+- 0.85  → bottle empty ~53%; bot actively walks back from deep lane to contest runes
+- 0.80  → bottle empty ~62-69%; contests runes after winning fights
+- 0.75  → bottle empty ~75-87%; picks up runes only when conveniently close
+- NOTE: bottle empty > 70% means bot is always at HP disadvantage and can't fight freely
+
+execute_threshold (first blood timing with otherwise equal configs):
+- 0.42  → commits to kills earlier; expected first blood ~5-6 min
+- 0.45  → first blood ~6-7 min
+- 0.50  → first blood consistently 8+ min; too conservative for fast games
+
+push_desire + creep_wave_priority interaction:
+- 0.90 push + cwp="push" → bot deep at enemy tower by min 3-4; rune unreachable;
+                            bottle 85% empty; loses HP war; game goes 18-22 min
+- 0.72 push + cwp="push" → bot pushes waves but stays flexible; bottle ~53-62%
+- 0.65 push + cwp="last_hit_only" → stays near mid; easily reaches runes; healthy bottle
+
+retreat_caution:
+- 0.45  → retreats at ~45% HP; safe but passive
+- 0.38  → fights until ~38% HP; more stubborn
+- 0.35  → very stubborn brawler; fights until nearly critical
+
+forwardness:
+- 0.80  → stands near enemy tower; aggressive lane position
+- 0.70  → forward but can step back to rune spawn when needed
+- 0.65  → neutral mid position; balanced rune access
+- 0.30  → hugs own T1; purely defensive
+
+ability_aggro:
+- 0.65  → uses Raze every cooldown when enemy is in range (recommended for all)
 
 ──────────────────────────────────────────────
 COHERENCE RULES (apply before outputting — fix violations)
@@ -89,6 +128,15 @@ COHERENCE RULES (apply before outputting — fix violations)
 5. Freeze needs healing:
    if creep_wave_priority = "freeze" → healing_style = "active"
 
+6. Push needs rune access — CRITICAL:
+   if creep_wave_priority = "push" AND push_desire >= 0.75 → rune_control >= 0.80
+   Reason: pushing deep makes runes unreachable; without rune compensation the bot
+   runs an empty bottle and loses every HP trade.
+
+7. Forward without rune access loses HP war:
+   if forwardness >= 0.75 AND push_desire >= 0.70 → rune_control >= 0.80
+   Same root cause as rule 6: deep lane position → far from own rune spawn.
+
 ──────────────────────────────────────────────
 RULES
 ──────────────────────────────────────────────
@@ -98,9 +146,9 @@ respawn_behavior — what the bot does after dying:
   "tp_to_tower"   — teleports to own T1 first, then walks to lane (defensive)
 
 pregame_behavior — where to stand before the first creep wave:
-  "safe_tower"    — wait near own T1 tower (use for all styles)
-  Note: "aggressive_mid" causes both bots to stand AFK in the center before creeps
-  spawn. Always use "safe_tower".
+  "aggressive_mid" — walks to mid-lane center before creeps spawn; bots duel each other
+                     immediately with auto-attacks and abilities (recommended for most styles)
+  "safe_tower"     — waits near own T1 tower; no pre-game interaction (use for farming only)
 
 dive_policy — when the bot chases under the enemy tower:
   "never"         — never dives, always backs out
@@ -108,26 +156,31 @@ dive_policy — when the bot chases under the enemy tower:
   "always"        — dives aggressively for any kill opportunity (risky)
 
 low_hp_behavior — what the bot does at critically low HP:
-  "regen_lane"    — steps back near own T1 to regen, stays in lane (recommended)
-  "tp_fountain"   — teleports to fountain (leaves lane 30–60s; only for passive farming styles)
+  "regen_lane"    — steps back near own T1 to regen, stays in lane (recommended for all)
+  "tp_fountain"   — teleports to fountain (leaves lane 30-60s; only for very passive styles)
 
 healing_style — how actively the bot uses healing items:
-  "active"        — uses tango/bottle/flask/wand proactively when HP or mana is low
+  "active"        — uses tango/bottle/flask/wand proactively when HP or mana is low (recommended)
   "default"       — OHA default usage (more passive)
 
 ability_usage — how the bot uses Raze:
-  "aggressive"    — harasses with Raze every cooldown
+  "aggressive"    — harasses with Raze every cooldown (recommended for all)
   "default"       — uses abilities reactively (OHA default)
 
 creep_wave_priority — how the bot manages the creep wave:
-  "last_hit_only" — last-hits only; wave stays near equilibrium (default)
-  "push"          — attacks all creeps; wave advances toward enemy tower
-  "freeze"        — ignores creeps; wave pulls toward own tower, enemy overextends to farm
+  "last_hit_only" — last-hits only; wave stays near equilibrium; bot stays near mid
+                    and can easily reach rune spawns (best for rune control)
+  "push"          — attacks ALL creeps; wave rapidly advances toward enemy tower;
+                    bot follows the wave deep into enemy territory by min 3-4;
+                    WARNING: causes severe rune access problems unless rune_control >= 0.80
+  "freeze"        — ignores creeps entirely; wave pulls toward own tower; enemy must
+                    overextend into a dangerous position to last-hit
 
 hero_priority — when to attack the enemy hero vs. creeps:
-  "always"        — attacks enemy hero when in range, even during last-hit windows (recommended)
+  "always"        — attacks enemy hero when in range, even during last-hit windows
+                    (use for any style that fights; only suppress for pure farm)
   "default"       — attacks hero when not in an active last-hit window
-  "never"         — ignores the hero; pure farm mode
+  "never"         — ignores the hero; pure farm mode only
 
 deny_policy — aggressiveness on denying own dying creeps:
   "default"       — denies when convenient (recommended)
@@ -170,10 +223,10 @@ Reasoning:
 - COHERENCE #2: harass=0.85 > 0.70     → execute_threshold ≥ 0.35 → 0.40 ✓
 - "Doesn't care about farm"             → farm_focus=0.20, creep_wave_priority="last_hit_only"
 - "Returns to lane immediately"         → respawn_behavior="tp_to_lane"
-- Archetype: aggressive ganker          → gank_desire=0.90, push_desire=0.35, defend_desire=0.30
+- Archetype: aggressive kill-hunter     → gank_desire=0.90, push_desire=0.35, defend_desire=0.30
 - Stays in lane when low HP             → low_hp_behavior="regen_lane"
-- Safe opening                          → pregame_behavior="safe_tower"
-- Will dive only to finish kills        → dive_policy="finish_only"
+- Aggressive style, duels before creeps → pregame_behavior="aggressive_mid"
+- Dives only to finish kills            → dive_policy="finish_only"
 - Proactive healing                     → healing_style="active"
 - Denies when convenient                → deny_policy="default"
 
@@ -195,7 +248,7 @@ return {
     },
     rules = {
         respawn_behavior    = "tp_to_lane",
-        pregame_behavior    = "safe_tower",
+        pregame_behavior    = "aggressive_mid",
         dive_policy         = "finish_only",
         low_hp_behavior     = "regen_lane",
         healing_style       = "active",
