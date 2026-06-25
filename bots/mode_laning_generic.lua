@@ -1322,6 +1322,7 @@ local function ThinkLaningCore(dials, rules)
 	if urgentInterrupt ~= nil then urgentIntents[#urgentIntents + 1] = urgentInterrupt end
 	if AIBEngine.Resolve(urgentIntents, intentCtx) then return end
 
+	if J.GetHP(bot) < 0.35 and AIBSurvive.Think(bot, dials, nEnemyCreeps) then return end
 	if AIB_PreWaveDuelStep(rules) then return end
 	if AIB_PreCreepStandoffStep() then return end
 	if AIB_AbilityPressureStep() then return end

@@ -16,12 +16,6 @@ local function duelState(ctx, enemy, dist, phase, hpFloor, approachExtra)
 	ctx.state("prewave-duel", string.format("ttl=2 phase=%s dist=%.0f hp=%.0f", phase, dist, hp * 100), 2.0)
 
 	if hp < hpFloor then
-		local back = ctx.towardFountain(bot:GetLocation(), 260)
-		if back ~= nil then
-			bot:Action_MoveToLocation(back)
-			ctx.diag(keyPrefix .. "-disengage")
-			return true
-		end
 		ctx.blocked("prewave-duel", "low_hp", string.format("phase=%s dist=%.0f hp=%.0f", phase, dist, hp * 100), 3.0)
 		return false
 	end

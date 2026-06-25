@@ -216,6 +216,9 @@ Recent local commits:
   - siege-window logic moved from `mode_laning_generic.lua` into `FunLib/aibattle_laning_siege.lua`;
   - `mode_laning_generic.lua` should keep moving toward orchestration + sensors, not owning every behavior mode;
   - deploy/check tooling must list every new runtime module, otherwise live Dota can miss required files.
+- Next behavior package in progress:
+  - after killing the enemy, siege can step toward tower even without allied tower tanking, but still will not hit tower under no-tank danger;
+  - prewave duel low-HP disengage no longer consumes the tick; HP below 35% gets a survival chance before duel.
 - `89d2b65 codex: tighten lane decision states` - deployed live; latest behavior package:
   - engine can continue after an intent action explicitly returns `false`;
   - prewave duel is now approach/trade/space/disengage instead of a single attack gate;

@@ -37,6 +37,8 @@ function M.Think(ctx)
 		return false
 	end
 
+	local now = DotaTime()
+	local twrDist = GetUnitToUnitDistance(bot, twr)
 	local alliedTank = false
 	local target = twr:GetAttackTarget()
 	if target ~= nil and target:GetTeam() == GetTeam() then alliedTank = true end
@@ -48,13 +50,17 @@ function M.Think(ctx)
 		end
 	end
 	if not alliedTank then
+		if ctx.enemyDeadRecently() and twrDist > attackRange + 60 then
+			ctx.state("siege-window", string.format("ttl=2 wave=%d tower=%.0f hp=%.0f adv=%s", waveCount, twrDist, J.GetHP(bot) * 100, tostring(advantageSiege)), 2.0)
+			ctx.towerOpportunity("step", string.format("phase=dead_no_tank wave=%d tower=%.0f", waveCount, twrDist), 2.0)
+			ctx.diag("siege-dead-no-tank-step")
+			return ctx.moveToAttackEdge(twr, "siege-dead-no-tank-step", 80)
+		end
 		ctx.blocked("siege", "no_allied_tank", string.format("tower=%.0f", GetUnitToUnitDistance(bot, twr)), 5.0)
 		ctx.towerOpportunity("blocked_no_tank", string.format("wave=%d tower=%.0f", waveCount, GetUnitToUnitDistance(bot, twr)), 5.0)
 		return false
 	end
 
-	local now = DotaTime()
-	local twrDist = GetUnitToUnitDistance(bot, twr)
 	local inTowerAttackRange = twrDist <= attackRange + 60
 	ctx.state("siege-window", string.format("ttl=2 wave=%d tower=%.0f hp=%.0f adv=%s", waveCount, twrDist, J.GetHP(bot) * 100, tostring(advantageSiege)), 2.0)
 	local safeHealingHit = alliedTank and inTowerAttackRange and J.GetHP(bot) >= (ctx.enemyDeadRecently() and 0.30 or 0.38)
