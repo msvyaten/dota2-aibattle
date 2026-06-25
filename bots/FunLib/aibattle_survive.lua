@@ -13,6 +13,7 @@ local FLASK_CD = 3.0   -- laning flask (defensiveHeal); recovery uses aib_recFla
 local BOTTLE_RUNE_MAX_DIST = 1900.0
 local BOTTLE_RUNE_STAGE_MAX_DIST = 3600.0
 local BOTTLE_RUNE_LANE_BUDGET = 1500.0
+local WATER_RECOVERY_RUNE_MAX_DIST = 3600.0
 local RECOVERY_RUNE_MAX_DIST = 3600.0
 local RECOVERY_RUNE_STAGE_MAX_DIST = 4200.0
 
@@ -251,6 +252,21 @@ local function laneFrontDistance(bot)
 	return GetUnitToLocationDistance(bot, front)
 end
 
+local function midContextDistance(bot)
+	local front = GetLaneFrontLocation(bot:GetTeam(), LANE_MID, 0)
+	local t1 = GetTower(bot:GetTeam(), TOWER_MID_1)
+	local best = math.huge
+	if front ~= nil then best = math.min(best, GetUnitToLocationDistance(bot, front)) end
+	if t1 ~= nil and t1:IsAlive() then best = math.min(best, GetUnitToUnitDistance(bot, t1)) end
+	return best
+end
+
+local function waterRecoveryAllowed(bot, hp, mana, dist, forceEmptyBottle)
+	if dist == nil or dist > WATER_RECOVERY_RUNE_MAX_DIST then return false end
+	if not forceEmptyBottle and hp >= 0.65 and mana >= 0.35 then return false end
+	return midContextDistance(bot) <= 2600
+end
+
 local nextBottleRuneSpawn
 
 local function runeMemoryUntil(now)
@@ -429,7 +445,9 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 				local dist = GetUnitToLocationDistance(bot, loc)
 				local runeType = GetRuneType(runeId)
 				local score = dist + ((runeType == RUNE_WATER) and 0 or 350)
-				if dist <= (maxDist or 2600) and score < bestScore then
+				local allowedDist = dist <= (maxDist or 2600)
+					or (runeType == RUNE_WATER and waterRecoveryAllowed(bot, hp, mana, dist, forceEmptyBottle))
+				if allowedDist and score < bestScore then
 					bestRune, bestLoc, bestDist, bestScore = runeId, loc, dist, score
 				end
 			end
@@ -519,7 +537,7 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 				return true
 			end
 		end
-		Style.Blocked(bot, diagKey, "no_close_rune", string.format("max=%.0f", maxDist or 2600), 8.0)
+		Style.Blocked(bot, diagKey, "no_close_rune", string.format("max=%.0f water=%.0f", maxDist or 2600, WATER_RECOVERY_RUNE_MAX_DIST), 8.0)
 		return false
 	end
 
@@ -914,15 +932,27 @@ local function recovery(bot, dials, nEnemyCreeps)
 
 	-- d. Water rune (regen_lane only)
 	if behavior == "regen_lane" then
+		local now = DotaTime()
+		local bestRune, bestLoc, bestDist = nil, nil, math.huge
 		for _, runeId in ipairs({ RUNE_POWERUP_1, RUNE_POWERUP_2 }) do
-			if GetRuneStatus(runeId) == RUNE_STATUS_AVAILABLE and GetRuneType(runeId) == RUNE_WATER then
-				if bot.aib_recMoveLast == nil or DotaTime() - bot.aib_recMoveLast >= 5.0 then
-					recoveryPlan(bot, "water_rune", "regen_lane", string.format("hp=%.0f mana=%.0f", hp*100, mana*100), 2.0)
-					bot.aib_recMoveLast = DotaTime(); Style.Diag(bot, "recovery-rune")
-					bot:Action_MoveToLocation(GetRuneSpawnLocation(runeId))
+			if GetRuneStatus(runeId) == RUNE_STATUS_AVAILABLE and GetRuneType(runeId) == RUNE_WATER
+				and not isRuneKnownEmpty(bot, runeId, now) then
+				local loc = GetRuneSpawnLocation(runeId)
+				local dist = loc ~= nil and GetUnitToLocationDistance(bot, loc) or math.huge
+				if waterRecoveryAllowed(bot, hp, mana, dist, false) and dist < bestDist then
+					bestRune, bestLoc, bestDist = runeId, loc, dist
 				end
-				return true
 			end
+		end
+		if bestLoc ~= nil then
+			if bot.aib_recMoveLast == nil or now - bot.aib_recMoveLast >= 5.0 then
+				recoveryPlan(bot, "water_rune", "regen_lane", string.format("hp=%.0f mana=%.0f dist=%.0f", hp*100, mana*100, bestDist), 2.0)
+				bot.aib_recMoveLast = now; Style.Diag(bot, "recovery-rune")
+				bot:Action_MoveToLocation(bestLoc)
+			end
+			return true
+		else
+			recoveryPlan(bot, "water_rune", "blocked", string.format("hp=%.0f mana=%.0f", hp*100, mana*100), 4.0)
 		end
 	end
 
