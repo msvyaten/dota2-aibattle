@@ -935,6 +935,14 @@ end
 local function AIB_CriticalRecoveryLockStep()
 	local now = DotaTime()
 	local hp = J.GetHP(bot)
+	local powerRune = AIBEngine.PowerRuneState(bot)
+	local combatRune = powerRune == "double_damage" or powerRune == "haste" or powerRune == "arcane"
+	if combatRune and hp >= 0.30 then
+		bot.aib_criticalRecoverUntil = nil
+		bot.aib_criticalRecoverDest = nil
+		Style.Intent(bot, "critical-recovery", string.format("reason=power_rune_yield rune=%s hp=%.0f", powerRune, hp * 100), 2.0)
+		return false
+	end
 	if hp >= 0.34 then
 		bot.aib_criticalRecoverUntil = nil
 		bot.aib_criticalRecoverDest = nil
