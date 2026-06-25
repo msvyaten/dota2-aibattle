@@ -1027,7 +1027,7 @@ local function AIB_VisualHoldHeartbeatStep()
 			if AIB_MoveToAttackEdgeOf(twr, "visual-hold-tower-step", 30) then return true end
 		end
 	end
-	if enemy ~= nil and J.GetHP(bot) >= 0.35
+	if reason == "hero_in_range" and enemy ~= nil and J.GetHP(bot) >= 0.35
 		and AIB_EnemyTowerDanger() == nil and not AIB_UphillMiss(enemy) then
 		if enemyDist <= range + 80 then
 			bot:Action_AttackUnit(enemy, false)
