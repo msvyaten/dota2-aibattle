@@ -1,8 +1,8 @@
 # AIBattle Current State
 
-Last updated by Codex on 2026-06-24 after match `8865079476` and the debug-tree tooling pass.
-Current live bot build: `c7a5874`.
-Current repo HEAD: `7284fbf` (`tools/` only after live deploy; bot behavior still matches `c7a5874`).
+Last updated by Codex on 2026-06-25 during the behavior/infrastructure follow-up.
+Current live bot build before the next deploy: `c7a5874`.
+Current repo HEAD before this work: `84e2937`.
 
 ## Goal
 
@@ -64,9 +64,18 @@ Combat / hero:
 - `channel-interrupt-chase`
 - `damage-unstuck`
 - `creep-hit-react-atk`
-- `creep-hit-react-kite`
+- `creep-hit-react-force-atk`
+- `creep-hit-react-back`
 - `harass-atk`
 - `kill-priority`
+- `pg-duel-approach`
+- `pg-duel-trade`
+- `pg-duel-space`
+- `pg-duel-disengage`
+- `prewave-duel-approach`
+- `prewave-duel-trade`
+- `prewave-duel-space`
+- `prewave-duel-disengage`
 
 Creeps / lane:
 - `cs-inrange`
@@ -201,6 +210,12 @@ use `deploy.bat playstyle` or `deploy.bat all`. Match `8864152947` showed this t
 ## Latest State
 
 Recent local commits:
+- Next behavior package in progress:
+  - engine can continue after an intent action explicitly returns `false`;
+  - prewave duel is now approach/trade/space/disengage instead of a single attack gate;
+  - creep-damage response uses forced attack or short back-step instead of long kite;
+  - close rune commit has a wider pickup range and no random hold offset;
+  - siege hold now attacks nearby creeps or keeps stepping toward tower instead of doing no visible action.
 - `7284fbf codex: add debug desire tree to match stats` - tooling only, not deployed to Dota.
 - `c7a5874 codex: restore pregame duel state metrics` - deployed live; restores pregame duel inside `ThinkPregame`.
 - `06a45db codex: make recovery and siege lane-aware` - deployed before `c7a5874`.
@@ -223,12 +238,13 @@ What `7284fbf` added:
 - Existing detailed `diag:`, `intent:`, `blocked:`, timeline, farmtrace, bottle, stationary output remains unchanged.
 
 Open code candidates:
-- Build the real laning arbiter for `fight / cs / rune / recover / push`.
+- Build the full laning arbiter for `fight / cs / rune / recover / push` once the current smaller behavior
+  package has one match of evidence.
 - Make `prewave_duel` a small state machine: approach -> trade -> keep range -> disengage.
-- Make creep-damage response a short forced response, not a long kite.
-- Lock close rune commits so a bot does not turn away at 350-500u without a strong reason.
-- Make siege-with-wave always produce a useful action when allied creeps tank tower.
-- Add config drift checks for `Customize/canonical_*.lua` and `Customize/playstyle_*.lua`.
+- If close rune turns still happen, add a stricter sub-500u rune lock that ignores lane work except critical danger.
+- If siege still stalls, promote tower/creep attack under allied tank into the macro arbiter.
+- Keep using `check_all.py` live drift checks for `Customize/canonical_*.lua` and `Customize/playstyle_*.lua`
+  after any config/playstyle deploy.
 
 ## Current Debug Philosophy
 

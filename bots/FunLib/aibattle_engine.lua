@@ -61,9 +61,12 @@ function M.Resolve(intents, ctx)
 						tostring(intent.name), tostring(intent.priority or 0), table.concat(losers, ",")), 1.5)
 				end
 				Style.Intent(bot, intent.name, intentDetail(intent), intent.sec)
-				intent.action(ctx)
-				if ctx ~= nil then ctx.last_intent = intent.name end
-				return true, intent.name
+				local handled = intent.action(ctx)
+				if handled ~= false then
+					if ctx ~= nil then ctx.last_intent = intent.name end
+					return true, intent.name
+				end
+				Style.Blocked(bot, intent.name, "empty_action", intent.detail, intent.sec)
 			end
 		end
 	end

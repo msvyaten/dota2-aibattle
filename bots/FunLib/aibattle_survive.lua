@@ -358,7 +358,7 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 			return false
 		end
 		local targetDist = GetUnitToLocationDistance(bot, bot.aib_bottleRuneTarget)
-		if bot.aib_bottleRuneId ~= nil and targetDist <= 260 then
+		if bot.aib_bottleRuneId ~= nil and targetDist <= 420 then
 			recoveryPlan(bot, "rune", "pickup", string.format("source=%s dist=%.0f", diagKey, targetDist), 1.0)
 			stateIntent(bot, "rune-commit", string.format("source=%s ttl=30 reason=pickup dist=%.0f", diagKey, targetDist), 1.0)
 			runeResult(bot, diagKey, "pickup_attempt", string.format("dist=%.0f age=%.0f", targetDist, now - bot.aib_bottleRuneStarted), 2.0)
@@ -370,7 +370,7 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 			end
 			return true
 		end
-		if targetDist > 90 then
+		if targetDist > 120 then
 			recoveryPlan(bot, "rune", "commit", string.format("source=%s dist=%.0f", diagKey, targetDist), 2.0)
 			stateIntent(bot, "rune-commit", string.format("source=%s ttl=30 reason=commit dist=%.0f", diagKey, targetDist), 2.0)
 			Style.Intent(bot, diagKey, string.format("dist=%.0f age=%.0f reason=commit", targetDist, now - bot.aib_bottleRuneStarted), 2.0)
@@ -380,7 +380,7 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 		recoveryPlan(bot, "rune", "hold", string.format("source=%s dist=%.0f", diagKey, targetDist), 1.0)
 		stateIntent(bot, "rune-commit", string.format("source=%s ttl=30 reason=hold dist=%.0f", diagKey, targetDist), 1.0)
 		Style.Intent(bot, diagKey, string.format("dist=%.0f age=%.0f reason=hold", targetDist, now - bot.aib_bottleRuneStarted), 1.0)
-		bot:Action_MoveToLocation(bot.aib_bottleRuneTarget + RandomVector(25))
+		bot:Action_MoveToLocation(bot.aib_bottleRuneTarget)
 		return true
 	end
 	if bot.aib_bottleRuneStarted ~= nil then
@@ -417,17 +417,17 @@ local function seekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 				if bot.aib_bottleRuneStageUntil ~= nil and now <= bot.aib_bottleRuneStageUntil
 					and bot.aib_bottleRuneStageTarget ~= nil then
 					local followDist = GetUnitToLocationDistance(bot, bot.aib_bottleRuneStageTarget)
-					if followDist > 90 and (bot.aib_bottleRuneStageFollowLast == nil or now - bot.aib_bottleRuneStageFollowLast >= 1.0) then
+					if followDist > 120 and (bot.aib_bottleRuneStageFollowLast == nil or now - bot.aib_bottleRuneStageFollowLast >= 1.0) then
 						bot.aib_bottleRuneStageFollowLast = now
 						recoveryPlan(bot, "rune_stage", "follow", string.format("source=%s dist=%.0f eta=%.0f", diagKey, followDist, secsToSpawn), 1.5)
 						stateIntent(bot, "rune-commit", string.format("source=%s ttl=%.0f reason=stage_follow dist=%.0f", diagKey, math.max(0, secsToSpawn), followDist), 1.5)
 						bot:Action_MoveToLocation(bot.aib_bottleRuneStageTarget)
 						return true
 					end
-					if followDist <= 90 then
+					if followDist <= 120 then
 						recoveryPlan(bot, "rune_stage", "hold", string.format("source=%s dist=%.0f eta=%.0f", diagKey, followDist, secsToSpawn), 1.5)
 						stateIntent(bot, "rune-commit", string.format("source=%s ttl=%.0f reason=stage_hold dist=%.0f", diagKey, math.max(0, secsToSpawn), followDist), 1.5)
-						bot:Action_MoveToLocation(bot.aib_bottleRuneStageTarget + RandomVector(20))
+						bot:Action_MoveToLocation(bot.aib_bottleRuneStageTarget)
 						return true
 					end
 				end

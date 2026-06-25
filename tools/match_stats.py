@@ -516,7 +516,9 @@ def debug_tree_lines(side, diag, intents, blocked, alerts):
     fight_states = _intent_counts(intents, ["state-prewave-duel"], side)
     fight_actions = _side_counts(diag, [
         "pg-duel", "pg-duel-uphill", "pg-duel-step",
+        "pg-duel-approach", "pg-duel-trade", "pg-duel-space", "pg-duel-disengage",
         "prewave-duel", "prewave-duel-uphill", "prewave-duel-step",
+        "prewave-duel-approach", "prewave-duel-trade", "prewave-duel-space", "prewave-duel-disengage",
         "ability-harass", "execute", "execute-approach",
         "hero-contact-atk", "hero-contact-chase", "hero-pass-atk", "hero-pass-chase",
         "kill-lock-atk", "channel-interrupt-atk", "channel-interrupt-chase",
@@ -576,6 +578,7 @@ def debug_tree_lines(side, diag, intents, blocked, alerts):
         "cs-watchdog-atk", "cs-watchdog-step", "deny-act",
         "creep-dmg", "creep-aggro-back", "creep-aggro-hit",
         "creep-hit-react-atk", "creep-hit-react-kite", "creep-hit-react-step",
+        "creep-hit-react-force-atk", "creep-hit-react-back",
         "fwd-position", "fwd-at-position", "fwd-hold",
         "fwd-suppressed-hero", "fwd-suppressed-creep", "fwd-suppressed-lowhp",
         "visual-hold",
