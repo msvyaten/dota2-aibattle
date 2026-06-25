@@ -249,6 +249,7 @@ Recent local commits:
   - rune staging remembers completed/blocked spawn windows via `stage_cooldown`;
   - empty bottle with healthy HP/MP emits `empty-bottle-ok` instead of repeatedly planning lane recovery;
   - creep-damage relief, creep-hit-react, and damage-unstuck share short cooldowns to reduce action conflicts.
+- `lane_override` chase is conservative: max ~950u, enemy HP <=62%, and requires hero-priority always or a strong HP advantage.
 - `89d2b65 codex: tighten lane decision states` - deployed live; latest behavior package:
   - engine can continue after an intent action explicitly returns `false`;
   - prewave duel is now approach/trade/space/disengage instead of a single attack gate;

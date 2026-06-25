@@ -1723,9 +1723,10 @@ local function ThinkLaningCore(dials, rules)
 					local closeVisibleChase = chaseDist <= 900
 						and J.GetHP(bot) >= 0.52
 						and chaseSafe
-					local laneOverrideChase = chaseDist <= 1180
+					local laneOverrideChase = chaseDist <= 950
 						and J.GetHP(bot) >= 0.58
-						and J.GetHP(chase[1]) <= 0.78
+						and J.GetHP(chase[1]) <= 0.62
+						and ((rules.hero_priority or "default") == "always" or J.GetHP(bot) >= J.GetHP(chase[1]) + 0.15)
 						and chaseSafe
 						and (not creepNear or not csAllowed)
 					if hpAdvChase or killPressureChase or closeVisibleChase or laneOverrideChase or (chaseDist <= 950 and not csAllowed and not creepNear) then
