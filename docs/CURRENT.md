@@ -1,8 +1,9 @@
 # AIBattle Current State
 
-Last updated by Codex on 2026-06-25 during the laning architecture cleanup.
-Current live bot build before the next deploy: `89d2b65`.
-Current repo HEAD before this work: `89d2b65`.
+Last updated by Codex on 2026-06-25 after the fight/recovery/rune gate cleanup.
+Current live bot build: `82b4929`.
+Current repo HEAD: `82b4929`.
+Codex-specific compact memory: `docs/CODEX_MEMORY.md`.
 
 ## Goal
 
@@ -16,21 +17,30 @@ Make the 1v1 mid bot watchable and debuggable:
 The active laning loop is intentionally small:
 
 1. Respawn / pregame / tower-dive guards.
-2. Urgent intent arbitration before survival:
+2. Urgent intent arbitration before survival (`arbiter family=urgent`):
    - `kill-lock`
    - `channel-interrupt`
-3. Low-HP survival if health is dangerous.
-4. `hero-contact`: point-blank enemy hero response before visual-AFK and normal intents.
-5. Normal intent arbitration:
+3. Recovery gates use `AIBEngine.RecoveryPolicy` / `KillWindow` before consuming the tick:
+   - emergency survival below true death HP;
+   - `recovery-yield-kill` when execute / attack kill / mutual-low window is commit-safe;
+   - `recovery-policy action=recover` when survival owns the tick.
+4. `critical-recovery` lock, but active DD/Haste/Arcane or a valid kill window can clear it.
+5. Prewave duel and pre-creep standoff:
+   - `prewave-duel-*`;
+   - `precreep-contact`;
+   - `precreep-close`;
+   - `precreep-space`.
+6. Ability and power-rune pressure:
+   - `ability-pressure`;
+   - `rune-pressure`.
+7. Visual-hold / visual-AFK / contact / creep-hit / damage-unstuck guards.
+8. Low-HP safe last-hit can fire before normal recovery if the creep is already in range.
+9. Normal fight intent arbitration (`arbiter family=fight`):
    - `creep-aggro`
    - `channel-interrupt`
    - `hero-pass`
-6. Early ability pressure (`AbilityExecute` / `AbilityHarass`) before normal hero contact.
-7. Last-hit, survival, emergency retreat, kill-priority, harass, CS-walk, push/deny/siege.
-8. Last-hit watchdog, ranged melee-pack spacing, and visual-hold heartbeat.
-9. Ability execute/harass still also exists later as a secondary chance.
-10. Final positioning via one forwardness action: `fwd-position`, rate-limited by `fwd-hold`.
-11. Visual-AFK watchdog only after normal combat/creep/positioning had a chance to act.
+10. Last-hit, survival, emergency retreat, kill-priority, harass, CS-walk, push/deny/siege.
+11. Last-hit watchdog, ranged melee-pack spacing, and final positioning via `fwd-position`.
 12. Last-resort `AntiIdleGlobal`.
 
 ## Removed From Active Laning
@@ -49,6 +59,8 @@ These old active fallback layers should not return to `mode_laning_generic.lua`:
 ## Normal Diag Keys
 
 Combat / hero:
+- `arbiter family=urgent`
+- `arbiter family=fight`
 - `ability-harass`
 - `ability-harass-move`
 - `execute`
@@ -60,6 +72,8 @@ Combat / hero:
 - `hero-pass-chase`
 - `kill-lock-atk`
 - `kill-lock-chase`
+- `mutual-low-finish-atk`
+- `mutual-low-finish-chase`
 - `channel-interrupt-atk`
 - `channel-interrupt-chase`
 - `damage-unstuck`
@@ -76,6 +90,9 @@ Combat / hero:
 - `prewave-duel-trade`
 - `prewave-duel-space`
 - `prewave-duel-disengage`
+- `precreep-close`
+- `precreep-contact`
+- `precreep-space`
 
 Creeps / lane:
 - `cs-inrange`
@@ -121,11 +138,20 @@ Last resort:
 Recovery / runes:
 - `bottle-rune`
 - `recovery-rune-bottle`
+- `recovery-policy`
+- `recovery-yield-kill`
+- `critical-recovery`
+- `critical-recover-lock`
+- `power-rune-yield`
 - `recovery-regen`
 - `recovery-walk`
 - `recovery-wait`
 - `fountain-wait`
 - `fountain-tp-lane`
+- `rune-transaction`
+- `rune-result`
+- `rune-stage-override`
+- `rune-pressure`
 
 ## Regression Signals
 
@@ -141,7 +167,10 @@ Bad signs in a fresh match:
 - `hero-prio-chase` blocked mostly by `lane_work` even when the enemy is close and bot has HP advantage.
 - `visual-hold empty` accumulating without `visual-hold-lane`.
 - Bottle empty above ~70% of telemetry samples with repeated `no_close_rune`.
+- Bottle empty above ~70% with repeated `stage_cooldown`; after `82b4929`, water rune emergency should emit `rune-stage-override`.
 - `enemy-healed-without-interrupt` alerts.
+- Deaths shortly after `channel-interrupt-chase`; after `82b4929`, chase interrupt requires at least 32% HP for healing targets.
+- `recovery-policy yield_kill` against enemies above ~60% HP; after `82b4929`, low-farm Brawler recovery bypass should no longer treat 78% HP as a kill window.
 
 Expected on old matches:
 - Old matches can still show removed keys because their logs were produced by older builds.
@@ -210,6 +239,27 @@ use `deploy.bat playstyle` or `deploy.bat all`. Match `8864152947` showed this t
 ## Latest State
 
 Recent local commits:
+- `82b4929 codex: tighten rune and chase gates` - deployed live and pushed:
+  - `stage_cooldown` can yield to `rune-stage-override reason=water_emergency` for water rune recovery when the bottle is empty and the bot is in mid context;
+  - empty-bottle duration is tracked via `aib_emptyBottleSince`;
+  - low-farm Brawler kill-window was tightened from enemy HP <=78% to <=60%;
+  - `channel-interrupt-chase` for healing targets now needs at least 32% self HP.
+- `2b005e7 codex: add fight recovery arbiter` - deployed live and pushed:
+  - `AIBEngine.KillWindow` is the shared fight/recovery kill-window source;
+  - `AIBEngine.RecoveryPolicy` decides when recovery yields to execute / attack kill / mutual-low windows;
+  - `AIBLaneTrade.KillLock` now consumes engine kill windows instead of owning separate killability logic;
+  - `AIBEngine.Resolve` logs `arbiter family=urgent|fight|generic`;
+  - bottle rune logic emits `rune-transaction` for start/commit/pickup/retarget/stage phases;
+  - pre-creep standoff now uses `precreep-close` instead of holding when an enemy is nearby but not yet attackable.
+- `12d0d5b codex: prioritize finishing fights` - deployed live and pushed:
+  - mango mana check uses 75 mana, not 100;
+  - haste chase policy is wider;
+  - mutual-low finish and recovery-yield-to-kill were added before the shared engine refactor.
+- Config/playstyle files are Claude-owned for now. Codex should not stage or commit:
+  - `bots/Customize/canonical_ganker.lua`
+  - `bots/Customize/canonical_pusher.lua`
+  - `bots/Customize/playstyle_radiant.lua`
+  - `bots/Customize/playstyle_dire.lua`
 - Current architecture package in progress:
   - no intentional behavior changes;
   - prewave/pregame duel logic moved from `mode_laning_generic.lua` into `FunLib/aibattle_laning_duel.lua`;
