@@ -29,6 +29,7 @@ Top-level arbiter pass:
 - Recovery is no longer a fixed sequential owner before fight/safety/siege; it competes by score and can fall through if its action yields.
 - `match_stats.py` prints `arbiter[R/D]` summaries: winners, active desire states, empty actions, and simple desire loops.
 - Arbiter auto-audit flags: recover dominance during lane contact, power-rune wins that only hit creeps, safety wins while damage continues, siege wins without tower hits, and top-arbiter `empty_action`.
+- Use `python tools/match_stats.py --brief <matchid>` for the first pass: it hides raw `diag/intent/blocked/timeline` noise but keeps configs, duration, intent families, alerts, state/tower/arbiter summaries, fix candidates, flow, bottle, stationary spans, and score/items.
 - Next match watch: `arbiter[R/D] winner ...`, `fix_candidate area=arbiter`, and whether `tick-owner stage=laning-core` drops in favor of detailed `desire/*`.
 
 Post-match fixes from `8867661051`:

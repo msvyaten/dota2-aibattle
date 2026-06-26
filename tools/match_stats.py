@@ -956,6 +956,14 @@ def print_fix_candidates(candidates, limit=8):
         print(f"  fix_candidate:+{len(candidates) - limit} more")
 
 
+def print_intent_families(intents):
+    for side in ["R", "D"]:
+        fam = intent_family_counts(intents, side)
+        if fam:
+            parts = [f"{k}={v}" for k, v in sorted(fam.items())]
+            print(f"  intent_family[{side}]: " + " ".join(parts))
+
+
 def alert_symptoms(diag, telemetry, intents, blocked, items, action_events):
     alerts = []
     for side in ["R", "D"]:
@@ -1039,6 +1047,8 @@ def main():
     parser.add_argument("matchids", nargs="*", help="Match IDs to analyze")
     parser.add_argument("--latest", action="store_true", help="Analyze the newest console.<id>.log")
     parser.add_argument("--live", action="store_true", help="Print live deployed AIBattle build sha")
+    parser.add_argument("--brief", action="store_true",
+                        help="Hide raw diag/intent/blocked/timeline sections; keep match summary, alerts, arbiter, and fix candidates")
     parser.add_argument("--window", nargs=2, type=int, metavar=("START", "END"),
                         help="Show the full event timeline for seconds START..END (no mid truncation)")
     args = parser.parse_args()
@@ -1100,40 +1110,42 @@ def main():
 
         # Per-minute rates use actual game time, not total duration.
         rate_min = game_s / 60 if game_s else (dur_f / 60 if dur_f else None)
-
-        for key in sorted(diag):
-            sides = " ".join(f"{s}#{n}" for s, n in sorted(diag[key].items()))
-            print("  diag:", key, sides)
-        for name in sorted(intents):
-            chunks = []
-            for side, entry in sorted(intents[name].items()):
-                last = f" last({entry['last']})" if entry["last"] else ""
-                chunks.append(f"{side}#{entry['count']}{last}")
-            print("  intent:", name, " ".join(chunks))
-        for side in ["R", "D"]:
-            fam = intent_family_counts(intents, side)
-            if fam:
-                parts = [f"{k}={v}" for k, v in sorted(fam.items())]
-                print(f"  intent_family[{side}]: " + " ".join(parts))
-        for name in sorted(blocked):
-            chunks = []
-            for side, reasons in sorted(blocked[name].items()):
-                reason_bits = []
-                for reason, entry in sorted(reasons.items()):
-                    last = f" last({entry['last']})" if entry["last"] else ""
-                    reason_bits.append(f"{reason}#{entry['count']}{last}")
-                chunks.append(f"{side}[" + ", ".join(reason_bits) + "]")
-            print("  blocked:", name, " ".join(chunks))
         alerts = alert_symptoms(diag, telemetry, intents, blocked, items, action_events)
+        candidates = fix_candidates(diag, telemetry, intents, blocked, items, action_events, players, game_s)
+
+        if args.brief:
+            print("  brief: raw diag/intent/blocked/timeline hidden; rerun without --brief for full trace")
+        else:
+            for key in sorted(diag):
+                sides = " ".join(f"{s}#{n}" for s, n in sorted(diag[key].items()))
+                print("  diag:", key, sides)
+            for name in sorted(intents):
+                chunks = []
+                for side, entry in sorted(intents[name].items()):
+                    last = f" last({entry['last']})" if entry["last"] else ""
+                    chunks.append(f"{side}#{entry['count']}{last}")
+                print("  intent:", name, " ".join(chunks))
+        print_intent_families(intents)
+        if not args.brief:
+            for name in sorted(blocked):
+                chunks = []
+                for side, reasons in sorted(blocked[name].items()):
+                    reason_bits = []
+                    for reason, entry in sorted(reasons.items()):
+                        last = f" last({entry['last']})" if entry["last"] else ""
+                        reason_bits.append(f"{reason}#{entry['count']}{last}")
+                    chunks.append(f"{side}[" + ", ".join(reason_bits) + "]")
+                print("  blocked:", name, " ".join(chunks))
         for alert in alerts:
             print("  alert:", alert)
         print_state_metrics(diag, intents)
         print_tower_opportunities(diag, intents, blocked)
         print_arbiter_metrics(intents, blocked, action_events)
-        print_debug_tree(diag, intents, blocked, alerts)
+        if not args.brief:
+            print_debug_tree(diag, intents, blocked, alerts)
         for verdict in verdicts(diag, telemetry):
             print("  verdict:", verdict)
-        print_fix_candidates(fix_candidates(diag, telemetry, intents, blocked, items, action_events, players, game_s))
+        print_fix_candidates(candidates)
         def _pk(idx, key):
             return int(players[idx].get(key) or 0) if idx < len(players) else 0
         score = (_pk(0, "kills"), _pk(0, "deaths"), _pk(1, "kills"), _pk(1, "deaths"))
@@ -1141,13 +1153,14 @@ def main():
                            max((int(p.get('kills') or 0) for p in players), default=0) >= 2, score)
         if flow:
             print("  flow:", flow)
-        for side in ["R", "D"]:
-            if timeline.get(side):
-                print(f"  timeline[{side}]: " + " | ".join(timeline[side]))
-        for side in ["R", "D"]:
-            ft = farm_trace(telemetry.get(side, []))
-            if ft:
-                print(f"  farmtrace[{side}]: {ft}")
+        if not args.brief:
+            for side in ["R", "D"]:
+                if timeline.get(side):
+                    print(f"  timeline[{side}]: " + " | ".join(timeline[side]))
+            for side in ["R", "D"]:
+                ft = farm_trace(telemetry.get(side, []))
+                if ft:
+                    print(f"  farmtrace[{side}]: {ft}")
         for side in ["R", "D"]:
             bs = bottle_summary(telemetry.get(side, []))
             if bs:
@@ -1161,7 +1174,7 @@ def main():
                     shown.append(f"{start['t']:.0f}-{end['t']:.0f}s({dur_span:.0f}s)@{end['loc'][0]:.0f},{end['loc'][1]:.0f}")
                 more = f" +{len(spans)-5} more" if len(spans) > 5 else ""
                 print(f"  stationary[{side}]: " + "; ".join(shown) + more)
-        if pg_locs:
+        if pg_locs and not args.brief:
             print(f"  pregame positions ({len(pg_locs)} snapshots, every ~3s):")
             for p in pg_locs:
                 if p["no_enm"]:

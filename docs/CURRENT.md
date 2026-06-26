@@ -86,6 +86,14 @@ Intent telemetry keeps the old `intent=<specific-name>` format and adds `family=
 It also prints conservative `fix_candidate` advisory lines when match data shows a likely behavior bug. These are evidence-backed hints, not automatic fixes.
 For the top-level laning arbiter, `match_stats.py` additionally prints `arbiter[R/D]` with winner counts, desire state counts, simple desire loops, and `empty_action` counts. Arbiter-specific `fix_candidate` lines call out recover dominance, power-rune creep-only pressure, safety that does not stop damage, siege without tower hits, and winner actions that returned empty.
 
+For a quick first pass, use:
+
+```bat
+python tools\match_stats.py --brief <matchid>
+```
+
+Brief mode hides raw `diag`, `intent`, `blocked`, timeline, farmtrace, and pregame-position dumps, while keeping the parts usually needed for a match read: configs, duration, intent families, alerts, state/tower/arbiter summaries, fix candidates, flow, bottle/stationary summaries, and final player rows.
+
 Combat / hero:
 - `arbiter family=urgent`
 - `arbiter family=fight`

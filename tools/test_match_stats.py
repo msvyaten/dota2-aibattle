@@ -178,6 +178,17 @@ def test_desire_loop_counts_detects_aba_loops():
     }
 
 
+def test_print_intent_families_keeps_brief_summary(capsys):
+    intents = {
+        "hero-contact": {"R": {"count": 1, "last": "", "fields": {"family": {"fight": 1}}}},
+        "recovery-plan": {"R": {"count": 2, "last": "", "fields": {"family": {"recover": 2}}}},
+    }
+    m.print_intent_families(intents)
+    out = capsys.readouterr().out
+    assert "intent_family[R]:" in out
+    assert "fight=1" in out and "recover=2" in out
+
+
 def test_debug_tree_groups_state_action_block_and_symptom():
     diag = {
         "pg-duel": {"R": 2},
