@@ -38,6 +38,8 @@ end
 -- AIBattle Schema v2: shared loader (dials + rules), with safe defaults/clamping.
 local Style   = require(GetScriptDirectory()..'/FunLib/aibattle_style')
 local AIBEngine = require(GetScriptDirectory()..'/FunLib/aibattle_engine')
+local AIBConst = require(GetScriptDirectory()..'/FunLib/aibattle_constants')
+local AIBLaningContext = require(GetScriptDirectory()..'/FunLib/aibattle_laning_context')
 local _buildOk, AIBBuild = pcall(require, GetScriptDirectory()..'/FunLib/aibattle_build')
 if not _buildOk then AIBBuild = { sha = "unknown" } end
 local _healOk, _healResult = pcall(require, GetScriptDirectory()..'/FunLib/aibattle_survive')
@@ -46,6 +48,7 @@ local AIBLaneSurvival = require(GetScriptDirectory()..'/FunLib/aibattle_laning_s
 local AIBLaneTrade = require(GetScriptDirectory()..'/FunLib/aibattle_laning_trade')
 local AIBLaneSiege = require(GetScriptDirectory()..'/FunLib/aibattle_laning_siege')
 local AIBLaneDuel = require(GetScriptDirectory()..'/FunLib/aibattle_laning_duel')
+local AIBLaneCreeps = require(GetScriptDirectory()..'/FunLib/aibattle_laning_creeps')
 
 local function AIB_ClearRecoveryState()
 	if AIBSurvive.Reset ~= nil then
@@ -71,11 +74,11 @@ local function GetRules() return Style.Get().rules end
 -- carries the cumulative totals. (print() is invisible in console.log, so chat is the only
 -- logging channel - keep it sparse.)
 local AIB_SIDE = (bot:GetTeam() == TEAM_RADIANT) and "R" or "D"
-local AIB_VISUAL_AFK_SECONDS = 3.5
-local AIB_VISUAL_AFK_DISTANCE = 90.0
-local AIB_VISUAL_HOLD_SECONDS = 2.0
-local AIB_VISUAL_HOLD_DISTANCE = 55.0
-local AIB_RUNE_COMMIT_SECONDS = 30.0
+local AIB_VISUAL_AFK_SECONDS = AIBConst.Visual.afkSeconds
+local AIB_VISUAL_AFK_DISTANCE = AIBConst.Visual.afkDistance
+local AIB_VISUAL_HOLD_SECONDS = AIBConst.Visual.holdSeconds
+local AIB_VISUAL_HOLD_DISTANCE = AIBConst.Visual.holdDistance
+local AIB_RUNE_COMMIT_SECONDS = AIBConst.Rune.commitSeconds
 -- Delegates to the shared counter (FunLib/aibattle_style M.Diag); kept as a thin local
 -- wrapper so existing call sites stay unchanged. Counters live on the bot handle, so
 -- laning + team-mode diags merge into the same summary line.
@@ -341,43 +344,11 @@ function GetFurthestEnemyAttackRange(enemyList)
 end
 
 function GetBestLastHitCreep(hCreepList)
-	if not hCreepList then return nil end
-	-- dmgDelta=1.5: wider window so bot pursues creeps at ~150 HP (0.7 missed 100-130 HP range).
-	local dmgDelta = attackDamage * 1.5
-
-	local moveToCreep = nil
-	for _, creep in pairs(hCreepList) do
-		if J.IsValid(creep) and J.CanBeAttacked(creep) then
-			local nDelay = J.GetAttackProDelayTime(bot, creep)
-			if J.WillKillTarget(creep, attackDamage, DAMAGE_TYPE_PHYSICAL, nDelay) then
-				return creep, false
-			end
-			if J.WillKillTarget(creep, attackDamage + dmgDelta, DAMAGE_TYPE_PHYSICAL, nDelay) then
-				moveToCreep = creep
-			end
-		end
-	end
-	if moveToCreep then
-		return moveToCreep, true
-	end
-
-	return nil
+	return AIBLaneCreeps.GetBestLastHitCreep(bot, hCreepList, attackDamage)
 end
 
 function GetBestDenyCreep(hCreepList)
-	if not hCreepList then return nil end
-	for _, creep in pairs(hCreepList)
-	do
-		if J.IsValid(creep)
-		and J.GetHP(creep) < 0.49
-		and J.CanBeAttacked(creep)
-		and creep:GetHealth() <= attackDamage
-		then
-			return creep
-		end
-	end
-
-	return nil
+	return AIBLaneCreeps.GetBestDenyCreep(hCreepList, attackDamage)
 end
 
 -- THINK SECTION FUNCTIONS
@@ -681,47 +652,15 @@ local function AIB_RangedMeleePackSpacingStep()
 end
 
 local function AIB_NearestAttackableEnemyCreep(range)
-	local best = nil
-	local bestDist = range or math.huge
-	for _, creep in pairs(nEnemyCreeps or {}) do
-		if J.IsValid(creep) and J.CanBeAttacked(creep) then
-			local dist = GetUnitToUnitDistance(bot, creep)
-			if dist <= bestDist then
-				best = creep
-				bestDist = dist
-			end
-		end
-	end
-	return best, bestDist
+	return AIBLaneCreeps.NearestAttackableEnemyCreep(bot, nEnemyCreeps, range)
 end
 
 local function AIB_WeakestAttackableEnemyCreep(maxDist)
-	local best = nil
-	local bestHp = math.huge
-	local bestDist = math.huge
-	for _, creep in pairs(nEnemyCreeps or {}) do
-		if J.IsValid(creep) and J.CanBeAttacked(creep) then
-			local dist = GetUnitToUnitDistance(bot, creep)
-			local hp = creep:GetHealth()
-			if dist <= (maxDist or math.huge) and hp < bestHp then
-				best = creep
-				bestHp = hp
-				bestDist = dist
-			end
-		end
-	end
-	return best, bestDist, bestHp
+	return AIBLaneCreeps.WeakestAttackableEnemyCreep(bot, nEnemyCreeps, maxDist)
 end
 
 local function AIB_AlliedCreepsAtTower(tower, distLimit)
-	if tower == nil then return 0 end
-	local count = 0
-	for _, creep in pairs(nAllyCreeps or {}) do
-		if J.IsValid(creep) and GetUnitToUnitDistance(creep, tower) <= (distLimit or tower:GetAttackRange() + 180) then
-			count = count + 1
-		end
-	end
-	return count
+	return AIBLaneCreeps.AlliedCreepsAtTower(nAllyCreeps, tower, distLimit)
 end
 
 local function AIB_WantBlocked(name, reason, detail, sec)
@@ -1536,7 +1475,6 @@ end
 
 -- Main laning policy. Think() below only schedules high-level stages.
 local function ThinkLaningCore(dials, rules)
-	local cwp = rules.creep_wave_priority or "last_hit_only"
 	local debugSkeleton = rules.debug_skeleton_laning == true
 	local debugNoForward = debugSkeleton or rules.debug_disable_forwardness_fallbacks == true
 	if debugSkeleton then
@@ -1544,14 +1482,7 @@ local function ThinkLaningCore(dials, rules)
 	elseif debugNoForward then
 		Style.DiagRL(bot, "dbg-no-fwd", 10)
 	end
-	local intentCtx = {
-		bot = bot,
-		dials = dials,
-		rules = rules,
-		enemyCreeps = nEnemyCreeps,
-		assignedLane = botAssignedLane,
-		attackRange = botAttackRange,
-	}
+	local intentCtx = AIBLaningContext.Build(bot, dials, rules, nEnemyCreeps, nAllyCreeps, botAssignedLane, botAttackRange)
 	if DotaTime() >= 0 and DotaTime() <= 25 and not bot.aib_postHornRecoveryReset then
 		bot.aib_postHornRecoveryReset = true
 		AIB_ClearRecoveryState()
@@ -1841,113 +1772,25 @@ local function ThinkLaningCore(dials, rules)
 		end
 	end
 
-	-- 3) walk toward last-hit creep, but stop at attack-range edge (not inside pack).
-	-- For ranged heroes: calculate a safe point at (attackRange-50) from the creep in our direction.
-	-- Melee heroes: walk directly (Action_MoveToUnit), engine handles range.
-	-- Cap: don't chase killable creep beyond 1.5x attack range so positioning can still recover.
-	-- when bot is returning from death and a pushed creep wave sits just out of range.
-	local csDist = csAllowed and needMove and (csDistNow or GetUnitToUnitDistance(bot, hitCreep))
-	if csAllowed and needMove and csDist <= botAttackRange * 1.5 then
-		if csSoon == true and csDist <= botAttackRange - 35 then
-			local now = DotaTime()
-			if bot.aib_csWaitStart == nil or bot.aib_csWaitTarget ~= hitCreep then
-				bot.aib_csWaitStart = now
-				bot.aib_csWaitTarget = hitCreep
-			end
-			if now - bot.aib_csWaitStart < 0.8 then
-				Style.DiagRL(bot, "cs-wait", 2)
-				return
-			end
-			bot:SetTarget(hitCreep)
-			bot:Action_AttackUnit(hitCreep, true)
-			AIB_Diag("cs-wait-release")
-			return
-		end
-		bot.aib_csWaitStart = nil
-		bot.aib_csWaitTarget = nil
-		AIB_Diag("cs-walk")
-		AIB_MoveToAttackEdgeOf(hitCreep, nil, 20)
-		return
-	end
-	bot.aib_csWaitStart = nil
-	bot.aib_csWaitTarget = nil
-	if AIB_RangedMeleePackSpacingStep() then return end
-	if AIB_LastHitWatchdogStep() then return end
-
-	-- creep_wave_priority = push: attack non-CS creeps only after protecting the next last-hit.
-	-- Guard: only push when allied creeps are nearby (<500) so aggro is shared with the wave.
-	-- Without this, the bot pulls the entire enemy wave alone and takes constant creep damage.
-	if cwp == "push" and AIB_EnemyTowerDanger() == nil then
-		if csAllowed and csSoon == true and csDistNow ~= nil and csDistNow <= botAttackRange * 1.55 then
-			if csDistNow <= botAttackRange + 40 then
-				Style.DiagRL(bot, "cw-push-protect-cs", 2)
-				return
-			end
-			AIB_Diag("cw-push-cs-step")
-			AIB_MoveToAttackEdgeOf(hitCreep, nil, 20)
-			return
-		end
-		local allyNear = false
-		for _, a in pairs(nAllyCreeps or {}) do
-			if J.IsValid(a) and GetUnitToUnitDistance(bot, a) <= 500 then
-				allyNear = true; break
-			end
-		end
-		if allyNear then
-			local pushCreep, pushHp = nil, -1
-			for _, c in pairs(nEnemyCreeps or {}) do
-				if J.IsValid(c) and J.CanBeAttacked(c)
-					and GetUnitToUnitDistance(bot, c) <= botAttackRange then
-					local hp = c:GetHealth()
-					if (not csAllowed or c ~= hitCreep or csSoon ~= true) and hp > pushHp then
-						pushCreep, pushHp = c, hp
-					end
-				end
-			end
-			if pushCreep ~= nil then
-				bot:Action_AttackUnit(pushCreep, true)
-				AIB_Diag("cw-push"); return
-			end
-		end
-	end
-	if AIB_SiegeIntent(dials, rules) then return end
-
-	-- deny_policy: never = skip; always = wider window (HP<60%); default = kill-guarantee only.
-	local denyPol = rules.deny_policy or "default"
-	if denyPol ~= "never" then
-		local denyCreep
-		if denyPol == "always" then
-			for _, c in pairs(nAllyCreeps or {}) do
-				if J.IsValid(c) and J.GetHP(c) < 0.60 and J.CanBeAttacked(c) then
-					denyCreep = c; break
-				end
-			end
-		else
-			denyCreep = GetBestDenyCreep(nAllyCreeps)
-		end
-		if J.IsValid(denyCreep) then
-			-- Skip deny if the target would pull the bot backward toward own tower.
-			-- Threshold: creep is 250+ units closer to own T1 than the bot, so it is not worth going back.
-			local skipDeny = false
-			local ownT1 = GetTower(GetTeam(), TOWER_MID_1)
-			if ownT1 ~= nil then
-				local botDistT1  = GetUnitToUnitDistance(bot, ownT1)
-				local creepDistT1 = GetUnitToUnitDistance(denyCreep, ownT1)
-				if creepDistT1 < botDistT1 - 250 then
-					skipDeny = true
-				end
-			end
-			if not skipDeny then
-				bot:SetTarget(denyCreep)
-				if GetUnitToUnitDistance(bot, denyCreep) <= botAttackRange + 40 then
-					bot:Action_AttackUnit(denyCreep, true)
-				else
-					AIB_MoveToAttackEdgeOf(denyCreep, nil, 20)
-				end
-				AIB_Diag("deny-act"); return
-			end
-		end
-	end
+	if AIBLaneCreeps.HandleCreepWork({
+		bot = bot,
+		rules = rules,
+		enemyCreeps = nEnemyCreeps,
+		allyCreeps = nAllyCreeps,
+		attackRange = botAttackRange,
+		hitCreep = hitCreep,
+		csSoon = csSoon,
+		csAllowed = csAllowed,
+		csDistNow = csDistNow,
+		needMove = needMove,
+		diag = AIB_Diag,
+		moveToAttackEdge = AIB_MoveToAttackEdgeOf,
+		rangedSpacing = AIB_RangedMeleePackSpacingStep,
+		lastHitWatchdog = AIB_LastHitWatchdogStep,
+		enemyTowerDanger = AIB_EnemyTowerDanger,
+		siegeIntent = function() return AIB_SiegeIntent(dials, rules) end,
+		bestDeny = GetBestDenyCreep,
+	}) then return end
 
 	local fLaneFrontAmount = GetLaneFrontAmount(GetTeam(), botAssignedLane, false)
 	local fLaneFrontAmount_enemy = GetLaneFrontAmount(GetOpposingTeam(), botAssignedLane, false)

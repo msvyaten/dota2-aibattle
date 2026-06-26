@@ -5,6 +5,7 @@ local M = {}
 
 local Style = require(GetScriptDirectory()..'/FunLib/aibattle_style')
 local J = require(GetScriptDirectory()..'/FunLib/jmz_func')
+local Const = require(GetScriptDirectory()..'/FunLib/aibattle_constants')
 
 function M.Stage(name, run)
 	return { name = name, run = run }
@@ -91,17 +92,17 @@ function M.KillWindow(ctx)
 			local dist = GetUnitToUnitDistance(bot, enemy)
 			local exec = dials.execute_threshold or 0
 			local attackKill = enemy:GetHealth() <= bot:GetAttackDamage() * (ctx.attackDamageMult or 3.0)
-			local execute = exec > 0 and ehp <= math.max(exec, ctx.minExecuteHp or 0.24)
-			local mutualLow = ehp <= (ctx.mutualEnemyHp or 0.35)
-				and hp <= (ctx.mutualSelfHp or 0.38)
-				and hp >= (ctx.minSelfHp or 0.14)
-			local hpAdv = hp >= ehp + (ctx.hpAdvantage or 0.14)
+			local execute = exec > 0 and ehp <= math.max(exec, ctx.minExecuteHp or Const.Fight.minExecuteHp)
+			local mutualLow = ehp <= (ctx.mutualEnemyHp or Const.Fight.mutualEnemyHp)
+				and hp <= (ctx.mutualSelfHp or Const.Fight.mutualSelfHp)
+				and hp >= (ctx.minSelfHp or Const.Fight.minSelfHp)
+			local hpAdv = hp >= ehp + (ctx.hpAdvantage or Const.Fight.hpAdvantage)
 			local lowFarmAlways = (dials.farm_focus or 0.5) < 0.25
 				and ((ctx.rules or {}).hero_priority or "default") == "always"
 			local maxDist = range + 360
 			if mutualLow then maxDist = math.max(maxDist, math.max(700, range + 260)) end
 			if lowFarmAlways or hpAdv then maxDist = math.max(maxDist, range + 520) end
-			if execute or attackKill or mutualLow or (lowFarmAlways and ehp <= 0.60 and hp >= 0.34 and hpAdv) then
+			if execute or attackKill or mutualLow or (lowFarmAlways and ehp <= Const.Fight.lowFarmEnemyHp and hp >= 0.34 and hpAdv) then
 				return {
 					enemy = enemy,
 					hp = hp,

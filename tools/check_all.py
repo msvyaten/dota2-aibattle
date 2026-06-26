@@ -23,8 +23,12 @@ FORBIDDEN_LANING_KEYS = [
 
 LIVE_CODE_FILES = [
     "FunLib/aibattle_engine.lua",
+    "FunLib/aibattle_constants.lua",
+    "FunLib/aibattle_laning_context.lua",
     "FunLib/aibattle_style.lua",
+    "FunLib/aibattle_runes.lua",
     "FunLib/aibattle_survive.lua",
+    "FunLib/aibattle_laning_creeps.lua",
     "FunLib/aibattle_laning_duel.lua",
     "FunLib/aibattle_laning_siege.lua",
     "FunLib/aibattle_laning_survival.lua",

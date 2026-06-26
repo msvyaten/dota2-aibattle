@@ -50,9 +50,13 @@ echo.
 if "%DO_CODE%"=="1" (
 	echo -- code --
 	call :copyfile "FunLib\aibattle_engine.lua" || exit /b 1
+	call :copyfile "FunLib\aibattle_constants.lua" || exit /b 1
+	call :copyfile "FunLib\aibattle_laning_context.lua" || exit /b 1
 	call :copyfile "FunLib\aibattle_build.lua" || exit /b 1
 	call :copyfile "FunLib\aibattle_style.lua" || exit /b 1
+	call :copyfile "FunLib\aibattle_runes.lua" || exit /b 1
 	call :copyfile "FunLib\aibattle_survive.lua" || exit /b 1
+	call :copyfile "FunLib\aibattle_laning_creeps.lua" || exit /b 1
 	call :copyfile "FunLib\aibattle_laning_duel.lua" || exit /b 1
 	call :copyfile "FunLib\aibattle_laning_siege.lua" || exit /b 1
 	call :copyfile "FunLib\aibattle_laning_survival.lua" || exit /b 1

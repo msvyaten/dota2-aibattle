@@ -1,8 +1,8 @@
 # AIBattle Current State
 
-Last updated by Codex on 2026-06-25 after the fight/recovery/rune gate cleanup.
-Current live bot build: `82b4929`.
-Current repo HEAD: `82b4929`.
+Last updated by Codex on 2026-06-26 after the constants/context/creeps/runes architecture split.
+Current live bot build before deploy: `82b4929`.
+Current repo HEAD before deploy: `e2bb36e`.
 Codex-specific compact memory: `docs/CODEX_MEMORY.md`.
 
 ## Goal
@@ -239,6 +239,14 @@ use `deploy.bat playstyle` or `deploy.bat all`. Match `8864152947` showed this t
 ## Latest State
 
 Recent local commits:
+- Current architecture package in progress:
+  - `FunLib/aibattle_constants.lua` centralizes internal thresholds/distances;
+  - `FunLib/aibattle_laning_context.lua` builds a per-tick laning snapshot;
+  - `FunLib/aibattle_laning_creeps.lua` owns last-hit, push, and deny work;
+  - `FunLib/aibattle_runes.lua` owns bottle rune transaction/staging/pickup memory;
+  - `aibattle_survive.lua` no longer owns the rune transaction engine;
+  - legacy unused files moved from `bots/` to `archive/dota/legacy_code/`;
+  - `tools/deploy.bat` and `tools/check_all.py` must include any new runtime module.
 - `82b4929 codex: tighten rune and chase gates` - deployed live and pushed:
   - `stage_cooldown` can yield to `rune-stage-override reason=water_emergency` for water rune recovery when the bottle is empty and the bot is in mid context;
   - empty-bottle duration is tracked via `aib_emptyBottleSince`;

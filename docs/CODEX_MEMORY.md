@@ -1,8 +1,9 @@
 # Codex Memory
 
-Last updated: 2026-06-25.
+Last updated: 2026-06-26.
 
-Current live/repo code build: `82b4929`.
+Current live code build before deploy: `82b4929`.
+Current repo HEAD before architecture commit: `e2bb36e`.
 
 ## Ownership
 
@@ -15,6 +16,14 @@ Claude currently owns config/playstyle changes. Do not stage or commit these fil
 - `bots/Customize/playstyle_dire.lua`
 
 ## Latest Codex Commits
+
+Architecture package in progress:
+- `aibattle_constants.lua` centralizes internal thresholds/distances.
+- `aibattle_laning_context.lua` builds a per-tick laning snapshot.
+- `aibattle_laning_creeps.lua` owns last-hit, push, and deny work.
+- `aibattle_runes.lua` owns bottle rune transaction/staging/pickup memory.
+- Legacy inactive bot files moved to `archive/dota/legacy_code/`.
+- Keep `deploy.bat` and `check_all.py` in sync with every new runtime module.
 
 `82b4929 codex: tighten rune and chase gates`
 - Water rune `stage_cooldown` can be overridden by `rune-stage-override reason=water_emergency`.
