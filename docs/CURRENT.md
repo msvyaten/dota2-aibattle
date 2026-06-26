@@ -1,8 +1,8 @@
 # AIBattle Current State
 
-Last updated by Codex on 2026-06-26 after the constants/context/creeps/runes architecture split.
-Current live bot build before deploy: `82b4929`.
-Current repo HEAD before deploy: `e2bb36e`.
+Last updated by Codex on 2026-06-26 after the laning combat/recovery/safety split.
+Current live bot build before this deploy: `59c016a`.
+Current repo HEAD before this deploy: `59c016a`.
 Codex-specific compact memory: `docs/CODEX_MEMORY.md`.
 
 ## Goal
@@ -12,9 +12,21 @@ Make the 1v1 mid bot watchable and debuggable:
 - no jitter from competing fallback layers;
 - logs must explain what the bot wanted, what it did, and what was blocked.
 
+## Current Laning Architecture
+
+`mode_laning_generic.lua` is the orchestrator, not the dumping ground. Runtime behavior is split into small modules:
+- `aibattle_laning_combat.lua`: hero contact, chase, ability pressure, rune power pressure.
+- `aibattle_laning_recovery.lua`: low-HP gates, critical recovery lock, recovery-yield-to-kill.
+- `aibattle_laning_safety.lua`: visual hold/AFK, creep damage reaction, damage unstuck, CS watchdog.
+- `aibattle_laning_creeps.lua`: last-hit, push, deny, ranged spacing hooks.
+- `aibattle_runes.lua`: bottle rune transaction/staging/pickup memory.
+- `aibattle_laning_intents.lua`: tiny ordered stage runner.
+
+Keep `tools/deploy.bat` and `tools/check_all.py` synced with every new runtime module.
+
 ## Current Laning Order
 
-The active laning loop is intentionally small:
+The active laning loop is intentionally ordered:
 
 1. Respawn / pregame / tower-dive guards.
 2. Urgent intent arbitration before survival (`arbiter family=urgent`):
@@ -33,7 +45,13 @@ The active laning loop is intentionally small:
 6. Ability and power-rune pressure:
    - `ability-pressure`;
    - `rune-pressure`.
-7. Visual-hold / visual-AFK / contact / creep-hit / damage-unstuck guards.
+7. Safety/combat runner:
+   - ability pressure;
+   - power-rune pressure;
+   - visual-hold / visual-AFK;
+   - hero contact;
+   - creep-hit reaction;
+   - damage-unstuck.
 8. Low-HP safe last-hit can fire before normal recovery if the creep is already in range.
 9. Normal fight intent arbitration (`arbiter family=fight`):
    - `creep-aggro`
