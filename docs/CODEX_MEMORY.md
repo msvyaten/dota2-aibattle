@@ -17,6 +17,11 @@ Claude currently owns config/playstyle changes. Do not stage or commit these fil
 
 ## Latest Codex Commits
 
+Post-match fixes from `8867661051`:
+- High-HP single creep chip no longer sends the bot into a large safe retreat; it is logged/blocked as `creep-aggro reason=chip_ignored`.
+- Rune staging now closes a checked empty spawn window before `water_emergency` can reopen the same route.
+- `visual-hold reason=empty` escalates faster when healthy, so the bot should look for a creep/action sooner instead of standing.
+
 Latest architecture package in progress:
 - `aibattle_constants.lua` centralizes internal thresholds/distances.
 - `aibattle_laning_context.lua` builds a per-tick laning snapshot.

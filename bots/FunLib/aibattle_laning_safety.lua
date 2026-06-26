@@ -327,6 +327,9 @@ function M.VisualHoldHeartbeat(ctx)
 		bot.aib_holdRepeat = 1
 	end
 	local hardHold = (bot.aib_holdRepeat or 0) >= 3 or (now - bot.aib_holdAnchorTime) >= 5.0
+	if reason == "empty" and J.GetHP(bot) >= 0.55 then
+		hardHold = (bot.aib_holdRepeat or 0) >= 2 or (now - bot.aib_holdAnchorTime) >= 3.0
+	end
 	Style.Blocked(bot, "visual-hold", reason,
 		string.format("held=%.1f hp=%.0f repeat=%d hard=%s", now - bot.aib_holdAnchorTime, J.GetHP(bot) * 100, bot.aib_holdRepeat or 0, tostring(hardHold)), 2.0)
 

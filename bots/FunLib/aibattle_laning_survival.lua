@@ -46,6 +46,7 @@ function M.CreepAggroRelief(ctx)
 		bot.aib_creepDmgSeen = now
 		bot.aib_creepDmgCount = (bot.aib_creepDmgCount or 0) + 1
 	end
+	local repeatedDamage = (bot.aib_creepDmgCount or 0) >= 2
 
 	for _, creep in pairs(enemyCreeps or {}) do
 		local dist = J.IsValid(creep) and GetUnitToUnitDistance(bot, creep) or math.huge
@@ -67,6 +68,10 @@ function M.CreepAggroRelief(ctx)
 	end
 
 	local cen = AIBUtils.EnemyCreepCentroid(enemyCreeps)
+	if hp >= 0.74 and not repeatedDamage then
+		return Engine.Blocked("creep-aggro", 10, "chip_ignored",
+			string.format("hp=%.0f hits=%d", hp * 100, bot.aib_creepDmgCount or 0))
+	end
 	local dest = laneRetreatLoc(bot, ctx, cen)
 	if dest == nil then return nil end
 

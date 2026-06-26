@@ -332,6 +332,12 @@ function M.SeekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 			local stageWindow = opts.stage_window or 16.0
 			local stageRune, stageLoc, stageDist = nearestRuneSpot(bot, now)
 			local stageMaxDist = opts.stage_max_dist or math.max(maxDist or 2600, 2600)
+			if bot.aib_bottleRuneStageClosedWindow == nextSpawnAt then
+				Style.Blocked(bot, diagKey, "stage_done", string.format("eta=%.0f closed=1", secsToSpawn), 6.0)
+				bot.aib_bottleRuneStageBlockedWindow = nextSpawnAt
+				bot.aib_bottleRuneStageBlockedUntil = now + math.max(3.0, math.min(8.0, secsToSpawn + 1.0))
+				return false
+			end
 			if bot.aib_bottleRuneStageBlockedWindow == nextSpawnAt
 				and bot.aib_bottleRuneStageBlockedUntil ~= nil
 				and now < bot.aib_bottleRuneStageBlockedUntil then
@@ -399,6 +405,7 @@ function M.SeekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 					end
 				end
 				Style.Blocked(bot, diagKey, "stage_done", string.format("eta=%.0f", secsToSpawn), 6.0)
+				bot.aib_bottleRuneStageClosedWindow = nextSpawnAt
 				bot.aib_bottleRuneStageBlockedWindow = nextSpawnAt
 				bot.aib_bottleRuneStageBlockedUntil = now + math.max(3.0, math.min(8.0, secsToSpawn + 1.0))
 				return false
@@ -416,6 +423,7 @@ function M.SeekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 				bot.aib_bottleRuneStageUntil = nextSpawnAt + 7.0
 				bot.aib_bottleRuneStageTarget = stageLoc
 				bot.aib_bottleRuneStageFollowLast = now
+				bot.aib_bottleRuneStageClosedWindow = nil
 				bot.aib_bottleRuneStageBlockedWindow = nil
 				bot.aib_bottleRuneStageBlockedUntil = nil
 				runeTxn(bot, "rune_stage", spawnKind or "upcoming", diagKey, string.format("dist=%.0f eta=%.0f", stageDist, secsToSpawn), math.max(0, secsToSpawn), 2.0)
