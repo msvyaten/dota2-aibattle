@@ -89,6 +89,7 @@ These old active fallback layers should not return to `mode_laning_generic.lua`:
 
 Intent telemetry keeps the old `intent=<specific-name>` format and adds `family=<top-level>` details.
 `tools/match_stats.py` prints `intent_family[R/D]` so a match can be scanned by public state first.
+It also prints conservative `fix_candidate` advisory lines when match data shows a likely behavior bug. These are evidence-backed hints, not automatic fixes.
 
 Combat / hero:
 - `arbiter family=urgent`

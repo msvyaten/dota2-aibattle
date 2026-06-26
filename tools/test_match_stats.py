@@ -170,6 +170,59 @@ def test_debug_tree_groups_state_action_block_and_symptom():
     assert "push:" in joined and "tower:step=2" in joined and "blocked[siege=1]" in joined
 
 
+# --- fix_candidates: advisory auto-audit, not ground truth ---
+
+def test_fix_candidates_flags_stationary_damage_without_action():
+    tel = _tele(
+        ("R", "t=10s hp=80% gold=1 loc=0,0 bottle=3"),
+        ("R", "t=15s hp=72% gold=1 loc=10,5 bottle=3"),
+        ("R", "t=20s hp=66% gold=1 loc=12,8 bottle=3"),
+    )
+    candidates = m.fix_candidates({}, tel, {}, {}, [], {"R": [], "D": []}, [])
+    assert any(c["area"] == "visual-afk" and c["confidence"] == "high" for c in candidates)
+
+
+def test_fix_candidates_flags_empty_bottle_with_rune_blocks():
+    tel = _tele(
+        ("D", "t=10s hp=80% gold=1 loc=0,0 bottle=0"),
+        ("D", "t=15s hp=70% gold=1 loc=0,0 bottle=0"),
+        ("D", "t=20s hp=65% gold=1 loc=0,0 bottle=1"),
+        ("D", "t=25s hp=60% gold=1 loc=0,0 bottle=0"),
+    )
+    blocked = {
+        "recovery-rune-bottle": {
+            "D": {
+                "stage_cooldown": {"count": 4, "last": ""},
+                "no_close_rune": {"count": 2, "last": ""},
+            }
+        }
+    }
+    candidates = m.fix_candidates({}, tel, {}, blocked, [], {"R": [], "D": []}, [])
+    assert any(c["side"] == "D" and c["area"] == "rune" and c["priority"] == 2 for c in candidates)
+
+
+def test_fix_candidates_does_not_flag_empty_bottle_when_filled():
+    tel = _tele(
+        ("D", "t=10s hp=80% gold=1 loc=0,0 bottle=0"),
+        ("D", "t=15s hp=70% gold=1 loc=0,0 bottle=0"),
+        ("D", "t=20s hp=65% gold=1 loc=0,0 bottle=0"),
+    )
+    blocked = {"recovery-rune-bottle": {"D": {"stage_cooldown": {"count": 8, "last": ""}}}}
+    intents = {"rune-result": {"D": {"count": 1, "last": "", "fields": {"result": {"filled": 1}}}}}
+    candidates = m.fix_candidates({}, tel, intents, blocked, [], {"R": [], "D": []}, [])
+    assert not any(c["area"] == "rune" for c in candidates)
+
+
+def test_fix_candidates_flags_siege_without_hits():
+    intents = {
+        "tower-opportunity": {
+            "R": {"count": 10, "last": "", "fields": {"result": {"step": 7, "blocked_tower": 3}}}
+        }
+    }
+    candidates = m.fix_candidates({}, {"R": [], "D": []}, intents, {}, [], {"R": [], "D": []}, [])
+    assert any(c["side"] == "R" and c["area"] == "siege" for c in candidates)
+
+
 # --- check_all.lua_structure_problems ---
 
 def test_lua_valid_code_has_no_problems():

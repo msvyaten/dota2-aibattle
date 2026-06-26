@@ -674,6 +674,157 @@ def print_tower_opportunities(diag, intents, blocked):
         if total:
             print(f"  tower_opp[{side}]: hit={hit} step={step} blocked={blocked_n} total={total}")
 
+def _add_candidate(candidates, priority, side, area, confidence, issue, evidence, recommendation):
+    candidates.append({
+        "priority": priority,
+        "side": side,
+        "area": area,
+        "confidence": confidence,
+        "issue": issue,
+        "evidence": evidence,
+        "recommendation": recommendation,
+    })
+
+
+def _empty_bottle_ratio(samples):
+    vals = [s["bottle"] for s in samples if s.get("bottle") is not None and s["bottle"] >= 0]
+    if not vals:
+        return None
+    return sum(1 for v in vals if v == 0), len(vals)
+
+
+def fix_candidates(diag, telemetry, intents, blocked, items, action_events, players, game_s=None):
+    """Conservative advisory audit.
+
+    These lines are not ground truth and never imply an automatic code change. They surface
+    suspicious patterns with evidence so the next human/Codex pass can inspect the exact owner.
+    """
+    candidates = []
+    for side in ["R", "D"]:
+        samples = telemetry.get(side, [])
+        for start, end in stationary_spans(samples):
+            hp_drop = start["hp"] - end["hp"]
+            if hp_drop < 8:
+                continue
+            actions = span_actions(action_events, side, start["t"], end["t"])
+            if actions:
+                _add_candidate(
+                    candidates, 1, side, "visual-afk", "medium",
+                    "stationary while taking damage, but code kept issuing actions",
+                    f"{start['t']:.0f}-{end['t']:.0f}s hp_drop={hp_drop:.0f}% actions={','.join(actions[:4])}",
+                    "inspect tick-owner/action ownership inside this window; likely a movement/action is being overwritten or visually ineffective",
+                )
+            else:
+                _add_candidate(
+                    candidates, 1, side, "visual-afk", "high",
+                    "stationary while taking damage with no classified action",
+                    f"{start['t']:.0f}-{end['t']:.0f}s hp_drop={hp_drop:.0f}% loc={end['loc'][0]:.0f},{end['loc'][1]:.0f}",
+                    "add/verify a high-priority damage response before hold/recovery fallbacks consume the tick",
+                )
+            break
+
+        close_samples = sum(1 for s in samples if s.get("enemy_dist") is not None and s["enemy_dist"] < 700)
+        hero_actions = sum(side_count(diag, k, side) for k in [
+            "harass-atk", "harass-seek", "hero-pass-atk", "hero-pass-chase",
+            "hero-contact-atk", "hero-contact-chase", "hero-prio-always",
+            "hero-prio-chase", "kill-priority",
+        ])
+        if close_samples >= 5 and hero_actions <= 1:
+            _add_candidate(
+                candidates, 1, side, "fight", "high",
+                "enemy nearby but almost no hero action",
+                f"close_samples={close_samples} hero_actions={hero_actions}",
+                "inspect hero-contact/chase gates and lane_work blockers before changing strategy dials",
+            )
+
+        ratio = _empty_bottle_ratio(samples)
+        if ratio is not None:
+            empty, total = ratio
+            pct = empty / total if total else 0
+            rune_blocks = {}
+            for name in ("bottle-rune", "recovery-rune-bottle"):
+                for reason, n in blocked_reason_counts(blocked, name, side).items():
+                    rune_blocks[reason] = rune_blocks.get(reason, 0) + n
+            stage_cd = rune_blocks.get("stage_cooldown", 0)
+            no_close = rune_blocks.get("no_close_rune", 0)
+            filled = intent_field_counts(intents, "rune-result", side, "result").get("filled", 0)
+            if pct >= 0.70 and (stage_cd + no_close) >= 5 and filled == 0:
+                _add_candidate(
+                    candidates, 2, side, "rune", "high",
+                    "bottle stayed empty while rune attempts were blocked",
+                    f"empty={empty}/{total}({pct:.0%}) stage_cooldown={stage_cd} no_close_rune={no_close} filled=0",
+                    "inspect rune staging leash/cooldown; consider emergency override only when water rune is reachable in mid corridor",
+                )
+
+        result_counts = intent_field_counts(intents, "tower-opportunity", side, "result")
+        if result_counts:
+            hit = result_counts.get("hit", 0)
+            step = result_counts.get("step", 0)
+            blocked_n = sum(n for k, n in result_counts.items() if k.startswith("blocked"))
+        else:
+            hit = sum(side_count(diag, k, side) for k in [
+                "siege-commit-tower", "siege-wave-tower", "siege-tower",
+            ])
+            step = sum(side_count(diag, k, side) for k in [
+                "siege-commit-step", "siege-wave-step", "siege-step",
+            ])
+            blocked_n = sum(entry.get("count", 0)
+                            for entry in blocked.get("siege", {}).get(side, {}).values())
+        total_tower = hit + step + blocked_n
+        if total_tower >= 8 and hit == 0 and (step + blocked_n) >= 8:
+            _add_candidate(
+                candidates, 2, side, "siege", "medium",
+                "tower opportunities did not become tower hits",
+                f"hit={hit} step={step} blocked={blocked_n}",
+                "inspect siege owner: allied tank, tower range, and competing recovery/rune/fwd owners during push windows",
+            )
+
+        fwd_events = sum(side_count(diag, k, side) for k in [
+            "fwd-position", "fwd-at-position", "fwd-hold",
+            "fwd-suppressed-hero", "fwd-suppressed-creep",
+            "fwd-suppressed-lowhp", "fwd-suppressed-tower",
+        ])
+        if fwd_events >= 120:
+            _add_candidate(
+                candidates, 3, side, "positioning", "medium",
+                "forwardness/positioning is still very noisy",
+                f"fwd_events={fwd_events}",
+                "sample tick-owner around jitter windows; forwardness should yield to creep/hero/tower owners, not be the main activity",
+            )
+
+    if players:
+        try:
+            total_kills = sum(int(p.get("kills") or 0) for p in players[:2])
+            hero_damage = [int(p.get("hero_damage") or 0) for p in players[:2]]
+        except ValueError:
+            total_kills = 0
+            hero_damage = []
+        if game_s is not None and game_s >= 600 and total_kills <= 1:
+            _add_candidate(
+                candidates, 3, "ALL", "watchability", "medium",
+                "long match with low kill count",
+                f"game={game_s:.0f}s kills={total_kills} hero_damage={hero_damage}",
+                "treat as config-sensitive: verify chase/execute gates first, then tune matchup aggression if gates are healthy",
+            )
+
+    priority_order = {1: 0, 2: 1, 3: 2}
+    return sorted(candidates, key=lambda c: (priority_order.get(c["priority"], 99), c["side"], c["area"], c["issue"]))
+
+
+def print_fix_candidates(candidates, limit=8):
+    if not candidates:
+        return
+    for c in candidates[:limit]:
+        print(
+            f"  fix_candidate:P{c['priority']}[{c['side']}] "
+            f"area={c['area']} confidence={c['confidence']} "
+            f"issue=\"{c['issue']}\" evidence=\"{c['evidence']}\" "
+            f"recommend=\"{c['recommendation']}\""
+        )
+    if len(candidates) > limit:
+        print(f"  fix_candidate:+{len(candidates) - limit} more")
+
+
 def alert_symptoms(diag, telemetry, intents, blocked, items, action_events):
     alerts = []
     for side in ["R", "D"]:
@@ -850,6 +1001,7 @@ def main():
         print_debug_tree(diag, intents, blocked, alerts)
         for verdict in verdicts(diag, telemetry):
             print("  verdict:", verdict)
+        print_fix_candidates(fix_candidates(diag, telemetry, intents, blocked, items, action_events, players, game_s))
         def _pk(idx, key):
             return int(players[idx].get(key) or 0) if idx < len(players) else 0
         score = (_pk(0, "kills"), _pk(0, "deaths"), _pk(1, "kills"), _pk(1, "deaths"))

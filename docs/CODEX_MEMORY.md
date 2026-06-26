@@ -43,6 +43,7 @@ Latest architecture package in progress:
 - `aibattle_item_policy.lua` owns AIBattle bottle/mango/TP/purchase guards.
 - `mode_laning_generic.lua` is now the orchestrator (~950 lines after this split, down from ~2000).
 - `match_stats.py` prints `intent_family[R/D]` from `family=` fields in intent telemetry.
+- `match_stats.py` prints conservative `fix_candidate` advisory lines with priority, confidence, evidence, and recommendation. Treat them as hints, not ground truth.
 - Legacy inactive bot files moved to `archive/dota/legacy_code/`.
 - `docs/ARCHITECTURE.md` defines module ownership, rules/dials/constants boundaries, and telemetry conventions.
 - `tools/check_all.py` now checks that `deploy.bat` and the check manifest stay in sync.
