@@ -61,6 +61,10 @@ GENERATED_CODE_FILES = {
     "FunLib/aibattle_build.lua",
 }
 
+STALE_LIVE_FILES = [
+    "FunLib/aibattle_laning_intents.lua",
+]
+
 # Files we hand-edit and deploy: a syntax slip here crashes the live match. Mirrors deploy.bat.
 SYNTAX_FILES = LIVE_CODE_FILES + LIVE_PLAYSTYLE_FILES
 
@@ -311,6 +315,16 @@ def check_live_drift():
     return not missing and not drift
 
 
+def check_live_stale_files():
+    print("[check] stale live files", flush=True)
+    found = [rel for rel in STALE_LIVE_FILES if (DOTA_BOTS_DIR / rel).exists()]
+    if found:
+        print("[fail] stale live files present:", ", ".join(found), flush=True)
+        print("       run: tools\\deploy.bat code", flush=True)
+        return False
+    return True
+
+
 def main():
     parser = argparse.ArgumentParser(description="Run AIBattle sanity checks.")
     parser.add_argument("--match", help="Optional match id for match_stats smoke")
@@ -328,6 +342,7 @@ def main():
     if not args.skip_live:
         ok = check_live_build() and ok
         ok = check_live_drift() and ok
+        ok = check_live_stale_files() and ok
 
     if args.match or args.latest:
         cmd = [sys.executable, "tools/match_stats.py", "--live"]

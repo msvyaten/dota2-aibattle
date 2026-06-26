@@ -143,6 +143,41 @@ def test_extract_intents_keeps_field_counts():
     assert intents["rune-result"]["R"]["fields"]["result"] == {"timeout": 2, "filled": 1}
 
 
+def test_extract_intents_keeps_top_arbiter_scored_values():
+    text = "\n".join([
+        "x 'AIB[R] intent=top-arbiter winner=power-rune:119 losers=safety:108,recover:74'",
+        "x 'AIB[R] intent=top-arbiter winner=recover:81 losers=fight:60'",
+    ])
+    intents = m.extract_intents(text)
+    assert intents["top-arbiter"]["R"]["fields"]["winner"] == {
+        "power-rune:119": 1,
+        "recover:81": 1,
+    }
+    assert m.arbiter_winner_counts(intents, "R") == {"power-rune": 1, "recover": 1}
+
+
+def test_classify_event_top_arbiter_keeps_winner_name():
+    label = m.classify_event("intent=top-arbiter winner=power-rune:119 losers=safety:108")
+    assert label == "arbiter:power-rune"
+
+
+def test_desire_loop_counts_detects_aba_loops():
+    events = {
+        "R": [
+            {"t": 1, "label": "arbiter:recover"},
+            {"t": 2, "label": "arbiter:safety"},
+            {"t": 3, "label": "arbiter:recover"},
+            {"t": 4, "label": "arbiter:recover"},
+            {"t": 5, "label": "arbiter:fight"},
+            {"t": 6, "label": "arbiter:recover"},
+        ]
+    }
+    assert m.desire_loop_counts(events, "R") == {
+        "recover->safety->recover": 1,
+        "recover->fight->recover": 1,
+    }
+
+
 def test_debug_tree_groups_state_action_block_and_symptom():
     diag = {
         "pg-duel": {"R": 2},
@@ -221,6 +256,28 @@ def test_fix_candidates_flags_siege_without_hits():
     }
     candidates = m.fix_candidates({}, {"R": [], "D": []}, intents, {}, [], {"R": [], "D": []}, [])
     assert any(c["side"] == "R" and c["area"] == "siege" for c in candidates)
+
+
+def test_fix_candidates_flags_power_rune_creep_only():
+    intents = {
+        "top-arbiter": {
+            "R": {"count": 3, "last": "", "fields": {"winner": {"power-rune:100": 3}}}
+        }
+    }
+    diag = {"rune-pressure-creep": {"R": 4}}
+    candidates = m.fix_candidates(diag, {"R": [], "D": []}, intents, {}, [], {"R": [], "D": []}, [])
+    assert any(c["side"] == "R" and c["area"] == "arbiter" and "power-rune" in c["issue"] for c in candidates)
+
+
+def test_fix_candidates_flags_empty_arbiter_action():
+    intents = {
+        "top-arbiter": {
+            "D": {"count": 4, "last": "", "fields": {"winner": {"siege:90": 4}}}
+        }
+    }
+    blocked = {"top-arbiter": {"D": {"empty_action": {"count": 3, "last": ""}}}}
+    candidates = m.fix_candidates({}, {"R": [], "D": []}, intents, blocked, [], {"R": [], "D": []}, [])
+    assert any(c["side"] == "D" and c["area"] == "arbiter" and c["confidence"] == "high" for c in candidates)
 
 
 # --- check_all.lua_structure_problems ---

@@ -70,6 +70,7 @@ if "%DO_CODE%"=="1" (
 	call :copyfile "FunLib\aibattle_laning_trade.lua" || exit /b 1
 	call :copyfile "FunLib\aibattle_utils.lua" || exit /b 1
 	call :copyfile "FunLib\jmz_func.lua" || exit /b 1
+	call :deletefile "FunLib\aibattle_laning_intents.lua" || exit /b 1
 	call :copyfile "ability_item_usage_generic.lua" || exit /b 1
 	call :copyfile "item_purchase_generic.lua" || exit /b 1
 	call :copyfile "mode_laning_generic.lua" || exit /b 1
@@ -109,6 +110,21 @@ if errorlevel 1 (
 	exit /b 1
 )
 echo [OK] %~1
+exit /b 0
+
+:deletefile
+if "%DRY_RUN%"=="1" (
+	echo [PLAN-DEL] %~1
+	exit /b 0
+)
+if exist "%DOTA%\%~1" (
+	del /F /Q "%DOTA%\%~1" >nul
+	if errorlevel 1 (
+		echo [ERR-DEL] %~1
+		exit /b 1
+	)
+	echo [DEL] %~1
+)
 exit /b 0
 
 :writebuild

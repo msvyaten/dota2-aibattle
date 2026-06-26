@@ -264,7 +264,7 @@ def extract_intents(text):
         entry = side_map.setdefault(side, {"count": 0, "last": "", "fields": {}})
         entry["count"] += 1
         entry["last"] = body.strip()
-        for key, val in re.findall(r"\b([\w-]+)=([\w.-]+)", body):
+        for key, val in re.findall(r"\b([\w-]+)=([^\s]+)", body):
             field = entry["fields"].setdefault(key, {})
             field[val] = field.get(val, 0) + 1
     return intents
@@ -293,6 +293,10 @@ def extract_builds(text):
 def classify_event(body):
     if body.startswith("intent="):
         name = body.split(None, 1)[0].split("=", 1)[1]
+        if name == "top-arbiter":
+            winner = re.search(r"\bwinner=([^\s:]+)", body)
+            if winner:
+                return f"arbiter:{winner.group(1)}"
         return f"intent:{name}"
     if body.startswith("blocked="):
         name = body.split(None, 1)[0].split("=", 1)[1]
@@ -674,6 +678,73 @@ def print_tower_opportunities(diag, intents, blocked):
         if total:
             print(f"  tower_opp[{side}]: hit={hit} step={step} blocked={blocked_n} total={total}")
 
+
+def arbiter_winner_counts(intents, side):
+    out = {}
+    for raw, n in intent_field_counts(intents, "top-arbiter", side, "winner").items():
+        name = raw.split(":", 1)[0]
+        if name:
+            out[name] = out.get(name, 0) + n
+    return out
+
+
+def desire_state_counts(intents, side):
+    prefix = "state-desire-"
+    out = {}
+    for name, by_side in intents.items():
+        if not name.startswith(prefix):
+            continue
+        entry = by_side.get(side)
+        if entry:
+            out[name[len(prefix):]] = entry.get("count", 0)
+    return out
+
+
+def arbiter_empty_actions(blocked, side):
+    return blocked_reason_counts(blocked, "top-arbiter", side).get("empty_action", 0)
+
+
+def desire_loop_counts(action_events, side):
+    seq = []
+    last = None
+    for ev in action_events.get(side, []):
+        label = ev.get("label", "")
+        if not label.startswith("arbiter:"):
+            continue
+        name = label.split(":", 1)[1]
+        if name == last:
+            continue
+        seq.append(name)
+        last = name
+
+    loops = {}
+    for i in range(len(seq) - 2):
+        a, b, c = seq[i], seq[i + 1], seq[i + 2]
+        if a == c and a != b:
+            key = f"{a}->{b}->{a}"
+            loops[key] = loops.get(key, 0) + 1
+    return loops
+
+
+def print_arbiter_metrics(intents, blocked, action_events):
+    for side in ["R", "D"]:
+        winners = arbiter_winner_counts(intents, side)
+        states = desire_state_counts(intents, side)
+        loops = desire_loop_counts(action_events, side)
+        empty = arbiter_empty_actions(blocked, side)
+        if not winners and not states and not loops and not empty:
+            continue
+        parts = []
+        if winners:
+            parts.append("winner " + _fmt_counts(winners, 5))
+        if states:
+            parts.append("state " + _fmt_counts(states, 5))
+        if loops:
+            parts.append("loops " + _fmt_counts(loops, 3))
+        if empty:
+            parts.append(f"empty_action={empty}")
+        print(f"  arbiter[{side}]: " + " | ".join(parts))
+
 def _add_candidate(candidates, priority, side, area, confidence, issue, evidence, recommendation):
     candidates.append({
         "priority": priority,
@@ -702,6 +773,9 @@ def fix_candidates(diag, telemetry, intents, blocked, items, action_events, play
     candidates = []
     for side in ["R", "D"]:
         samples = telemetry.get(side, [])
+        arb_winners = arbiter_winner_counts(intents, side)
+        arb_total = sum(arb_winners.values())
+        arb_empty = arbiter_empty_actions(blocked, side)
         for start, end in stationary_spans(samples):
             hp_drop = start["hp"] - end["hp"]
             if hp_drop < 8:
@@ -729,12 +803,25 @@ def fix_candidates(diag, telemetry, intents, blocked, items, action_events, play
             "hero-contact-atk", "hero-contact-chase", "hero-prio-always",
             "hero-prio-chase", "kill-priority",
         ])
+        creep_work = sum(side_count(diag, k, side) for k in [
+            "cs-inrange", "cs-wait", "cs-walk", "deny-act",
+            "creep-hit-react-atk", "creep-aggro-hit", "cw-push",
+        ])
         if close_samples >= 5 and hero_actions <= 1:
             _add_candidate(
                 candidates, 1, side, "fight", "high",
                 "enemy nearby but almost no hero action",
                 f"close_samples={close_samples} hero_actions={hero_actions}",
                 "inspect hero-contact/chase gates and lane_work blockers before changing strategy dials",
+            )
+
+        recover_wins = arb_winners.get("recover", 0)
+        if arb_total >= 8 and recover_wins / arb_total >= 0.55 and (close_samples >= 5 or creep_work >= 8):
+            _add_candidate(
+                candidates, 2, side, "arbiter", "medium",
+                "recover desire dominated while lane work or enemy contact existed",
+                f"recover={recover_wins}/{arb_total} close_samples={close_samples} creep_work={creep_work}",
+                "inspect recovery score/yield rules before adding another AFK fallback; recover may be winning too broadly",
             )
 
         ratio = _empty_bottle_ratio(samples)
@@ -777,6 +864,50 @@ def fix_candidates(diag, telemetry, intents, blocked, items, action_events, play
                 "tower opportunities did not become tower hits",
                 f"hit={hit} step={step} blocked={blocked_n}",
                 "inspect siege owner: allied tank, tower range, and competing recovery/rune/fwd owners during push windows",
+            )
+
+        siege_wins = arb_winners.get("siege", 0)
+        if siege_wins >= 3 and hit == 0 and (step + blocked_n) >= 3:
+            _add_candidate(
+                candidates, 2, side, "arbiter", "medium",
+                "siege desire won but did not produce tower hits",
+                f"siege_wins={siege_wins} tower_hit={hit} step={step} blocked={blocked_n}",
+                "inspect siege action result and competing tower safety gates; the top desire is correct but the action may be ineffective",
+            )
+
+        power_wins = arb_winners.get("power-rune", 0)
+        power_hero_or_tower = sum(side_count(diag, k, side) for k in [
+            "rune-pressure-atk", "rune-pressure-chase", "rune-pressure-tower",
+            "rune-pressure-tower-step", "rune-pressure-ability", "ability-harass",
+        ])
+        power_creep = side_count(diag, "rune-pressure-creep", side)
+        if power_wins >= 3 and power_hero_or_tower == 0 and power_creep > 0:
+            _add_candidate(
+                candidates, 2, side, "arbiter", "medium",
+                "power-rune desire won but only produced creep pressure",
+                f"power_wins={power_wins} hero_tower_actions=0 creep_actions={power_creep}",
+                "inspect RunePowerPressure target selection; DD/Haste should usually convert into hero or tower pressure when safe",
+            )
+
+        safety_wins = arb_winners.get("safety", 0)
+        creep_dmg = side_count(diag, "creep-dmg", side)
+        worst_stationary_drop = 0
+        for start, end in stationary_spans(samples):
+            worst_stationary_drop = max(worst_stationary_drop, start["hp"] - end["hp"])
+        if safety_wins >= 5 and (worst_stationary_drop >= 8 or creep_dmg >= 5):
+            _add_candidate(
+                candidates, 1, side, "arbiter", "medium",
+                "safety desire won repeatedly while damage symptoms remained",
+                f"safety_wins={safety_wins} stationary_hp_drop={worst_stationary_drop:.0f}% creep_dmg={creep_dmg}",
+                "inspect safety action effectiveness and action overwrites; a winning safety desire must visibly move, attack, or disengage",
+            )
+
+        if arb_empty >= 3:
+            _add_candidate(
+                candidates, 2, side, "arbiter", "high",
+                "top arbiter winner returned no action",
+                f"empty_action={arb_empty} winners={_fmt_counts(arb_winners, 5) or '-'}",
+                "fix the winning candidate action contract so it returns false before consuming the tick when it cannot act",
             )
 
         fwd_events = sum(side_count(diag, k, side) for k in [
@@ -998,6 +1129,7 @@ def main():
             print("  alert:", alert)
         print_state_metrics(diag, intents)
         print_tower_opportunities(diag, intents, blocked)
+        print_arbiter_metrics(intents, blocked, action_events)
         print_debug_tree(diag, intents, blocked, alerts)
         for verdict in verdicts(diag, telemetry):
             print("  verdict:", verdict)

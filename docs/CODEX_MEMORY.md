@@ -2,8 +2,8 @@
 
 Last updated: 2026-06-26.
 
-Current live code build before latest infrastructure pass: `0a92d26`.
-Current repo HEAD before latest infrastructure commit: `0a92d26`.
+Current live code build before latest arbiter-audit pass: `0b7e813`.
+Current repo HEAD before latest arbiter-audit commit: `0b7e813`.
 
 ## Ownership
 
@@ -25,9 +25,11 @@ Post-match fixes from `8867764859`:
 Top-level arbiter pass:
 - Added `aibattle_laning_arbiter.lua`.
 - `ThinkLaningCore` now scores and arbitrates `safety / power-rune / fight / recover / siege` after emergency/critical/precreep gates.
-- The arbiter emits `top-arbiter` plus `state-desire-<name>` and `TickOwner desire/<name>`.
+- The arbiter emits `top-arbiter` plus `state-desire-<name>` and `TickOwner desire/<name>` with score/reason detail.
 - Recovery is no longer a fixed sequential owner before fight/safety/siege; it competes by score and can fall through if its action yields.
-- Next match watch: `top-arbiter winner=...`, `state-desire-*`, and whether `tick-owner stage=laning-core` drops in favor of `desire/*`.
+- `match_stats.py` prints `arbiter[R/D]` summaries: winners, active desire states, empty actions, and simple desire loops.
+- Arbiter auto-audit flags: recover dominance during lane contact, power-rune wins that only hit creeps, safety wins while damage continues, siege wins without tower hits, and top-arbiter `empty_action`.
+- Next match watch: `arbiter[R/D] winner ...`, `fix_candidate area=arbiter`, and whether `tick-owner stage=laning-core` drops in favor of detailed `desire/*`.
 
 Post-match fixes from `8867661051`:
 - High-HP single creep chip no longer sends the bot into a large safe retreat; it is logged/blocked as `creep-aggro reason=chip_ignored`.
@@ -60,6 +62,7 @@ Latest architecture package in progress:
 - `docs/ARCHITECTURE.md` defines module ownership, rules/dials/constants boundaries, and telemetry conventions.
 - `tools/check_all.py` now checks that `deploy.bat` and the check manifest stay in sync.
 - `tools/check_all.py` also fails if a `bots/FunLib/aibattle_*.lua` runtime module is not listed for deploy/check.
+- `deploy.bat code` removes stale live `FunLib/aibattle_laning_intents.lua`; `check_all.py` fails if that retired module is still present in the live Dota folder.
 
 `82b4929 codex: tighten rune and chase gates`
 - Water rune `stage_cooldown` can be overridden by `rune-stage-override reason=water_emergency`.

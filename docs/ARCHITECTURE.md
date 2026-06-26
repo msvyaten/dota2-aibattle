@@ -112,6 +112,7 @@ Every active runtime module must be covered by:
 - `tools/check_all.py`
 
 `tools/check_all.py` intentionally fails when a `bots/FunLib/aibattle_*.lua` runtime module is not listed for deploy/check, or when the deploy manifest and check manifest drift.
+When a runtime module is retired, add it to the deploy cleanup and stale-live check. Live Dota must not keep old modules that are no longer part of the engine.
 
 Use deploy profiles carefully:
 

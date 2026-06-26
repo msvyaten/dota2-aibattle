@@ -1,8 +1,8 @@
 # AIBattle Current State
 
-Last updated by Codex on 2026-06-26 after the infrastructure manifest pass.
-Current live bot build before this pass: `0a92d26`.
-Current repo HEAD before this pass: `0a92d26`.
+Last updated by Codex on 2026-06-26 after the arbiter audit tooling pass.
+Current live bot build before this pass: `0b7e813`.
+Current repo HEAD before this pass: `0b7e813`.
 Codex-specific compact memory: `docs/CODEX_MEMORY.md`.
 Architecture guide: `docs/ARCHITECTURE.md`.
 
@@ -29,6 +29,7 @@ Make the 1v1 mid bot watchable and debuggable:
 `mode_laning_generic.lua` is now about 950 lines, down from about 2000 before the split work.
 
 Keep `tools/deploy.bat` and `tools/check_all.py` synced with every new runtime module. `tools/check_all.py` now fails if the deploy manifest and check manifest drift, or if a `bots/FunLib/aibattle_*.lua` runtime module is not listed.
+Retired runtime modules must also be removed from live Dota; `deploy.bat code` deletes known stale files and `check_all.py` fails if `FunLib/aibattle_laning_intents.lua` is still present.
 
 Config/playstyle ownership note: Claude currently owns canonical/live config changes. Codex should not stage or commit `canonical_ganker.lua`, `canonical_pusher.lua`, `playstyle_radiant.lua`, or `playstyle_dire.lua` unless the user explicitly asks.
 
@@ -59,7 +60,7 @@ The active laning loop is intentionally ordered:
    - `fight`;
    - `recover`;
    - `siege`.
-7. The arbiter logs `top-arbiter` and `state-desire-*`, then runs only the winning candidate.
+7. The arbiter logs `top-arbiter` and `state-desire-*`, then runs only the winning candidate. `tick-owner desire/<name>` includes score/reason detail.
 8. Low-HP safe last-hit can fire before normal recovery if the creep is already in range.
 9. Last-hit, survival, emergency retreat, kill-priority, harass, CS-walk, push/deny/siege.
 10. Last-hit watchdog, ranged melee-pack spacing, and final positioning via `fwd-position`.
@@ -83,6 +84,7 @@ These old active fallback layers should not return to `mode_laning_generic.lua`:
 Intent telemetry keeps the old `intent=<specific-name>` format and adds `family=<top-level>` details.
 `tools/match_stats.py` prints `intent_family[R/D]` so a match can be scanned by public state first.
 It also prints conservative `fix_candidate` advisory lines when match data shows a likely behavior bug. These are evidence-backed hints, not automatic fixes.
+For the top-level laning arbiter, `match_stats.py` additionally prints `arbiter[R/D]` with winner counts, desire state counts, simple desire loops, and `empty_action` counts. Arbiter-specific `fix_candidate` lines call out recover dominance, power-rune creep-only pressure, safety that does not stop damage, siege without tower hits, and winner actions that returned empty.
 
 Combat / hero:
 - `arbiter family=urgent`

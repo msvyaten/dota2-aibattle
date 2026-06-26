@@ -60,7 +60,7 @@ function M.Run(candidates, ctx)
 		local handled = c.action()
 		if handled then
 			if ctx ~= nil then ctx.last_desire = c.name end
-			Style.TickOwner(bot, "desire/" .. tostring(c.name), "score=" .. tostring(c.priority or 0), 2.0)
+			Style.TickOwner(bot, "desire/" .. tostring(c.name), candidateDetail(c), 2.0)
 			return true, c.name
 		end
 		Style.Blocked(bot, "top-arbiter", "empty_action",
