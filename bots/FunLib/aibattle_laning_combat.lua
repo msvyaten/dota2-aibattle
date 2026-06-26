@@ -101,7 +101,8 @@ function M.RunePowerPressure(ctx)
 	local hasDamageRune = policy.name == "double_damage"
 	local hasHasteRune = policy.name == "haste"
 	local hasArcaneRune = policy.name == "arcane"
-	if not (hasDamageRune or hasHasteRune or hasArcaneRune) then return false end
+	local hasActionRune = AIBEngine.IsActionPowerRune(policy.name)
+	if not hasActionRune then return false end
 	if J.GetHP(bot) < (policy.minFightHp or 0.38) then return false end
 	local range = attackRange(ctx)
 	local enemy, dist = ctx.nearestEnemyHero(policy.maxChase or (hasHasteRune and 1150 or 950))

@@ -22,6 +22,7 @@ M.Scan = {
 	attackExtra = 100,
 	killChaseExtra = 360,
 	advantageChaseExtra = 260,
+	abilityThreat = 900,
 	hasteChase = 1150,
 	runeChase = 900,
 	safetyCreepExtra = 160,
@@ -103,8 +104,9 @@ function M.EnemyActionable(args)
 	local enemyHp = args.enemyHp or 1
 	local execHp = math.max(args.executeThreshold or 0, M.Hp.activeRecovery)
 	local powerRune = args.powerRune
-	local combatRune = powerRune == "double_damage" or powerRune == "haste" or powerRune == "arcane"
+	local combatRune = args.actionPowerRune == true
 	return dist <= range + M.Scan.attackExtra
+		or (hp >= M.Hp.critical and dist <= M.Scan.abilityThreat)
 		or (enemyHp <= execHp and dist <= range + M.Scan.killChaseExtra)
 		or (hp >= enemyHp + M.Combat.hpAdvantage and dist <= range + M.Scan.advantageChaseExtra)
 		or (combatRune and hp >= M.Hp.danger and dist <= ((powerRune == "haste") and M.Scan.hasteChase or M.Scan.runeChase))
@@ -134,7 +136,7 @@ end
 
 function M.PowerRune(args)
 	local powerRune = args.powerRune
-	if not (powerRune == "double_damage" or powerRune == "haste" or powerRune == "arcane") then return nil end
+	if args.actionPowerRune ~= true then return nil end
 	local hp = args.hp or 1
 	if hp < M.Hp.critical then return nil end
 	local base = M.Score.powerRuneBase
@@ -182,7 +184,7 @@ function M.Fight(args)
 		score = score + M.Score.fightExecuteBonus
 		add(parts, "execute", M.Score.fightExecuteBonus)
 	end
-	if args.combatRune == true then
+	if args.actionPowerRune == true then
 		score = score + M.Score.fightRuneBonus
 		add(parts, "rune", M.Score.fightRuneBonus)
 	end
@@ -207,7 +209,7 @@ function M.Recover(args)
 		score = M.Score.recoverDanger
 		add(parts, "danger", M.Score.recoverDanger - base)
 	end
-	if args.combatRune == true and hp >= M.Hp.danger then
+	if args.actionPowerRune == true and hp >= M.Hp.danger then
 		score = score + M.Score.recoverRunePenalty
 		add(parts, "rune", M.Score.recoverRunePenalty)
 	end

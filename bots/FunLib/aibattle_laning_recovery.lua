@@ -57,8 +57,7 @@ function M.CriticalLock(ctx)
 	local now = DotaTime()
 	local hp = J.GetHP(bot)
 	local powerRune = AIBEngine.PowerRuneState(bot)
-	local combatRune = powerRune == "double_damage" or powerRune == "haste" or powerRune == "arcane"
-	if combatRune and hp >= 0.30 then
+	if AIBEngine.IsActionPowerRune(powerRune) and hp >= 0.30 then
 		bot.aib_criticalRecoverUntil = nil
 		bot.aib_criticalRecoverDest = nil
 		Style.Intent(bot, "power-rune-yield", string.format("rune=%s hp=%.0f", powerRune, hp * 100), 2.0)

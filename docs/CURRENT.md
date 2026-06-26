@@ -24,6 +24,7 @@ Make the 1v1 mid bot watchable and debuggable:
 - `aibattle_laning_policy.lua`: named HP bands, top-level desire gates, score weights, and forward/siege thresholds.
 - `aibattle_laning_creeps.lua`: last-hit, push, deny, ranged spacing hooks.
 - `aibattle_runes.lua`: bottle rune transaction/staging/pickup memory.
+- `aibattle_engine.lua`: shared runtime helpers including power-rune state/use policy and action-rune classification.
 - `aibattle_intents.lua`: public intent family taxonomy (`fight/farm/rune/recover/safety/...`) for logs.
 - `aibattle_item_policy.lua`: AIBattle bottle/mango/TP/purchase guards outside generic item files.
 

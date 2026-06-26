@@ -162,6 +162,15 @@ function M.PowerRuneState(bot)
 	return nil
 end
 
+function M.IsActionPowerRune(rune)
+	return rune == "double_damage"
+		or rune == "haste"
+		or rune == "arcane"
+		or rune == "regen"
+		or rune == "invis"
+		or rune == "illusion"
+end
+
 function M.RuneUsePolicy(bot, dials, rules)
 	local rune = M.PowerRuneState(bot)
 	if rune == nil then return nil end

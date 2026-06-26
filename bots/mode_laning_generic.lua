@@ -654,7 +654,7 @@ local function AIB_RunTopDesireArbiter(dials, rules, runtimeCtx, intentCtx)
 	local enemy, enemyDist = AIB_NearestEnemyHero(AIBLanePolicy.EnemyScanRange(range))
 	local enemyHp = enemy ~= nil and J.GetHP(enemy) or 1.0
 	local powerRune = AIBEngine.PowerRuneState(bot)
-	local combatRune = powerRune == "double_damage" or powerRune == "haste" or powerRune == "arcane"
+	local actionPowerRune = AIBEngine.IsActionPowerRune(powerRune)
 	local recentCreepDamage = bot:WasRecentlyDamagedByCreep(AIBLanePolicy.RecentDamage.creepSeconds)
 	local recentHeroDamage = bot:WasRecentlyDamagedByAnyHero(AIBLanePolicy.RecentDamage.heroSeconds)
 	local attackableCreep = AIB_NearestAttackableEnemyCreep(range + AIBLanePolicy.Scan.safetyCreepExtra) ~= nil
@@ -668,7 +668,7 @@ local function AIB_RunTopDesireArbiter(dials, rules, runtimeCtx, intentCtx)
 		enemyDist = enemyDist or 99999,
 		enemyHp = enemyHp,
 		powerRune = powerRune,
-		combatRune = combatRune,
+		actionPowerRune = actionPowerRune,
 		recentCreepDamage = recentCreepDamage,
 		recentHeroDamage = recentHeroDamage,
 		attackableCreep = attackableCreep,

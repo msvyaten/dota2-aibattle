@@ -17,6 +17,12 @@ Claude currently owns config/playstyle changes. Do not stage or commit these fil
 
 ## Latest Codex Commits
 
+Pre-match rune bug fixes:
+- `stage_unchecked` no longer closes the bottle rune staging window unless the bot actually observed the staged rune spot.
+- Added `AIBEngine.IsActionPowerRune()` so `double_damage/haste/arcane/regen/invis/illusion` are handled through one runtime helper instead of four hard-coded combat-rune lists.
+- Fight desire now opens an ability-pressure window up to 900u at safe HP, matching `AbilityPressure()` scan range so raze opportunities are not skipped at 700-900u.
+- Kept 45-55% HP recovery-without-damage disabled on purpose; that band previously made bots over-recover and look passive.
+
 Desire policy architecture pass:
 - Added `aibattle_laning_policy.lua` as the owner for named HP bands, top-level desire gates, score weights, forward thresholds, and siege candidate thresholds.
 - `mode_laning_generic.lua` no longer builds top-level `safety / power-rune / fight / recover / siege` scores from anonymous literals.

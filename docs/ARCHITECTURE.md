@@ -51,6 +51,7 @@ Current owners:
 - `aibattle_laning_tempo.lua`: pregame, pre-creep standoff, tower dive policy, death window.
 - `aibattle_laning_arbiter.lua`: top-level laning desire arbitration; evaluates `safety / power-rune / fight / recover / siege` candidates by score and runs only the winner.
 - `aibattle_laning_policy.lua`: named HP bands, top-level desire gates, score weights, and forward/siege thresholds.
+- `aibattle_engine.lua`: shared runtime helpers and policy adapters, including `PowerRuneState`, `RuneUsePolicy`, and `IsActionPowerRune`.
 - `aibattle_laning_duel.lua`: pregame/prewave duel movement.
 - `aibattle_laning_siege.lua`: tower pressure and allied-tank rules.
 - `aibattle_laning_survival.lua`: creep aggro relief and combat safety candidates.
