@@ -36,6 +36,7 @@ LIVE_CODE_FILES = [
     "FunLib/aibattle_laning_combat.lua",
     "FunLib/aibattle_laning_tempo.lua",
     "FunLib/aibattle_laning_arbiter.lua",
+    "FunLib/aibattle_laning_policy.lua",
     "FunLib/aibattle_laning_duel.lua",
     "FunLib/aibattle_laning_siege.lua",
     "FunLib/aibattle_laning_survival.lua",
@@ -172,6 +173,22 @@ def check_aibattle_runtime_modules():
     return True
 
 
+def check_top_desire_policy_boundary():
+    print("[check] top desire policy boundary", flush=True)
+    text = (ROOT / "bots" / "mode_laning_generic.lua").read_text(encoding="utf-8", errors="ignore")
+    marker = "local function AIB_RunTopDesireArbiter"
+    start = text.find(marker)
+    end = text.find("-- Main laning policy.", start)
+    if start == -1 or end == -1:
+        print("[fail] cannot locate AIB_RunTopDesireArbiter boundary", flush=True)
+        return False
+    body = text[start:end]
+    forbidden = ["local score", "score =", "score +", "score -"]
+    found = [frag for frag in forbidden if frag in body]
+    if found:
+        print("[fail] top desire scoring must live in FunLib/aibattle_laning_policy.lua:", ", ".join(found), flush=True)
+        return False
+    return True
 def _strip_lua(src):
     """Blank out comments and string literals so delimiter counts only see real code."""
     out = []
@@ -338,6 +355,7 @@ def main():
     ok = check_forbidden_laning_keys() and ok
     ok = check_deploy_manifest_sync() and ok
     ok = check_aibattle_runtime_modules() and ok
+    ok = check_top_desire_policy_boundary() and ok
 
     if not args.skip_live:
         ok = check_live_build() and ok

@@ -17,6 +17,12 @@ Claude currently owns config/playstyle changes. Do not stage or commit these fil
 
 ## Latest Codex Commits
 
+Desire policy architecture pass:
+- Added `aibattle_laning_policy.lua` as the owner for named HP bands, top-level desire gates, score weights, forward thresholds, and siege candidate thresholds.
+- `mode_laning_generic.lua` no longer builds top-level `safety / power-rune / fight / recover / siege` scores from anonymous literals.
+- `state-desire-*` details now include score components such as `base=... range=... execute=... hp_adv=... rune=...`, so the next match can explain why a desire won.
+- Forwardness thresholds and suppression-after-empty-desire are named in policy instead of living as raw `900/10/1600/3` values in the orchestrator.
+
 Post-match fixes from `8868017746`:
 - Top-level desire candidates are now stricter: `fight` only enters the arbiter when the enemy is actionable by range/kill/advantage/rune pressure, not merely visible around 1000u.
 - `recover` no longer becomes top desire at 45-55% HP unless recent damage or a lower HP gate makes it urgent.

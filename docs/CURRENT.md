@@ -21,6 +21,7 @@ Make the 1v1 mid bot watchable and debuggable:
 - `aibattle_laning_safety.lua`: visual hold/AFK, creep damage reaction, damage unstuck, CS watchdog.
 - `aibattle_laning_tempo.lua`: pregame, pre-creep standoff, tower dive policy, death window.
 - `aibattle_laning_arbiter.lua`: top-level `safety / power-rune / fight / recover / siege` desire arbitration.
+- `aibattle_laning_policy.lua`: named HP bands, top-level desire gates, score weights, and forward/siege thresholds.
 - `aibattle_laning_creeps.lua`: last-hit, push, deny, ranged spacing hooks.
 - `aibattle_runes.lua`: bottle rune transaction/staging/pickup memory.
 - `aibattle_intents.lua`: public intent family taxonomy (`fight/farm/rune/recover/safety/...`) for logs.

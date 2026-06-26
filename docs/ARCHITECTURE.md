@@ -50,6 +50,7 @@ Current owners:
 - `aibattle_laning_safety.lua`: visual hold/AFK, creep damage reaction, damage unstuck, CS watchdog.
 - `aibattle_laning_tempo.lua`: pregame, pre-creep standoff, tower dive policy, death window.
 - `aibattle_laning_arbiter.lua`: top-level laning desire arbitration; evaluates `safety / power-rune / fight / recover / siege` candidates by score and runs only the winner.
+- `aibattle_laning_policy.lua`: named HP bands, top-level desire gates, score weights, and forward/siege thresholds.
 - `aibattle_laning_duel.lua`: pregame/prewave duel movement.
 - `aibattle_laning_siege.lua`: tower pressure and allied-tank rules.
 - `aibattle_laning_survival.lua`: creep aggro relief and combat safety candidates.
@@ -65,6 +66,8 @@ When adding a new behavior:
 3. Emit one public intent family and one specific diag key.
 4. Add blocked reasons instead of silent returns.
 5. Keep `tools/deploy.bat` and `tools/check_all.py` green.
+
+Top-level desire scores must be explainable in telemetry. Prefer details like `base=78 range=18 execute=20` over anonymous final scores.
 
 ## Decision Order
 
