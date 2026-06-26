@@ -160,7 +160,9 @@ function M.CreepHitReact(ctx)
 		return true
 	end
 
-	if hp >= 0.32 and repeatedDamage and dist <= range + 110 and ctx.enemyTowerDanger() == nil then
+	local hasted = bot:HasModifier("modifier_rune_haste")
+	local forcedAttackHp = hasted and 0.24 or 0.30
+	if hp >= forcedAttackHp and repeatedDamage and dist <= range + 110 and ctx.enemyTowerDanger() == nil then
 		Style.Intent(bot, "creep-hit-react", string.format("dist=%.0f hp=%.0f hits=%d reason=forced_attack", dist, hp * 100, bot.aib_creepReactCount or 0), 1.0)
 		bot:Action_AttackUnit(creep, true)
 		ctx.diag("creep-hit-react-force-atk")

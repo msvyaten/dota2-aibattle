@@ -51,7 +51,7 @@ function M.CreepAggroRelief(ctx)
 	for _, creep in pairs(enemyCreeps or {}) do
 		local dist = J.IsValid(creep) and GetUnitToUnitDistance(bot, creep) or math.huge
 		if J.IsValid(creep) and J.CanBeAttacked(creep)
-			and (dist <= range - 60 or bot:GetAttackRange() <= 300) then
+			and (dist <= range - 60 or bot:GetAttackRange() <= 300 or (repeatedDamage and dist <= range + 80)) then
 			return Engine.Intent("creep-aggro", 112, "creep_hitting", function()
 				bot:Action_AttackUnit(creep, true)
 				Style.Diag(bot, "creep-aggro-hit")

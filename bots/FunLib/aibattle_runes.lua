@@ -405,7 +405,17 @@ function M.SeekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 					end
 				end
 				Style.Blocked(bot, diagKey, "stage_done", string.format("eta=%.0f", secsToSpawn), 6.0)
-				markRuneKnownEmpty(bot, stageRune, now)
+				local observedStage = false
+				if stageRune ~= nil then
+					local stageTarget = bot.aib_bottleRuneStageTarget or stageLoc
+					local observedDist = stageTarget ~= nil and GetUnitToLocationDistance(bot, stageTarget) or math.huge
+					observedStage = GetRuneStatus(stageRune) ~= RUNE_STATUS_AVAILABLE or observedDist <= 850
+					if observedStage then
+						markRuneKnownEmpty(bot, stageRune, now)
+					else
+						Style.Blocked(bot, diagKey, "stage_unchecked", string.format("rune=%.0f eta=%.0f", observedDist, secsToSpawn), 6.0)
+					end
+				end
 				bot.aib_bottleRuneStageClosedWindow = nextSpawnAt
 				bot.aib_bottleRuneStageBlockedWindow = nextSpawnAt
 				bot.aib_bottleRuneStageBlockedUntil = now + math.max(3.0, math.min(8.0, secsToSpawn + 1.0))

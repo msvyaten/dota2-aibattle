@@ -10,6 +10,22 @@ local function attackRange(ctx)
 	return ctx.attackRange or ctx.bot:GetAttackRange()
 end
 
+local function powerRuneTowerTarget(ctx, range)
+	local bot = ctx.bot
+	local twr = ctx.enemyTowerDanger()
+	if not J.IsValid(twr) then
+		local midT1 = GetTower(GetOpposingTeam(), TOWER_MID_1)
+		if J.IsValid(midT1) and GetUnitToUnitDistance(bot, midT1) <= range + 650 then
+			twr = midT1
+		end
+	end
+	if not J.IsValid(twr) then return nil, 0 end
+	local wave = ctx.alliedCreepsAtTower(twr, twr:GetAttackRange() + 220)
+	if wave < 1 then return nil, wave end
+	if ctx.towerThreatening(twr) and wave < 2 then return nil, wave end
+	return twr, wave
+end
+
 function M.ContactHero(ctx)
 	local bot = ctx.bot
 	local rules = ctx.rules or {}
@@ -104,10 +120,9 @@ function M.RunePowerPressure(ctx)
 		return ctx.moveToAttackEdge(enemy, "rune-pressure-chase", 0)
 	end
 	if policy.useForTowerWithWave == true and (policy.towerPressure or 0.5) >= 0.45 then
-		local twr = ctx.enemyTowerDanger()
-		if twr ~= nil and not ctx.towerThreatening(twr)
-			and ctx.alliedCreepsAtTower(twr, twr:GetAttackRange() + 160) >= 1 then
-			Style.Intent(bot, "rune-pressure", string.format("rune=%s target=tower tower=%.0f", policy.name, GetUnitToUnitDistance(bot, twr)), 2.0)
+		local twr, wave = powerRuneTowerTarget(ctx, range)
+		if twr ~= nil then
+			Style.Intent(bot, "rune-pressure", string.format("rune=%s target=tower tower=%.0f wave=%d", policy.name, GetUnitToUnitDistance(bot, twr), wave), 2.0)
 			if GetUnitToUnitDistance(bot, twr) <= range + 160 then
 				bot:Action_AttackUnit(twr, true)
 				ctx.diag("rune-pressure-tower")

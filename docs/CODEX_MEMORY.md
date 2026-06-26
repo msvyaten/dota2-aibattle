@@ -17,6 +17,11 @@ Claude currently owns config/playstyle changes. Do not stage or commit these fil
 
 ## Latest Codex Commits
 
+Post-match fixes from `8867764859`:
+- Rune staging no longer marks a spawn point as known-empty unless the bot actually observed it closely enough or the rune status is already gone; otherwise it emits `stage_unchecked`.
+- Double-damage tower pressure can target mid T1 with allied creeps even when the tower is not the current `enemyTowerDanger`, so DD should not fall through to creep-only pressure near a siege.
+- Repeated creep damage lets ranged bots answer from normal attack range, and Haste lowers the forced creep-response HP floor so a hasted bot near its tower is less likely to stand/tank creeps.
+
 Post-match fixes from `8867661051`:
 - High-HP single creep chip no longer sends the bot into a large safe retreat; it is logged/blocked as `creep-aggro reason=chip_ignored`.
 - Rune staging now closes a checked empty spawn window before `water_emergency` can reopen the same route.
