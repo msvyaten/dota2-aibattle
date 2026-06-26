@@ -2,8 +2,8 @@
 
 Last updated: 2026-06-26.
 
-Current live code build before latest architecture deploy: `92d096e`.
-Current repo HEAD before latest architecture commit: `92d096e`.
+Current live code build before latest infrastructure pass: `0a92d26`.
+Current repo HEAD before latest infrastructure commit: `0a92d26`.
 
 ## Ownership
 
@@ -44,7 +44,9 @@ Latest architecture package in progress:
 - `mode_laning_generic.lua` is now the orchestrator (~950 lines after this split, down from ~2000).
 - `match_stats.py` prints `intent_family[R/D]` from `family=` fields in intent telemetry.
 - Legacy inactive bot files moved to `archive/dota/legacy_code/`.
-- Keep `deploy.bat` and `check_all.py` in sync with every new runtime module.
+- `docs/ARCHITECTURE.md` defines module ownership, rules/dials/constants boundaries, and telemetry conventions.
+- `tools/check_all.py` now checks that `deploy.bat` and the check manifest stay in sync.
+- `tools/check_all.py` also fails if a `bots/FunLib/aibattle_*.lua` runtime module is not listed for deploy/check.
 
 `82b4929 codex: tighten rune and chase gates`
 - Water rune `stage_cooldown` can be overridden by `rune-stage-override reason=water_emergency`.

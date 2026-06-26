@@ -44,6 +44,12 @@ local order = {
 	"fight", "chase", "farm", "push", "siege", "rune", "recover", "retreat", "safety", "state", "blocked",
 }
 
+function M.PublicFamilies()
+	local out = {}
+	for i, family in ipairs(order) do out[i] = family end
+	return out
+end
+
 function M.Family(name)
 	name = tostring(name or "")
 	for _, family in ipairs(order) do

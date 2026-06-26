@@ -57,8 +57,16 @@ LIVE_PLAYSTYLE_FILES = [
     "Customize/playstyle_dire.lua",
 ]
 
+GENERATED_CODE_FILES = {
+    "FunLib/aibattle_build.lua",
+}
+
 # Files we hand-edit and deploy: a syntax slip here crashes the live match. Mirrors deploy.bat.
 SYNTAX_FILES = LIVE_CODE_FILES + LIVE_PLAYSTYLE_FILES
+
+
+def _norm_rel(path):
+    return path.replace("\\", "/")
 
 
 def run_step(name, cmd):
@@ -79,6 +87,83 @@ def check_forbidden_laning_keys():
             found.append(key)
     if found:
         print("[fail] forbidden keys in mode_laning_generic.lua:", ", ".join(found), flush=True)
+        return False
+    return True
+
+
+def _deploy_copyfiles(section_name):
+    text = (ROOT / "tools" / "deploy.bat").read_text(encoding="utf-8", errors="ignore")
+    in_section = False
+    files = []
+    marker = f'if "%{section_name}%"=="1" ('
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped == marker:
+            in_section = True
+            continue
+        if in_section and stripped == ")":
+            break
+        if not in_section:
+            continue
+        m = re.search(r'call\s+:copyfile\s+"([^"]+)"', stripped, re.IGNORECASE)
+        if m:
+            files.append(_norm_rel(m.group(1)))
+    return files
+
+
+def check_deploy_manifest_sync():
+    print("[check] deploy manifest sync", flush=True)
+    deployed_code = set(_deploy_copyfiles("DO_CODE")) - GENERATED_CODE_FILES
+    deployed_playstyle = set(_deploy_copyfiles("DO_PLAYSTYLE"))
+    expected_code = set(LIVE_CODE_FILES)
+    expected_playstyle = set(LIVE_PLAYSTYLE_FILES)
+
+    ok = True
+    missing_code = sorted(expected_code - deployed_code)
+    extra_code = sorted(deployed_code - expected_code)
+    missing_playstyle = sorted(expected_playstyle - deployed_playstyle)
+    extra_playstyle = sorted(deployed_playstyle - expected_playstyle)
+
+    if missing_code:
+        print("[fail] code files missing from deploy.bat:", ", ".join(missing_code), flush=True)
+        ok = False
+    if extra_code:
+        print("[fail] deploy.bat code files missing from check_all.py:", ", ".join(extra_code), flush=True)
+        ok = False
+    if missing_playstyle:
+        print("[fail] playstyle files missing from deploy.bat:", ", ".join(missing_playstyle), flush=True)
+        ok = False
+    if extra_playstyle:
+        print("[fail] deploy.bat playstyle files missing from check_all.py:", ", ".join(extra_playstyle), flush=True)
+        ok = False
+    return ok
+
+
+def check_aibattle_runtime_modules():
+    print("[check] aibattle runtime modules", flush=True)
+    expected = set(LIVE_CODE_FILES) | GENERATED_CODE_FILES
+    actual = {
+        _norm_rel(str(path.relative_to(ROOT / "bots")))
+        for path in (ROOT / "bots" / "FunLib").glob("aibattle_*.lua")
+    }
+    missing = sorted(actual - expected)
+    if missing:
+        print("[fail] aibattle modules not listed for deploy/check:", ", ".join(missing), flush=True)
+        return False
+
+    require_re = re.compile(r"FunLib/(aibattle_[A-Za-z0-9_]+)")
+    required = set()
+    for rel in LIVE_CODE_FILES:
+        path = ROOT / "bots" / rel
+        if not path.exists():
+            continue
+        text = path.read_text(encoding="utf-8", errors="ignore").replace("\\", "/")
+        for name in require_re.findall(text):
+            required.add(f"FunLib/{name}.lua")
+
+    unresolved = sorted(required - expected)
+    if unresolved:
+        print("[fail] required aibattle modules not listed for deploy/check:", ", ".join(unresolved), flush=True)
         return False
     return True
 
@@ -237,6 +322,8 @@ def main():
     ok = run_step("text encoding", [sys.executable, "tools/check_text_encoding.py"]) and ok
     ok = check_lua_syntax() and ok
     ok = check_forbidden_laning_keys() and ok
+    ok = check_deploy_manifest_sync() and ok
+    ok = check_aibattle_runtime_modules() and ok
 
     if not args.skip_live:
         ok = check_live_build() and ok

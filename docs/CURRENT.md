@@ -1,9 +1,10 @@
 # AIBattle Current State
 
-Last updated by Codex on 2026-06-26 after the tempo/item/intent split.
-Current live bot build before this deploy: `92d096e`.
-Current repo HEAD before this deploy: `92d096e`.
+Last updated by Codex on 2026-06-26 after the infrastructure manifest pass.
+Current live bot build before this pass: `0a92d26`.
+Current repo HEAD before this pass: `0a92d26`.
 Codex-specific compact memory: `docs/CODEX_MEMORY.md`.
+Architecture guide: `docs/ARCHITECTURE.md`.
 
 ## Goal
 
@@ -27,7 +28,9 @@ Make the 1v1 mid bot watchable and debuggable:
 
 `mode_laning_generic.lua` is now about 950 lines, down from about 2000 before the split work.
 
-Keep `tools/deploy.bat` and `tools/check_all.py` synced with every new runtime module.
+Keep `tools/deploy.bat` and `tools/check_all.py` synced with every new runtime module. `tools/check_all.py` now fails if the deploy manifest and check manifest drift, or if a `bots/FunLib/aibattle_*.lua` runtime module is not listed.
+
+Config/playstyle ownership note: Claude currently owns canonical/live config changes. Codex should not stage or commit `canonical_ganker.lua`, `canonical_pusher.lua`, `playstyle_radiant.lua`, or `playstyle_dire.lua` unless the user explicitly asks.
 
 ## Current Laning Order
 
