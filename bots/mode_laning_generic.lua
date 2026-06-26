@@ -656,12 +656,12 @@ local function ThinkLaningCore(dials, rules)
 	if AIBIntentRunner.Run({
 		{ name = "ability-pressure", fn = function() return AIBLaneCombat.AbilityPressure(runtimeCtx) end },
 		{ name = "rune-pressure", fn = function() return AIBLaneCombat.RunePowerPressure(runtimeCtx) end },
-		{ name = "visual-hold", fn = function() return AIBLaneSafety.VisualHoldHeartbeat(runtimeCtx) end },
-		{ name = "visual-afk", fn = function() return AIBLaneSafety.VisualAFK(runtimeCtx) end },
 		{ name = "hero-contact", fn = function() return AIBLaneCombat.ContactHero(runtimeCtx) end },
 		{ name = "creep-react", fn = function() return AIBLaneSafety.CreepHitReact(runtimeCtx) end },
 		{ name = "damage-unstuck", fn = function() return AIBLaneSafety.DamageUnstuck(runtimeCtx) end },
-	}) then return end
+		{ name = "visual-hold", fn = function() return AIBLaneSafety.VisualHoldHeartbeat(runtimeCtx) end },
+		{ name = "visual-afk", fn = function() return AIBLaneSafety.VisualAFK(runtimeCtx) end },
+	}, bot) then return end
 	if J.GetHP(bot) >= 0.28 and J.GetHP(bot) < 0.55 then
 		local safeCs, safeCsSoon = GetBestLastHitCreep(nEnemyCreeps)
 		if J.IsValid(safeCs) and safeCsSoon ~= true
@@ -798,6 +798,8 @@ local function ThinkLaningCore(dials, rules)
 	local pendingLastHit = csAllowed and (csDistNow or math.huge) <= botAttackRange * 1.8
 	local recentRecovery = bot.aib_recMoveLast ~= nil and nowFwd - bot.aib_recMoveLast < 2.5
 	local recentCreepRelief = bot.aib_creepReliefLast ~= nil and nowFwd - bot.aib_creepReliefLast < 1.8
+	local recentVisualHold = bot.aib_holdLast ~= nil and nowFwd - bot.aib_holdLast < 2.5
+	local recentWatchdog = bot.aib_csWatchLast ~= nil and nowFwd - bot.aib_csWatchLast < 3.0
 	local runeCommit = bot.aib_bottleRuneStarted ~= nil and nowFwd - bot.aib_bottleRuneStarted < AIB_RUNE_COMMIT_SECONDS
 	local siegeCommit = bot.aib_siegeCommitUntil ~= nil and nowFwd <= bot.aib_siegeCommitUntil
 	local suppressForward = pressureEnemy ~= nil
@@ -806,6 +808,8 @@ local function ThinkLaningCore(dials, rules)
 		or aib_lowHpHold
 		or recentRecovery
 		or recentCreepRelief
+		or recentVisualHold
+		or recentWatchdog
 		or AIB_HealingChannelActive()
 		or runeCommit
 		or siegeCommit
@@ -826,16 +830,17 @@ local function ThinkLaningCore(dials, rules)
 				dest = Vector(a.x + (b.x - a.x) * fwd, a.y + (b.y - a.y) * fwd, a.z)
 			end
 		end
-		if dest ~= nil and GetUnitToLocationDistance(bot, dest) > 520 then
-			if bot.aib_fwdLast == nil or nowFwd - bot.aib_fwdLast >= 3.5
-				or GetUnitToLocationDistance(bot, dest) > 1050 then
+		if dest ~= nil and GetUnitToLocationDistance(bot, dest) > 650 then
+			if bot.aib_fwdLast == nil or nowFwd - bot.aib_fwdLast >= 6.0
+				or GetUnitToLocationDistance(bot, dest) > 1300 then
 				bot.aib_fwdLast = nowFwd
 				bot:Action_MoveToLocation(dest)
 				AIB_Diag("fwd-position")
+				Style.TickOwner(bot, "forwardness", string.format("dist=%.0f", GetUnitToLocationDistance(bot, dest)), 2.0)
+				return
 			else
 				Style.DiagRL(bot, "fwd-hold", 5)
 			end
-			return
 		end
 		Style.DiagRL(bot, "fwd-at-position", 5)
 	else
@@ -855,6 +860,10 @@ local function ThinkLaningCore(dials, rules)
 			Style.DiagRL(bot, "fwd-suppressed-rune", 5)
 		elseif recentCreepRelief then
 			Style.DiagRL(bot, "fwd-suppressed-damage", 5)
+		elseif recentVisualHold then
+			Style.DiagRL(bot, "fwd-suppressed-visual", 5)
+		elseif recentWatchdog then
+			Style.DiagRL(bot, "fwd-suppressed-watchdog", 5)
 		else
 			Style.DiagRL(bot, "fwd-suppressed-tower", 5)
 		end

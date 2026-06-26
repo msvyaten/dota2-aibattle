@@ -68,6 +68,7 @@ function M.Resolve(intents, ctx)
 				local handled = intent.action(ctx)
 				if handled ~= false then
 					if ctx ~= nil then ctx.last_intent = intent.name end
+					Style.TickOwner(bot, tostring((ctx and (ctx.arbiter or ctx.family or ctx.phase)) or "intent"), "intent=" .. tostring(intent.name), 2.0)
 					return true, intent.name
 				end
 				Style.Blocked(bot, intent.name, "empty_action", intent.detail, intent.sec)
@@ -143,6 +144,7 @@ function M.Run(stages, ctx)
 	for _, stage in ipairs(stages or {}) do
 		if stage ~= nil and stage.run ~= nil and stage.run(ctx) then
 			if ctx ~= nil then ctx.last_stage = stage.name end
+			if ctx ~= nil and ctx.bot ~= nil then Style.TickOwner(ctx.bot, stage.name, "", 2.0) end
 			return true, stage.name
 		end
 	end

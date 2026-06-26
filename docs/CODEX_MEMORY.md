@@ -22,6 +22,13 @@ Post-match fixes from `8867661051`:
 - Rune staging now closes a checked empty spawn window before `water_emergency` can reopen the same route.
 - `visual-hold reason=empty` escalates faster when healthy, so the bot should look for a creep/action sooner instead of standing.
 
+Follow-up behavior package after `8867661051`:
+- `recovery-policy source=lane-low` yields to nearby lane work at HP >=45% when no recent hero/creep damage happened.
+- `tick-owner` telemetry records the stage/intent that consumed the tick (`stage=laning-core`, `stage=forwardness`, `stage=visual-hold`, etc.).
+- Early laning runner now tries hero contact / creep reaction / damage unstuck before `visual-hold`, so safety should be a rarer fallback.
+- Forwardness has a wider move threshold, a 6s cooldown, and is suppressed after visual-hold / CS watchdog; `fwd-position` should drop sharply.
+- Rune staging marks the checked spawn point as known-empty through the next rune tick when a stage window resolves as empty.
+
 Latest architecture package in progress:
 - `aibattle_constants.lua` centralizes internal thresholds/distances.
 - `aibattle_laning_context.lua` builds a per-tick laning snapshot.

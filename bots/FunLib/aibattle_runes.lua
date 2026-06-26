@@ -405,6 +405,7 @@ function M.SeekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 					end
 				end
 				Style.Blocked(bot, diagKey, "stage_done", string.format("eta=%.0f", secsToSpawn), 6.0)
+				markRuneKnownEmpty(bot, stageRune, now)
 				bot.aib_bottleRuneStageClosedWindow = nextSpawnAt
 				bot.aib_bottleRuneStageBlockedWindow = nextSpawnAt
 				bot.aib_bottleRuneStageBlockedUntil = now + math.max(3.0, math.min(8.0, secsToSpawn + 1.0))

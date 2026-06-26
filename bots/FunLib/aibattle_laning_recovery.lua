@@ -30,12 +30,25 @@ end
 
 function M.ThinkIfAllowed(ctx, hpThreshold, diagKey)
 	local bot = ctx.bot
-	if J.GetHP(bot) >= hpThreshold then return false end
+	local hp = J.GetHP(bot)
+	if hp >= hpThreshold then return false end
+	if diagKey == "lane-low" and hp >= 0.45
+		and not bot:WasRecentlyDamagedByAnyHero(2.0)
+		and not bot:WasRecentlyDamagedByCreep(1.2) then
+		local range = attackRange(ctx)
+		local creep = ctx.nearestAttackableEnemyCreep ~= nil and ctx.nearestAttackableEnemyCreep(range + 140) or nil
+		local enemy = ctx.nearestEnemyHero ~= nil and ctx.nearestEnemyHero(range + 180) or nil
+		if creep ~= nil or enemy ~= nil then
+			Style.Blocked(bot, "recovery-policy", "yield_lane_work",
+				string.format("hp=%.0f source=%s creep=%s hero=%s", hp * 100, diagKey, tostring(creep ~= nil), tostring(enemy ~= nil)), 2.0)
+			return false
+		end
+	end
 	if M.ShouldYieldRecoveryToKill(ctx) then
-		Style.Blocked(bot, "recovery-policy", "yield_kill", string.format("hp=%.0f gate=%.0f source=%s", J.GetHP(bot) * 100, hpThreshold * 100, diagKey or "unknown"), 1.5)
+		Style.Blocked(bot, "recovery-policy", "yield_kill", string.format("hp=%.0f gate=%.0f source=%s", hp * 100, hpThreshold * 100, diagKey or "unknown"), 1.5)
 		return false
 	end
-	Style.Intent(bot, "recovery-policy", string.format("action=recover hp=%.0f gate=%.0f source=%s", J.GetHP(bot) * 100, hpThreshold * 100, diagKey or "unknown"), 2.0)
+	Style.Intent(bot, "recovery-policy", string.format("action=recover hp=%.0f gate=%.0f source=%s", hp * 100, hpThreshold * 100, diagKey or "unknown"), 2.0)
 	return ctx.surviveThink(bot, ctx.dials, ctx.enemyCreeps)
 end
 

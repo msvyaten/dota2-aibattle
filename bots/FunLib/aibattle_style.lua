@@ -475,6 +475,18 @@ function M.Intent(bot, name, detail, sec)
     bot:ActionImmediate_Chat("AIB[" .. side .. "] intent=" .. tostring(name) .. suffix, true)
 end
 
+function M.TickOwner(bot, stage, detail, sec)
+    if bot == nil or stage == nil then return end
+    bot.aib_tickOwnerLast = bot.aib_tickOwnerLast or {}
+    local now = DotaTime()
+    local gap = sec or 2.0
+    if bot.aib_tickOwnerLast[stage] ~= nil and now - bot.aib_tickOwnerLast[stage] < gap then
+        return
+    end
+    bot.aib_tickOwnerLast[stage] = now
+    M.Intent(bot, "tick-owner", "stage=" .. tostring(stage) .. ((detail ~= nil and detail ~= "") and (" " .. detail) or ""), gap)
+end
+
 function M.Blocked(bot, name, reason, detail, sec)
     if bot == nil or name == nil then return end
     bot.aib_blockedLast = bot.aib_blockedLast or {}
