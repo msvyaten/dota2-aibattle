@@ -35,7 +35,7 @@ LIVE_CODE_FILES = [
     "FunLib/aibattle_laning_recovery.lua",
     "FunLib/aibattle_laning_combat.lua",
     "FunLib/aibattle_laning_tempo.lua",
-    "FunLib/aibattle_laning_intents.lua",
+    "FunLib/aibattle_laning_arbiter.lua",
     "FunLib/aibattle_laning_duel.lua",
     "FunLib/aibattle_laning_siege.lua",
     "FunLib/aibattle_laning_survival.lua",

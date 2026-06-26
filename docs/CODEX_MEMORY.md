@@ -22,6 +22,13 @@ Post-match fixes from `8867764859`:
 - Double-damage tower pressure can target mid T1 with allied creeps even when the tower is not the current `enemyTowerDanger`, so DD should not fall through to creep-only pressure near a siege.
 - Repeated creep damage lets ranged bots answer from normal attack range, and Haste lowers the forced creep-response HP floor so a hasted bot near its tower is less likely to stand/tank creeps.
 
+Top-level arbiter pass:
+- Added `aibattle_laning_arbiter.lua`.
+- `ThinkLaningCore` now scores and arbitrates `safety / power-rune / fight / recover / siege` after emergency/critical/precreep gates.
+- The arbiter emits `top-arbiter` plus `state-desire-<name>` and `TickOwner desire/<name>`.
+- Recovery is no longer a fixed sequential owner before fight/safety/siege; it competes by score and can fall through if its action yields.
+- Next match watch: `top-arbiter winner=...`, `state-desire-*`, and whether `tick-owner stage=laning-core` drops in favor of `desire/*`.
+
 Post-match fixes from `8867661051`:
 - High-HP single creep chip no longer sends the bot into a large safe retreat; it is logged/blocked as `creep-aggro reason=chip_ignored`.
 - Rune staging now closes a checked empty spawn window before `water_emergency` can reopen the same route.
@@ -43,7 +50,7 @@ Latest architecture package in progress:
 - `aibattle_laning_recovery.lua` owns low-HP gates, critical recovery, and recovery-yield-to-kill.
 - `aibattle_laning_safety.lua` owns visual hold/AFK, creep damage reaction, damage unstuck, and CS watchdog.
 - `aibattle_laning_tempo.lua` owns pregame, pre-creep standoff, tower dive policy, and death window.
-- `aibattle_laning_intents.lua` keeps ordered step execution explicit.
+- `aibattle_laning_arbiter.lua` owns top-level laning desire selection.
 - `aibattle_intents.lua` adds stable public intent families without changing the old intent names.
 - `aibattle_item_policy.lua` owns AIBattle bottle/mango/TP/purchase guards.
 - `mode_laning_generic.lua` is now the orchestrator (~950 lines after this split, down from ~2000).

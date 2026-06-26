@@ -49,11 +49,11 @@ Current owners:
 - `aibattle_laning_recovery.lua`: low-HP gates, critical recovery, recovery-yield logic.
 - `aibattle_laning_safety.lua`: visual hold/AFK, creep damage reaction, damage unstuck, CS watchdog.
 - `aibattle_laning_tempo.lua`: pregame, pre-creep standoff, tower dive policy, death window.
+- `aibattle_laning_arbiter.lua`: top-level laning desire arbitration; evaluates `safety / power-rune / fight / recover / siege` candidates by score and runs only the winner.
 - `aibattle_laning_duel.lua`: pregame/prewave duel movement.
 - `aibattle_laning_siege.lua`: tower pressure and allied-tank rules.
 - `aibattle_laning_survival.lua`: creep aggro relief and combat safety candidates.
 - `aibattle_laning_trade.lua`: hero trade candidates and chase scoring.
-- `aibattle_laning_intents.lua`: small ordered intent runner.
 - `aibattle_runes.lua`: bottle rune transaction, staging, pickup memory.
 - `aibattle_item_policy.lua`: AIBattle bottle/mango/TP/purchase guards.
 - `aibattle_intents.lua`: public intent family taxonomy for summaries.
@@ -75,12 +75,15 @@ The active laning loop should stay readable in this order:
 3. recovery policy: true emergency first, then yield to valid kill windows;
 4. critical recovery lock, with explicit power-rune/kill-window yields;
 5. prewave duel and pre-creep contact;
-6. ability and power-rune pressure;
-7. safety/combat runner;
-8. last-hit and safe lane work;
-9. normal fight arbitration;
-10. push, deny, siege, watchdogs, spacing, final positioning;
-11. last-resort anti-idle.
+6. top-level desire arbiter:
+   - `safety`
+   - `power-rune`
+   - `fight`
+   - `recover`
+   - `siege`
+7. last-hit and safe lane work;
+8. lower-priority harass, creep work, watchdogs, spacing, final positioning;
+9. last-resort anti-idle.
 
 If two layers fight for the same tick, add ownership/priority to the existing layer instead of adding a new fallback at the end.
 
@@ -125,4 +128,3 @@ Keep files boring and small enough to review:
 - One module should own one reason to move/attack/recover.
 - A function that needs many unrelated config fields probably belongs in a policy helper.
 - A fallback that returns true every tick should be treated as a decision owner and logged as such.
-

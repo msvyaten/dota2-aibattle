@@ -53,7 +53,7 @@ local AIBLaneSafety = require(GetScriptDirectory()..'/FunLib/aibattle_laning_saf
 local AIBLaneRecovery = require(GetScriptDirectory()..'/FunLib/aibattle_laning_recovery')
 local AIBLaneCombat = require(GetScriptDirectory()..'/FunLib/aibattle_laning_combat')
 local AIBLaneTempo = require(GetScriptDirectory()..'/FunLib/aibattle_laning_tempo')
-local AIBIntentRunner = require(GetScriptDirectory()..'/FunLib/aibattle_laning_intents')
+local AIBTopArbiter = require(GetScriptDirectory()..'/FunLib/aibattle_laning_arbiter')
 
 local function AIB_ClearRecoveryState()
 	if AIBSurvive.Reset ~= nil then
@@ -623,6 +623,100 @@ local function AIB_PreWaveDuelStep(rules)
 	return AIBLaneDuel.Prewave(AIB_LaningModuleCtx(nil, rules))
 end
 
+local function AIB_RunFightArbiter(intentCtx)
+	local intents = {}
+	intentCtx.arbiter = "fight"
+	local killIntent = AIBLaneTrade.KillLock(intentCtx)
+	if killIntent ~= nil then intents[#intents + 1] = killIntent end
+	local creepIntent = AIBLaneSurvival.CreepAggroRelief(intentCtx)
+	if creepIntent ~= nil then intents[#intents + 1] = creepIntent end
+	local healInterruptIntent = AIBLaneTrade.HealInterrupt(intentCtx)
+	if healInterruptIntent ~= nil then intents[#intents + 1] = healInterruptIntent end
+	local passingHeroIntent = AIBLaneTrade.PassingHeroTrade(intentCtx)
+	if passingHeroIntent ~= nil then intents[#intents + 1] = passingHeroIntent end
+	return AIBEngine.Resolve(intents, intentCtx)
+end
+
+local function AIB_HasSiegeCandidate()
+	local range = botAttackRange or bot:GetAttackRange()
+	local twr = AIB_EnemyTowerDanger()
+	if twr ~= nil then return true end
+	local midT1 = GetTower(GetOpposingTeam(), TOWER_MID_1)
+	if midT1 == nil then return false end
+	return GetUnitToUnitDistance(bot, midT1) <= range + 760
+		and AIB_AlliedCreepsAtTower(midT1, midT1:GetAttackRange() + 240) >= 1
+end
+
+local function AIB_RunTopDesireArbiter(dials, rules, runtimeCtx, intentCtx)
+	local hp = J.GetHP(bot)
+	local range = botAttackRange or bot:GetAttackRange()
+	local enemy, enemyDist = AIB_NearestEnemyHero(math.max(range + 520, 900))
+	local enemyHp = enemy ~= nil and J.GetHP(enemy) or 1.0
+	local powerRune = AIBEngine.PowerRuneState(bot)
+	local combatRune = powerRune == "double_damage" or powerRune == "haste" or powerRune == "arcane"
+	local candidates = {}
+
+	if bot:WasRecentlyDamagedByCreep(1.5) or (bot:WasRecentlyDamagedByAnyHero(1.2) and hp < 0.45) then
+		local score = hp < 0.35 and 126 or 108
+		if bot:WasRecentlyDamagedByCreep(2.0) then score = score + 8 end
+		candidates[#candidates + 1] = AIBTopArbiter.Candidate("safety", score, "recent_damage",
+			string.format("hp=%.0f creep=%s hero=%s", hp * 100, tostring(bot:WasRecentlyDamagedByCreep(1.5)), tostring(bot:WasRecentlyDamagedByAnyHero(1.2))),
+			function()
+				if AIBLaneSafety.CreepHitReact(runtimeCtx) then return true end
+				if AIBLaneSafety.DamageUnstuck(runtimeCtx) then return true end
+				return false
+			end)
+	end
+
+	if combatRune and hp >= 0.30 then
+		local score = 104
+		if powerRune == "double_damage" then score = score + 10 end
+		if powerRune == "haste" then score = score + 6 end
+		if enemy ~= nil then score = score + 5 end
+		candidates[#candidates + 1] = AIBTopArbiter.Candidate("power-rune", score, powerRune,
+			string.format("hp=%.0f enemy=%s", hp * 100, tostring(enemy ~= nil)),
+			function() return AIBLaneCombat.RunePowerPressure(runtimeCtx) end)
+	end
+
+	if enemy ~= nil and hp >= 0.30 then
+		local score = 78
+		if enemyDist <= range + 100 then score = score + 18 end
+		if hp >= enemyHp + 0.12 then score = score + 8 end
+		if enemyHp <= math.max(dials.execute_threshold or 0, 0.45) then score = score + 20 end
+		if combatRune then score = score + 8 end
+		candidates[#candidates + 1] = AIBTopArbiter.Candidate("fight", score, "enemy_seen",
+			string.format("dist=%.0f hp=%.0f ehp=%.0f", enemyDist, hp * 100, enemyHp * 100),
+			function()
+				if AIBLaneCombat.AbilityPressure(runtimeCtx) then return true end
+				if AIBLaneCombat.ContactHero(runtimeCtx) then return true end
+				return AIB_RunFightArbiter(intentCtx)
+			end)
+	end
+
+	if hp < 0.55 then
+		local score = 74
+		if hp < 0.30 then score = 118
+		elseif hp < 0.40 then score = 102 end
+		if combatRune and hp >= 0.35 then score = score - 18 end
+		if bot:WasRecentlyDamagedByCreep(1.5) then score = score - 14 end
+		candidates[#candidates + 1] = AIBTopArbiter.Candidate("recover", score, "hp_gate",
+			string.format("hp=%.0f", hp * 100),
+			function() return AIBLaneRecovery.ThinkIfAllowed(runtimeCtx, 0.55, "lane-low") end)
+	end
+
+	if AIB_HasSiegeCandidate() then
+		local score = 66 + math.floor(20 * (dials.push_desire or 0.5))
+		if AIB_EnemyDeadRecently() then score = score + 22 end
+		if powerRune == "double_damage" then score = score + 18 end
+		if hp < 0.45 then score = score - 18 end
+		candidates[#candidates + 1] = AIBTopArbiter.Candidate("siege", score, "tower_window",
+			string.format("hp=%.0f", hp * 100),
+			function() return AIB_SiegeIntent(dials, rules) end)
+	end
+
+	return AIBTopArbiter.Run(candidates, runtimeCtx)
+end
+
 -- Main laning policy. Think() below only schedules high-level stages.
 local function ThinkLaningCore(dials, rules)
 	local debugSkeleton = rules.debug_skeleton_laning == true
@@ -653,15 +747,7 @@ local function ThinkLaningCore(dials, rules)
 	if AIBLaneRecovery.CriticalLock(runtimeCtx) then return end
 	if AIB_PreWaveDuelStep(rules) then return end
 	if AIBLaneTempo.PreCreepStandoff(runtimeCtx) then return end
-	if AIBIntentRunner.Run({
-		{ name = "ability-pressure", fn = function() return AIBLaneCombat.AbilityPressure(runtimeCtx) end },
-		{ name = "rune-pressure", fn = function() return AIBLaneCombat.RunePowerPressure(runtimeCtx) end },
-		{ name = "hero-contact", fn = function() return AIBLaneCombat.ContactHero(runtimeCtx) end },
-		{ name = "creep-react", fn = function() return AIBLaneSafety.CreepHitReact(runtimeCtx) end },
-		{ name = "damage-unstuck", fn = function() return AIBLaneSafety.DamageUnstuck(runtimeCtx) end },
-		{ name = "visual-hold", fn = function() return AIBLaneSafety.VisualHoldHeartbeat(runtimeCtx) end },
-		{ name = "visual-afk", fn = function() return AIBLaneSafety.VisualAFK(runtimeCtx) end },
-	}, bot) then return end
+	if AIB_RunTopDesireArbiter(dials, rules, runtimeCtx, intentCtx) then return end
 	if J.GetHP(bot) >= 0.28 and J.GetHP(bot) < 0.55 then
 		local safeCs, safeCsSoon = GetBestLastHitCreep(nEnemyCreeps)
 		if J.IsValid(safeCs) and safeCsSoon ~= true
@@ -674,18 +760,6 @@ local function ThinkLaningCore(dials, rules)
 			return
 		end
 	end
-	if AIBLaneRecovery.ThinkIfAllowed(runtimeCtx, 0.55, "lane-low") then return end
-	local intents = {}
-	intentCtx.arbiter = "fight"
-	local killIntent = AIBLaneTrade.KillLock(intentCtx)
-	if killIntent ~= nil then intents[#intents + 1] = killIntent end
-	local creepIntent = AIBLaneSurvival.CreepAggroRelief(intentCtx)
-	if creepIntent ~= nil then intents[#intents + 1] = creepIntent end
-	local healInterruptIntent = AIBLaneTrade.HealInterrupt(intentCtx)
-	if healInterruptIntent ~= nil then intents[#intents + 1] = healInterruptIntent end
-	local passingHeroIntent = AIBLaneTrade.PassingHeroTrade(intentCtx)
-	if passingHeroIntent ~= nil then intents[#intents + 1] = passingHeroIntent end
-	if AIBEngine.Resolve(intents, intentCtx) then return end
 
 	local hitCreep, csSoon = GetBestLastHitCreep(nEnemyCreeps)
 

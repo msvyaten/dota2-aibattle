@@ -20,9 +20,9 @@ Make the 1v1 mid bot watchable and debuggable:
 - `aibattle_laning_recovery.lua`: low-HP gates, critical recovery lock, recovery-yield-to-kill.
 - `aibattle_laning_safety.lua`: visual hold/AFK, creep damage reaction, damage unstuck, CS watchdog.
 - `aibattle_laning_tempo.lua`: pregame, pre-creep standoff, tower dive policy, death window.
+- `aibattle_laning_arbiter.lua`: top-level `safety / power-rune / fight / recover / siege` desire arbitration.
 - `aibattle_laning_creeps.lua`: last-hit, push, deny, ranged spacing hooks.
 - `aibattle_runes.lua`: bottle rune transaction/staging/pickup memory.
-- `aibattle_laning_intents.lua`: tiny ordered stage runner.
 - `aibattle_intents.lua`: public intent family taxonomy (`fight/farm/rune/recover/safety/...`) for logs.
 - `aibattle_item_policy.lua`: AIBattle bottle/mango/TP/purchase guards outside generic item files.
 
@@ -53,24 +53,17 @@ The active laning loop is intentionally ordered:
    - `precreep-contact`;
    - `precreep-close`;
    - `precreep-space`.
-6. Ability and power-rune pressure:
-   - `ability-pressure`;
-   - `rune-pressure`.
-7. Safety/combat runner:
-   - ability pressure;
-   - power-rune pressure;
-   - visual-hold / visual-AFK;
-   - hero contact;
-   - creep-hit reaction;
-   - damage-unstuck.
+6. Top-level desire arbitration:
+   - `safety`;
+   - `power-rune`;
+   - `fight`;
+   - `recover`;
+   - `siege`.
+7. The arbiter logs `top-arbiter` and `state-desire-*`, then runs only the winning candidate.
 8. Low-HP safe last-hit can fire before normal recovery if the creep is already in range.
-9. Normal fight intent arbitration (`arbiter family=fight`):
-   - `creep-aggro`
-   - `channel-interrupt`
-   - `hero-pass`
-10. Last-hit, survival, emergency retreat, kill-priority, harass, CS-walk, push/deny/siege.
-11. Last-hit watchdog, ranged melee-pack spacing, and final positioning via `fwd-position`.
-12. Last-resort `AntiIdleGlobal`.
+9. Last-hit, survival, emergency retreat, kill-priority, harass, CS-walk, push/deny/siege.
+10. Last-hit watchdog, ranged melee-pack spacing, and final positioning via `fwd-position`.
+11. Last-resort `AntiIdleGlobal`.
 
 ## Removed From Active Laning
 
