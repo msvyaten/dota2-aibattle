@@ -6,6 +6,7 @@ local M = {}
 local Style = require(GetScriptDirectory()..'/FunLib/aibattle_style')
 local J = require(GetScriptDirectory()..'/FunLib/jmz_func')
 local Const = require(GetScriptDirectory()..'/FunLib/aibattle_constants')
+local ItemPolicy = require(GetScriptDirectory()..'/FunLib/aibattle_item_policy')
 
 function M.Stage(name, run)
 	return { name = name, run = run }
@@ -229,15 +230,7 @@ function M.AttackOrMoveToBand(ctx, target, diagKey, extraBack)
 end
 
 function M.ShouldUseMango(bot, context)
-	if bot == nil then return false end
-	context = context or {}
-	local hp = J.GetHP(bot)
-	local mp = J.GetMP(bot)
-	if hp < 0.30 and mp < 0.55 then return true end
-	if context.killWindow == true and mp < 0.55 then return true end
-	if context.abilitySoon == true and mp < 0.42 then return true end
-	if mp < 0.12 then return true end
-	return false
+	return ItemPolicy.ShouldUseMango(bot, context)
 end
 
 return M

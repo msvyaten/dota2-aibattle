@@ -4,6 +4,7 @@
 -- Consumed by mode_laning_generic, mode_rune_generic, mode_retreat_generic.
 
 local M = {}
+local AIBIntents = require(GetScriptDirectory()..'/FunLib/aibattle_intents')
 
 -- per-team cache (both heroes on a team share the same config)
 local _cache = {}
@@ -469,7 +470,8 @@ function M.Intent(bot, name, detail, sec)
     end
     bot.aib_intentLast[name] = now
     local side = (bot:GetTeam() == TEAM_RADIANT) and "R" or "D"
-    local suffix = (detail ~= nil and detail ~= "") and (" " .. detail) or ""
+    local enriched = AIBIntents.WithFamily(name, detail)
+    local suffix = (enriched ~= nil and enriched ~= "") and (" " .. enriched) or ""
     bot:ActionImmediate_Chat("AIB[" .. side .. "] intent=" .. tostring(name) .. suffix, true)
 end
 

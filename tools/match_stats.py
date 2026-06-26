@@ -461,6 +461,16 @@ def intent_count(intents, name, side):
 def intent_field_counts(intents, name, side, field):
     return intents.get(name, {}).get(side, {}).get("fields", {}).get(field, {})
 
+def intent_family_counts(intents, side):
+    counts = {}
+    for side_map in intents.values():
+        entry = side_map.get(side)
+        if not entry:
+            continue
+        for family, n in entry.get("fields", {}).get("family", {}).items():
+            counts[family] = counts.get(family, 0) + n
+    return counts
+
 def blocked_reason_counts(blocked, name, side):
     reasons = blocked.get(name, {}).get(side, {})
     return {reason: entry.get("count", 0) for reason, entry in reasons.items()}
@@ -818,6 +828,11 @@ def main():
                 last = f" last({entry['last']})" if entry["last"] else ""
                 chunks.append(f"{side}#{entry['count']}{last}")
             print("  intent:", name, " ".join(chunks))
+        for side in ["R", "D"]:
+            fam = intent_family_counts(intents, side)
+            if fam:
+                parts = [f"{k}={v}" for k, v in sorted(fam.items())]
+                print(f"  intent_family[{side}]: " + " ".join(parts))
         for name in sorted(blocked):
             chunks = []
             for side, reasons in sorted(blocked[name].items()):

@@ -14,6 +14,7 @@ local Localization = require( GetScriptDirectory()..'/FunLib/localization' )
 local Customize = require(GetScriptDirectory()..'/Customize/general')
 local AIBStyle = require(GetScriptDirectory()..'/FunLib/aibattle_style')
 local AIBEngine = require(GetScriptDirectory()..'/FunLib/aibattle_engine')
+local AIBItemPolicy = require(GetScriptDirectory()..'/FunLib/aibattle_item_policy')
 Customize.ThinkLess = Customize.Enable and Customize.ThinkLess or 1
 if GAMEMODE_TURBO == nil then GAMEMODE_TURBO = 23 end
 if GAMEMODE_ARDM == nil then GAMEMODE_ARDM = 20 end
@@ -1765,56 +1766,20 @@ end
 --魔瓶
 X.ConsiderItemDesire["item_bottle"] = function( hItem )
 
-	if hItem:GetCurrentCharges() == 0
-		or bot:HasModifier( "modifier_bottle_regeneration" )
-	then return BOT_ACTION_DESIRE_NONE end
-
-	local nCastRange = 400 + aetherRange
 	local sCastType = 'none'
 	local hEffectTarget = nil
 	local sCastMotive = nil
-	local nLostMana = bot:GetMaxMana() - bot:GetMana()
-	local nLostHealth = bot:OriginalGetMaxHealth() - bot:OriginalGetHealth()
 
-
-	--泉水喝
-	if bot:HasModifier( "modifier_fountain_aura" )
-	then
+	local shouldUse, reason = AIBItemPolicy.ShouldUseBottle(bot, hItem)
+	if shouldUse then
 		hEffectTarget = bot
-		sCastMotive = "在泉水里喝"
+		sCastMotive = 'AIB bottle: ' .. tostring(reason)
 		return BOT_ACTION_DESIRE_HIGH, hEffectTarget, sCastType, sCastMotive
 	end
-
-	--自己喝
-	if not bot:WasRecentlyDamagedByAnyHero( 3.0 )
-	then
-		if nLostHealth > 150 and nLostMana > 90
-		then
-			hEffectTarget = bot
-			sCastMotive = "补血补篮"
-			return BOT_ACTION_DESIRE_HIGH, hEffectTarget, sCastType, sCastMotive
-		end
-
-		if nLostHealth > 500 and J.GetHP( bot ) < 0.5
-		then
-			hEffectTarget = bot
-			sCastMotive = "只补血"
-			return BOT_ACTION_DESIRE_HIGH, hEffectTarget, sCastType, sCastMotive
-		end
-
-		if nLostMana > 280 and J.GetMP( bot ) < 0.4
-		then
-			hEffectTarget = bot
-			sCastMotive = "只补篮"
-			return BOT_ACTION_DESIRE_HIGH, hEffectTarget, sCastType, sCastMotive
-		end
-	end
-
 
 	return BOT_ACTION_DESIRE_NONE
 
 end
-
 
 --小净化
 X.ConsiderItemDesire["item_clarity"] = function( hItem )
@@ -2200,7 +2165,7 @@ X.ConsiderItemDesire["item_enchanted_mango"] = function( hItem )
 		end
 	end
 
-	if AIBEngine.ShouldUseMango(bot, { abilitySoon = abilitySoon, killWindow = killWindow })
+	if AIBItemPolicy.ShouldUseMango(bot, { abilitySoon = abilitySoon, killWindow = killWindow })
 	then
 		hEffectTarget = bot
 		sCastMotive = '自己吃'

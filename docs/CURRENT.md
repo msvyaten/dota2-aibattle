@@ -1,8 +1,8 @@
 # AIBattle Current State
 
-Last updated by Codex on 2026-06-26 after the laning combat/recovery/safety split.
-Current live bot build before this deploy: `59c016a`.
-Current repo HEAD before this deploy: `59c016a`.
+Last updated by Codex on 2026-06-26 after the tempo/item/intent split.
+Current live bot build before this deploy: `92d096e`.
+Current repo HEAD before this deploy: `92d096e`.
 Codex-specific compact memory: `docs/CODEX_MEMORY.md`.
 
 ## Goal
@@ -18,9 +18,14 @@ Make the 1v1 mid bot watchable and debuggable:
 - `aibattle_laning_combat.lua`: hero contact, chase, ability pressure, rune power pressure.
 - `aibattle_laning_recovery.lua`: low-HP gates, critical recovery lock, recovery-yield-to-kill.
 - `aibattle_laning_safety.lua`: visual hold/AFK, creep damage reaction, damage unstuck, CS watchdog.
+- `aibattle_laning_tempo.lua`: pregame, pre-creep standoff, tower dive policy, death window.
 - `aibattle_laning_creeps.lua`: last-hit, push, deny, ranged spacing hooks.
 - `aibattle_runes.lua`: bottle rune transaction/staging/pickup memory.
 - `aibattle_laning_intents.lua`: tiny ordered stage runner.
+- `aibattle_intents.lua`: public intent family taxonomy (`fight/farm/rune/recover/safety/...`) for logs.
+- `aibattle_item_policy.lua`: AIBattle bottle/mango/TP/purchase guards outside generic item files.
+
+`mode_laning_generic.lua` is now about 950 lines, down from about 2000 before the split work.
 
 Keep `tools/deploy.bat` and `tools/check_all.py` synced with every new runtime module.
 
@@ -28,7 +33,10 @@ Keep `tools/deploy.bat` and `tools/check_all.py` synced with every new runtime m
 
 The active laning loop is intentionally ordered:
 
-1. Respawn / pregame / tower-dive guards.
+1. Respawn / tempo guards:
+   - pregame;
+   - tower-dive policy;
+   - enemy death window.
 2. Urgent intent arbitration before survival (`arbiter family=urgent`):
    - `kill-lock`
    - `channel-interrupt`
@@ -75,6 +83,9 @@ These old active fallback layers should not return to `mode_laning_generic.lua`:
 `tools/check_all.py` fails if those keys appear in the active laning file.
 
 ## Normal Diag Keys
+
+Intent telemetry keeps the old `intent=<specific-name>` format and adds `family=<top-level>` details.
+`tools/match_stats.py` prints `intent_family[R/D]` so a match can be scanned by public state first.
 
 Combat / hero:
 - `arbiter family=urgent`

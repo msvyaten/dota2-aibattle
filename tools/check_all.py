@@ -23,6 +23,8 @@ FORBIDDEN_LANING_KEYS = [
 
 LIVE_CODE_FILES = [
     "FunLib/aibattle_engine.lua",
+    "FunLib/aibattle_intents.lua",
+    "FunLib/aibattle_item_policy.lua",
     "FunLib/aibattle_constants.lua",
     "FunLib/aibattle_laning_context.lua",
     "FunLib/aibattle_style.lua",
@@ -32,6 +34,7 @@ LIVE_CODE_FILES = [
     "FunLib/aibattle_laning_safety.lua",
     "FunLib/aibattle_laning_recovery.lua",
     "FunLib/aibattle_laning_combat.lua",
+    "FunLib/aibattle_laning_tempo.lua",
     "FunLib/aibattle_laning_intents.lua",
     "FunLib/aibattle_laning_duel.lua",
     "FunLib/aibattle_laning_siege.lua",
@@ -39,6 +42,8 @@ LIVE_CODE_FILES = [
     "FunLib/aibattle_laning_trade.lua",
     "FunLib/aibattle_utils.lua",
     "FunLib/jmz_func.lua",
+    "ability_item_usage_generic.lua",
+    "item_purchase_generic.lua",
     "mode_laning_generic.lua",
     "mode_roam_generic.lua",
     "mode_retreat_generic.lua",
@@ -53,9 +58,7 @@ LIVE_PLAYSTYLE_FILES = [
 ]
 
 # Files we hand-edit and deploy: a syntax slip here crashes the live match. Mirrors deploy.bat.
-SYNTAX_FILES = LIVE_CODE_FILES + LIVE_PLAYSTYLE_FILES + [
-    "item_purchase_generic.lua",
-]
+SYNTAX_FILES = LIVE_CODE_FILES + LIVE_PLAYSTYLE_FILES
 
 
 def run_step(name, cmd):

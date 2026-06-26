@@ -50,6 +50,8 @@ echo.
 if "%DO_CODE%"=="1" (
 	echo -- code --
 	call :copyfile "FunLib\aibattle_engine.lua" || exit /b 1
+	call :copyfile "FunLib\aibattle_intents.lua" || exit /b 1
+	call :copyfile "FunLib\aibattle_item_policy.lua" || exit /b 1
 	call :copyfile "FunLib\aibattle_constants.lua" || exit /b 1
 	call :copyfile "FunLib\aibattle_laning_context.lua" || exit /b 1
 	call :copyfile "FunLib\aibattle_build.lua" || exit /b 1
@@ -60,6 +62,7 @@ if "%DO_CODE%"=="1" (
 	call :copyfile "FunLib\aibattle_laning_safety.lua" || exit /b 1
 	call :copyfile "FunLib\aibattle_laning_recovery.lua" || exit /b 1
 	call :copyfile "FunLib\aibattle_laning_combat.lua" || exit /b 1
+	call :copyfile "FunLib\aibattle_laning_tempo.lua" || exit /b 1
 	call :copyfile "FunLib\aibattle_laning_intents.lua" || exit /b 1
 	call :copyfile "FunLib\aibattle_laning_duel.lua" || exit /b 1
 	call :copyfile "FunLib\aibattle_laning_siege.lua" || exit /b 1
@@ -67,6 +70,7 @@ if "%DO_CODE%"=="1" (
 	call :copyfile "FunLib\aibattle_laning_trade.lua" || exit /b 1
 	call :copyfile "FunLib\aibattle_utils.lua" || exit /b 1
 	call :copyfile "FunLib\jmz_func.lua" || exit /b 1
+	call :copyfile "ability_item_usage_generic.lua" || exit /b 1
 	call :copyfile "item_purchase_generic.lua" || exit /b 1
 	call :copyfile "mode_laning_generic.lua" || exit /b 1
 	call :copyfile "mode_roam_generic.lua" || exit /b 1

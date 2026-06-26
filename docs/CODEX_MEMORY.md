@@ -2,8 +2,8 @@
 
 Last updated: 2026-06-26.
 
-Current live code build before latest architecture deploy: `59c016a`.
-Current repo HEAD before latest architecture commit: `59c016a`.
+Current live code build before latest architecture deploy: `92d096e`.
+Current repo HEAD before latest architecture commit: `92d096e`.
 
 ## Ownership
 
@@ -25,8 +25,12 @@ Latest architecture package in progress:
 - `aibattle_laning_combat.lua` owns hero contact, chase, ability pressure, and power-rune pressure.
 - `aibattle_laning_recovery.lua` owns low-HP gates, critical recovery, and recovery-yield-to-kill.
 - `aibattle_laning_safety.lua` owns visual hold/AFK, creep damage reaction, damage unstuck, and CS watchdog.
+- `aibattle_laning_tempo.lua` owns pregame, pre-creep standoff, tower dive policy, and death window.
 - `aibattle_laning_intents.lua` keeps ordered step execution explicit.
-- `mode_laning_generic.lua` is now the orchestrator (~1200 lines after this split, down from ~2000).
+- `aibattle_intents.lua` adds stable public intent families without changing the old intent names.
+- `aibattle_item_policy.lua` owns AIBattle bottle/mango/TP/purchase guards.
+- `mode_laning_generic.lua` is now the orchestrator (~950 lines after this split, down from ~2000).
+- `match_stats.py` prints `intent_family[R/D]` from `family=` fields in intent telemetry.
 - Legacy inactive bot files moved to `archive/dota/legacy_code/`.
 - Keep `deploy.bat` and `check_all.py` in sync with every new runtime module.
 
