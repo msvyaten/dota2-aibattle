@@ -65,6 +65,7 @@ function M.Run(candidates, ctx)
 		end
 		Style.Blocked(bot, "top-arbiter", "empty_action",
 			string.format("winner=%s score=%.0f", tostring(c.name), c.priority or 0), 1.5)
+		if bot ~= nil then bot.aib_topArbiterEmptyLast = DotaTime() end
 	end
 	return false, nil
 end

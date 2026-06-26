@@ -17,6 +17,14 @@ Claude currently owns config/playstyle changes. Do not stage or commit these fil
 
 ## Latest Codex Commits
 
+Post-match fixes from `8868017746`:
+- Top-level desire candidates are now stricter: `fight` only enters the arbiter when the enemy is actionable by range/kill/advantage/rune pressure, not merely visible around 1000u.
+- `recover` no longer becomes top desire at 45-55% HP unless recent damage or a lower HP gate makes it urgent.
+- `safety` only enters top desire when recent damage has an actionable creep/low-HP/hero-damage reason.
+- Siege candidate fallback requires a closer tower window and at least two allied creeps near enemy T1, reducing "stand under enemy tower" behavior.
+- After a `top-arbiter empty_action`, forwardness is suppressed briefly and logs `fwd-suppressed-empty`; forwardness also needs a larger distance and longer cooldown.
+- Next match watch: `top-arbiter empty_action` should drop sharply from `8868017746` levels (`R=278`, `D=212`), `fwd-position` should be rarer, and visible back/forth at low HP should reduce.
+
 Post-match fixes from `8867764859`:
 - Rune staging no longer marks a spawn point as known-empty unless the bot actually observed it closely enough or the rune status is already gone; otherwise it emits `stage_unchecked`.
 - Double-damage tower pressure can target mid T1 with allied creeps even when the tower is not the current `enemyTowerDanger`, so DD should not fall through to creep-only pressure near a siege.

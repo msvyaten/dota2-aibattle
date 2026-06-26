@@ -643,8 +643,8 @@ local function AIB_HasSiegeCandidate()
 	if twr ~= nil then return true end
 	local midT1 = GetTower(GetOpposingTeam(), TOWER_MID_1)
 	if midT1 == nil then return false end
-	return GetUnitToUnitDistance(bot, midT1) <= range + 760
-		and AIB_AlliedCreepsAtTower(midT1, midT1:GetAttackRange() + 240) >= 1
+	return GetUnitToUnitDistance(bot, midT1) <= range + 560
+		and AIB_AlliedCreepsAtTower(midT1, midT1:GetAttackRange() + 240) >= 2
 end
 
 local function AIB_RunTopDesireArbiter(dials, rules, runtimeCtx, intentCtx)
@@ -654,13 +654,25 @@ local function AIB_RunTopDesireArbiter(dials, rules, runtimeCtx, intentCtx)
 	local enemyHp = enemy ~= nil and J.GetHP(enemy) or 1.0
 	local powerRune = AIBEngine.PowerRuneState(bot)
 	local combatRune = powerRune == "double_damage" or powerRune == "haste" or powerRune == "arcane"
+	local recentCreepDamage = bot:WasRecentlyDamagedByCreep(1.5)
+	local recentHeroDamage = bot:WasRecentlyDamagedByAnyHero(1.2)
+	local attackableCreep = AIB_NearestAttackableEnemyCreep(range + 160) ~= nil
+	local enemyActionable = false
+	if enemy ~= nil then
+		local execHp = math.max(dials.execute_threshold or 0, 0.45)
+		local directAttack = enemyDist <= range + 100
+		local killChase = enemyHp <= execHp and enemyDist <= range + 360
+		local advantageChase = hp >= enemyHp + 0.12 and enemyDist <= range + 260
+		local runeChase = combatRune and hp >= 0.35 and enemyDist <= ((powerRune == "haste") and 1150 or 900)
+		enemyActionable = directAttack or killChase or advantageChase or runeChase
+	end
 	local candidates = {}
 
-	if bot:WasRecentlyDamagedByCreep(1.5) or (bot:WasRecentlyDamagedByAnyHero(1.2) and hp < 0.45) then
+	if (recentCreepDamage and (attackableCreep or hp < 0.35)) or (recentHeroDamage and hp < 0.45) then
 		local score = hp < 0.35 and 126 or 108
-		if bot:WasRecentlyDamagedByCreep(2.0) then score = score + 8 end
+		if recentCreepDamage then score = score + 8 end
 		candidates[#candidates + 1] = AIBTopArbiter.Candidate("safety", score, "recent_damage",
-			string.format("hp=%.0f creep=%s hero=%s", hp * 100, tostring(bot:WasRecentlyDamagedByCreep(1.5)), tostring(bot:WasRecentlyDamagedByAnyHero(1.2))),
+			string.format("hp=%.0f creep=%s hero=%s", hp * 100, tostring(recentCreepDamage), tostring(recentHeroDamage)),
 			function()
 				if AIBLaneSafety.CreepHitReact(runtimeCtx) then return true end
 				if AIBLaneSafety.DamageUnstuck(runtimeCtx) then return true end
@@ -678,7 +690,7 @@ local function AIB_RunTopDesireArbiter(dials, rules, runtimeCtx, intentCtx)
 			function() return AIBLaneCombat.RunePowerPressure(runtimeCtx) end)
 	end
 
-	if enemy ~= nil and hp >= 0.30 then
+	if enemy ~= nil and hp >= 0.30 and enemyActionable then
 		local score = 78
 		if enemyDist <= range + 100 then score = score + 18 end
 		if hp >= enemyHp + 0.12 then score = score + 8 end
@@ -693,7 +705,7 @@ local function AIB_RunTopDesireArbiter(dials, rules, runtimeCtx, intentCtx)
 			end)
 	end
 
-	if hp < 0.55 then
+	if hp < 0.55 and (hp < 0.45 or recentHeroDamage or recentCreepDamage) then
 		local score = 74
 		if hp < 0.30 then score = 118
 		elseif hp < 0.40 then score = 102 end
@@ -874,6 +886,7 @@ local function ThinkLaningCore(dials, rules)
 	local recentCreepRelief = bot.aib_creepReliefLast ~= nil and nowFwd - bot.aib_creepReliefLast < 1.8
 	local recentVisualHold = bot.aib_holdLast ~= nil and nowFwd - bot.aib_holdLast < 2.5
 	local recentWatchdog = bot.aib_csWatchLast ~= nil and nowFwd - bot.aib_csWatchLast < 3.0
+	local recentTopEmpty = bot.aib_topArbiterEmptyLast ~= nil and nowFwd - bot.aib_topArbiterEmptyLast < 3.0
 	local runeCommit = bot.aib_bottleRuneStarted ~= nil and nowFwd - bot.aib_bottleRuneStarted < AIB_RUNE_COMMIT_SECONDS
 	local siegeCommit = bot.aib_siegeCommitUntil ~= nil and nowFwd <= bot.aib_siegeCommitUntil
 	local suppressForward = pressureEnemy ~= nil
@@ -884,6 +897,7 @@ local function ThinkLaningCore(dials, rules)
 		or recentCreepRelief
 		or recentVisualHold
 		or recentWatchdog
+		or recentTopEmpty
 		or AIB_HealingChannelActive()
 		or runeCommit
 		or siegeCommit
@@ -904,9 +918,9 @@ local function ThinkLaningCore(dials, rules)
 				dest = Vector(a.x + (b.x - a.x) * fwd, a.y + (b.y - a.y) * fwd, a.z)
 			end
 		end
-		if dest ~= nil and GetUnitToLocationDistance(bot, dest) > 650 then
-			if bot.aib_fwdLast == nil or nowFwd - bot.aib_fwdLast >= 6.0
-				or GetUnitToLocationDistance(bot, dest) > 1300 then
+		if dest ~= nil and GetUnitToLocationDistance(bot, dest) > 900 then
+			if bot.aib_fwdLast == nil or nowFwd - bot.aib_fwdLast >= 10.0
+				or GetUnitToLocationDistance(bot, dest) > 1600 then
 				bot.aib_fwdLast = nowFwd
 				bot:Action_MoveToLocation(dest)
 				AIB_Diag("fwd-position")
@@ -938,6 +952,8 @@ local function ThinkLaningCore(dials, rules)
 			Style.DiagRL(bot, "fwd-suppressed-visual", 5)
 		elseif recentWatchdog then
 			Style.DiagRL(bot, "fwd-suppressed-watchdog", 5)
+		elseif recentTopEmpty then
+			Style.DiagRL(bot, "fwd-suppressed-empty", 5)
 		else
 			Style.DiagRL(bot, "fwd-suppressed-tower", 5)
 		end
