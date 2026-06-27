@@ -306,7 +306,7 @@ local originalAction_UseAbility = CDOTA_Bot_Script.Action_UseAbility
 function CDOTA_Bot_Script:Action_UseAbility(hAbility)
     if hAbility == nil or hAbility:IsHidden() then
 		print("Action_UseAbility has been called on ability that's hidden")
-		print("Stack Trace:", debug.traceback())
+		print("Stack Trace:", SafeTraceback())
 		return nil
 	end
     return originalAction_UseAbility(self, hAbility)
@@ -316,7 +316,7 @@ local originalActionPush_UseAbility = CDOTA_Bot_Script.ActionPush_UseAbility
 function CDOTA_Bot_Script:ActionPush_UseAbility(hAbility)
     if hAbility == nil or hAbility:IsHidden() then
 		print("ActionPush_UseAbility has been called on ability that's hidden")
-		print("Stack Trace:", debug.traceback())
+		print("Stack Trace:", SafeTraceback())
 		return nil
 	end
     return originalActionPush_UseAbility(self, hAbility)
@@ -404,7 +404,7 @@ local originalGetUnitToLocationDistance = CDOTA_Bot_Script.GetUnitToLocationDist
 function CDOTA_Bot_Script:GetUnitToLocationDistance(unit, location)
     if location == nil then
 		print("GetUnitToLocationDistance error arg.")
-		print("Stack Trace:", debug.traceback())
+		print("Stack Trace:", SafeTraceback())
 		return 200
 	end
     return originalGetUnitToLocationDistance(self, unit, location)

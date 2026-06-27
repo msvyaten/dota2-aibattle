@@ -122,8 +122,26 @@ Latest architecture package in progress:
 - Haste chase policy is wider.
 - Mutual-low finish and recovery-yield-to-kill were added before the shared engine refactor.
 
+Post-match audit from `8868910894`:
+- Live build was `2fda77a` on both bots; configs were mirror Brawler (`harass=0.90 farm=0.15 fwd=0.78 rune=0.85 gank=0.90`).
+- Match was much more active than the broken runs: Dire won 2-1 by kills in 6:36, first blood at 4:14.
+- Still not clean: Radiant stationary windows `64-75`, `254-269`, `337-347`; Dire stationary windows `83-99`, `109-139`, `287-302`.
+- Worst symptom: Dire `109-139s` stood while losing 23% HP; telemetry showed lane/fight/cs ownership, so this is an ineffective-action/empty-action problem, not a lack of any intent.
+- Runtime errors were still present and must be fixed before trusting behavior metrics:
+  - `aibattle_laning_safety.lua:94` and `aibattle_laning_tempo.lua:246` used `ctx.assignedLane` without a guaranteed lane.
+  - `aibattle_utils.lua:86` called `GetHeightLevel` without runtime guards.
+  - `aba_global_overrides.lua` still had direct `debug.traceback` calls in live stack paths.
+- Fixes made after this audit:
+  - `AIB_LaningModuleCtx` now always carries `assignedLane`.
+  - safety/tempo lane-front fallbacks use `ctx.assignedLane or LANE_MID`.
+  - `AIBUtils.UphillMiss` now guards bot/target/location/height API calls.
+  - `aba_global_overrides.lua` direct traceback prints now use `SafeTraceback`.
+- Next match must first confirm zero `AIB ERR`. If clean, next real behavior target is `top-arbiter empty_action` (`D=86`, `R=79`) and the stationary-with-actions window.
+
 ## Next Match Watchlist
 
+- `AIB ERR` should be zero after the runtime hardening from the `8868910894` audit.
+- If errors are gone but standing remains, inspect `top-arbiter empty_action` and action contracts before adding new fallbacks.
 - `rune-stage-override` should replace repeated water `stage_cooldown` when bottle is empty and water rune is reachable.
 - `recovery-policy yield_kill` should not fire against healthy enemies above roughly 60% HP.
 - `channel-interrupt-chase` should not cause low-HP deaths.

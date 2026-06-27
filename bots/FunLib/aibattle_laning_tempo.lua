@@ -243,7 +243,7 @@ function M.DeathWindow(ctx)
 		end
 		if ctx.moveToAttackEdge(twr, "dw-tower-step", 30) then return true end
 	end
-	local dwDest = GetLaneFrontLocation(GetTeam(), ctx.assignedLane, 0)
+	local dwDest = GetLaneFrontLocation(GetTeam(), ctx.assignedLane or LANE_MID, 0)
 	if dwDest == nil then
 		local enmT1 = GetTower(GetOpposingTeam(), TOWER_MID_1)
 		if enmT1 ~= nil then dwDest = enmT1:GetLocation() end

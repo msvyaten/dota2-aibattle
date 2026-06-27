@@ -91,7 +91,7 @@ function M.VisualAFK(ctx)
 		end
 	end
 	if dest == nil then
-		dest = GetLaneFrontLocation(GetTeam(), ctx.assignedLane, 0)
+		dest = GetLaneFrontLocation(GetTeam(), ctx.assignedLane or LANE_MID, 0)
 		key = "anti-afk-lane"
 	end
 	if dest == nil then return false end

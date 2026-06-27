@@ -80,10 +80,24 @@ function M.EnemyCreepCentroid(enemyCreeps)
 	return n > 0 and Vector(cx / n, cy / n, 0) or nil
 end
 
--- True when bot (ranged) is on lower terrain than target by >30 units; 25% miss applies.
+local function safeHeightLevel(loc)
+	if loc == nil or GetHeightLevel == nil then return nil end
+	local ok, height = pcall(GetHeightLevel, loc)
+	if ok and type(height) == "number" then return height end
+	return nil
+end
+
+-- True when bot (ranged) is on lower terrain than target; 25% miss applies.
 function M.UphillMiss(bot, target)
+	if bot == nil or target == nil then return false end
 	if (bot:GetAttackRange() or 0) <= 310 then return false end
-	return GetHeightLevel(target:GetLocation()) > GetHeightLevel(bot:GetLocation())
+	if bot.GetLocation == nil or target.GetLocation == nil then return false end
+	local okBot, botLoc = pcall(function() return bot:GetLocation() end)
+	local okTarget, targetLoc = pcall(function() return target:GetLocation() end)
+	if not okBot or not okTarget then return false end
+	local botHeight = safeHeightLevel(botLoc)
+	local targetHeight = safeHeightLevel(targetLoc)
+	return botHeight ~= nil and targetHeight ~= nil and targetHeight > botHeight
 end
 
 return M

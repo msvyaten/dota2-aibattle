@@ -576,6 +576,7 @@ local function AIB_LaningModuleCtx(dials, rules)
 		rules = rules or GetRules(),
 		allyCreeps = nAllyCreeps,
 		enemyCreeps = nEnemyCreeps,
+		assignedLane = botAssignedLane or bot:GetAssignedLane() or LANE_MID,
 		attackRange = botAttackRange or bot:GetAttackRange(),
 		enemyTowerDanger = AIB_EnemyTowerDanger,
 		towerThreatening = AIB_TowerActuallyThreatening,
