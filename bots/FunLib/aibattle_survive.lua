@@ -144,6 +144,8 @@ function M.Reset(bot)
 	bot.aib_fountainFullSince = nil
 	bot.aib_fountainBottleLast = nil
 	bot.aib_recWaitStart = nil
+	bot.aib_recWaitDest = nil
+	bot.aib_recWaitKind = nil
 	bot.aib_recMoveLast = nil
 	bot.aib_recBottleLast = nil
 	bot.aib_recFlaskLast = nil
@@ -513,7 +515,12 @@ local function recovery(bot, dials, nEnemyCreeps)
 	-- Fallback chain: only when critically low and items exhausted
 	local threshold = 0.20 + 0.20 * (dials.retreat_caution or 0.5)
 	                + (GetHeroDeaths(bot:GetPlayerID()) >= 1 and 0.08 or 0.0)
-	if hp >= threshold then bot.aib_recWaitStart = nil; return false end
+	if hp >= threshold then
+		bot.aib_recWaitStart = nil
+		bot.aib_recWaitDest = nil
+		bot.aib_recWaitKind = nil
+		return false
+	end
 
 	local behavior = Style.Get().rules.low_hp_behavior or "tp_fountain"
 	local gold     = bot:GetGold()
@@ -583,12 +590,19 @@ local function recovery(bot, dials, nEnemyCreeps)
 	-- Passive regen is context, not a terminal action; standing still here looks like AFK.
 	local back, backKind = xpRecoveryLoc(bot, nEnemyCreeps, hp)
 	if back then
-		if bot.aib_recWaitStart == nil then bot.aib_recWaitStart = DotaTime() end
+		if bot.aib_recWaitStart == nil then
+			bot.aib_recWaitStart = DotaTime()
+			bot.aib_recWaitDest = back
+			bot.aib_recWaitKind = backKind
+		end
+		back = bot.aib_recWaitDest or back
+		backKind = bot.aib_recWaitKind or backKind
 		if DotaTime() - bot.aib_recWaitStart < 10.0 then
 			local backDist = GetUnitToLocationDistance(bot, back)
 			if backDist <= 220 then
 				Style.DiagRL(bot, "recovery-yield", 5)
-				return false
+				recoveryPlan(bot, "wait_safe", "hold_position", string.format("hp=%.0f", hp*100), 4.0)
+				return true
 			end
 			if bot.aib_recMoveLast == nil or DotaTime() - bot.aib_recMoveLast >= 1.5 then
 				bot.aib_recMoveLast = DotaTime(); Style.Diag(bot, "recovery-wait")
@@ -604,6 +618,8 @@ local function recovery(bot, dials, nEnemyCreeps)
 		end
 		-- Timeout elapsed with no items: go to lane at reduced HP rather than staying AFK.
 		bot.aib_recWaitStart = nil
+		bot.aib_recWaitDest = nil
+		bot.aib_recWaitKind = nil
 		Style.DiagRL(bot, "recovery-timeout", 10)
 	end
 

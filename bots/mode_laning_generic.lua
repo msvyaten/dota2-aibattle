@@ -516,9 +516,11 @@ local AIB_MoveToAttackEdgeOf
 local function AIB_AttackEdgeLocation(target, extraBack)
 	if target == nil then return nil end
 	local range = botAttackRange or bot:GetAttackRange()
-	if range <= 300 then return target:GetLocation() end
-	local tl = target:GetLocation()
-	local bl = bot:GetLocation()
+	if target.GetLocation == nil or bot.GetLocation == nil then return nil end
+	local okTarget, tl = pcall(function() return target:GetLocation() end)
+	local okBot, bl = pcall(function() return bot:GetLocation() end)
+	if not okTarget or not okBot or tl == nil or bl == nil then return nil end
+	if range <= 300 then return tl end
 	local packCen, packCount = AIB_MeleeCreepCentroidAround(tl, 380)
 	if packCen ~= nil and packCount >= 2 then
 		local ownT1 = GetTower(GetTeam(), TOWER_MID_1)

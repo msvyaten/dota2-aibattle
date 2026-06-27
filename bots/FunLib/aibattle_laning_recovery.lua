@@ -95,8 +95,12 @@ function M.CriticalLock(ctx)
 	end
 	if dest == nil then return false end
 	if GetUnitToLocationDistance(bot, dest) < 220 then
-		dest = ctx.towardFountain(bot:GetLocation(), 360) or (dest + RandomVector(180))
-		bot.aib_criticalRecoverDest = dest
+		if bot.aib_criticalRecoverLast == nil or now - bot.aib_criticalRecoverLast >= 1.0 then
+			bot.aib_criticalRecoverLast = now
+			Style.Intent(bot, "critical-recovery", string.format("hp=%.0f dist=%.0f ttl=%.0f reason=hold", hp * 100, GetUnitToLocationDistance(bot, dest), bot.aib_criticalRecoverUntil - now), 2.0)
+			ctx.diag("critical-recover-hold")
+		end
+		return true
 	end
 	if bot.aib_criticalRecoverLast == nil or now - bot.aib_criticalRecoverLast >= 0.8 then
 		bot.aib_criticalRecoverLast = now

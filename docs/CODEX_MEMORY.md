@@ -148,10 +148,22 @@ Post-match audit from `8868970379`:
   - `CreepHitReact` updates its cooldown only after a real attack/move action succeeds.
   - top-level safety can fall back to `ActiveLowHp(..., retreatOnly=true)` on hero damage / low HP when creep/damage-unstuck cannot act.
 
+Post-match audit from `8869003005`:
+- Live build was `f97d516`; the deploy/check fix worked, but new runtime errors appeared:
+  - `mode_laning_generic.lua:533` and `aibattle_laning_trade.lua:50` both indexed `tl` after target `GetLocation()` returned nil.
+- User-visible symptom: Dire killed Radiant around `297s` at `13% HP`, then walked back and forth between own T1/T2 while Radiant was dead.
+- Root cause: critical/no-resource recovery kept recalculating safe points. `AIBSurvive.recovery()` used fresh `xpRecoveryLoc()` for `wait_safe`, while `CriticalLock()` changed `aib_criticalRecoverDest` when the bot got within 220u. With no enemy nearby, this created pointless movement between safe anchors.
+- Fixes made:
+  - target-edge movement now guards `GetLocation()` with `pcall` and returns false when no movement can be issued.
+  - trade chase callbacks propagate failed movement as `empty_action` instead of pretending they acted.
+  - no-resource recovery pins `aib_recWaitDest`/`aib_recWaitKind` for the 10s wait window.
+  - when already at critical recovery destination, `CriticalLock` holds position instead of generating a new toward-fountain point.
+
 ## Next Match Watchlist
 
 - `AIB ERR` should be zero after the runtime hardening from the `8868910894` audit.
 - After `93812e6` plus the narrow Codex follow-up, watch `uphill-reposition`, `low-hp-safe-step`, `top-arbiter empty_action`, and visible back/forth movement separately.
+- After the `8869003005` fix, watch Dire/Radiant after a low-HP kill: expected behavior is one safe anchor + heal/wait, not T1/T2 ping-pong.
 - If errors are gone but standing remains, inspect `top-arbiter empty_action` and action contracts before adding new fallbacks.
 - `rune-stage-override` should replace repeated water `stage_cooldown` when bottle is empty and water rune is reachable.
 - `recovery-policy yield_kill` should not fire against healthy enemies above roughly 60% HP.
