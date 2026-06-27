@@ -67,7 +67,7 @@ The active laning loop is intentionally ordered:
 9. Last-hit, survival, emergency retreat, kill-priority, harass, CS-walk, push/deny/siege.
 10. Last-hit watchdog, ranged melee-pack spacing, and final positioning via `fwd-position`.
 11. Last-resort visual hold / visual AFK.
-12. `lane-line-fallback` only if recovery/safety/siege/creep gates are quiet; it must not override low-HP recovery, recent `empty_action`, creep damage, or an enemy-dead siege candidate.
+12. `lane-line-fallback` only if recovery/safety/siege/creep gates are quiet; it must not override low-HP recovery, recent `empty_action`, creep damage, or an enemy-dead siege candidate. Its target is clamped by allied creep front, not just static tower-line `forwardness`.
 13. Last-resort `AntiIdleGlobal`.
 
 ## Removed From Active Laning

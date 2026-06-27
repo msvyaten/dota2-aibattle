@@ -81,6 +81,8 @@ M.Forward = {
 	laneFallbackMinHp = 0.55,
 	laneFallbackRecoveryCooldown = 2.5,
 	laneFallbackCreepReliefCooldown = 1.8,
+	laneFallbackFrontBackoff = 180,
+	laneFallbackNoCreepMaxFwd = 0.50,
 }
 
 local function add(parts, key, value)

@@ -690,16 +690,56 @@ local function AIB_LaneLineFallback(dials)
 	local enmT1 = GetTower(GetOpposingTeam(), TOWER_MID_1)
 	if ownT1 == nil or enmT1 == nil then return false end
 	local a, b = ownT1:GetLocation(), enmT1:GetLocation()
+	local dx, dy = b.x - a.x, b.y - a.y
+	local laneLen = math.sqrt(dx * dx + dy * dy)
+	if laneLen <= 1 then return false end
+	local dirX, dirY = dx / laneLen, dy / laneLen
+	local function projRatio(loc)
+		if loc == nil then return nil end
+		local px, py = loc.x - a.x, loc.y - a.y
+		return math.max(0.0, math.min(1.0, (px * dirX + py * dirY) / laneLen))
+	end
 	local fwd = math.max(0.35, math.min(0.72, (dials or {}).forwardness or 0.5))
+	local frontFwd = nil
+	for _, creep in pairs(nAllyCreeps or {}) do
+		if J.IsValid(creep) then
+			local cr = projRatio(creep:GetLocation())
+			if cr ~= nil and (frontFwd == nil or cr > frontFwd) then frontFwd = cr end
+		end
+	end
+	local clampReason = nil
+	if frontFwd ~= nil then
+		local range = botAttackRange or bot:GetAttackRange()
+		local maxLead = math.max(180, range - AIBLanePolicy.Forward.laneFallbackFrontBackoff)
+		local maxFwd = math.min(0.72, frontFwd + maxLead / laneLen)
+		if fwd > maxFwd then
+			fwd = maxFwd
+			clampReason = "front"
+		end
+	else
+		local maxFwd = AIBLanePolicy.Forward.laneFallbackNoCreepMaxFwd
+		if fwd > maxFwd then
+			fwd = maxFwd
+			clampReason = "no_creep"
+		end
+	end
 	local dest = Vector(a.x + (b.x - a.x) * fwd, a.y + (b.y - a.y) * fwd, a.z)
 	if GetUnitToLocationDistance(bot, dest) <= 220 then
 		fwd = math.min(0.84, fwd + 0.12)
+		if frontFwd ~= nil then
+			local range = botAttackRange or bot:GetAttackRange()
+			local maxLead = math.max(180, range - AIBLanePolicy.Forward.laneFallbackFrontBackoff)
+			fwd = math.min(fwd, math.min(0.72, frontFwd + maxLead / laneLen))
+		else
+			fwd = math.min(fwd, AIBLanePolicy.Forward.laneFallbackNoCreepMaxFwd)
+		end
 		dest = Vector(a.x + (b.x - a.x) * fwd, a.y + (b.y - a.y) * fwd, a.z)
 		if GetUnitToLocationDistance(bot, dest) <= 220 then return false end
 	end
 	bot:Action_MoveToLocation(dest + RandomVector(45))
 	AIB_Diag("lane-line-fallback")
-	Style.TickOwner(bot, "lane-line-fallback", string.format("dist=%.0f fwd=%.2f", GetUnitToLocationDistance(bot, dest), fwd), 2.0)
+	Style.TickOwner(bot, "lane-line-fallback",
+		string.format("dist=%.0f fwd=%.2f clamp=%s", GetUnitToLocationDistance(bot, dest), fwd, tostring(clampReason or "none")), 2.0)
 	return true
 end
 
