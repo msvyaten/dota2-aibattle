@@ -286,6 +286,10 @@ function GetDesire()
 
 	if GetGameMode() == 23 then currentTime = currentTime * 1.65 end
 
+	-- AIBattle 1v1: laning is the ONLY useful mode here. Keep desire high before any
+	-- OHA local-mode fallback can yield control; recovery/retreat is handled in Think().
+	if GetGameMode() == GAMEMODE_1V1MID then return 0.7 end
+
 	if J.GetEnemiesAroundAncient(bot, 3200) > 0 then
 		return BOT_MODE_DESIRE_NONE
 	end
@@ -320,12 +324,6 @@ function GetDesire()
 		end
 	end
 	if local_mode_laning_generic and local_mode_laning_generic.GetDesire ~= nil then return local_mode_laning_generic.GetDesire() end
-
-	-- AIBattle 1v1: laning is the ONLY useful mode here. Keep desire high the whole game so the
-	-- bot never defers to OHA retreat/jungle modes -- after ~12 min the fallbacks below collapse
-	-- to 0.2/0.01, which let retreat-mode win and walk the bot to fountain, abandoning the lane
-	-- and tower (match 8862431491). All retreat/regen is handled inside ThinkLaningCore.
-	if GetGameMode() == GAMEMODE_1V1MID then return 0.7 end
 
 	if currentTime <= 10 then return 0.268 end
 	if currentTime <= 9 * 60 and botLV <= 7 then return 0.446 end

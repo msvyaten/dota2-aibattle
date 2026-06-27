@@ -29,6 +29,7 @@ Post-regression fixes from `8868671903`:
 - Added a 1v1 lane-line last resort that moves along the own-T1 -> enemy-T1 line by `forwardness` when all normal owners yield, preventing silent parking on pregame anchors.
 - Follow-up without logs: `PreCreepStandoff()` no longer consumes the tick with `precreep-hold` when already at anchor and no action is issued; it yields to core fallback instead.
 - Follow-up from interrupted `8868751540`: if lane-line fallback's first target is too close to the current anchor, it advances the target by +0.12 forwardness instead of silently yielding. Dire had sat at `170,299` with the enemy ~1105u away and no actions.
+- Live `8868768840` showed Dire got only `state-post-horn-reset` after `t=0` and then no `tick-owner`, while staying at `170,299` with 0 LH. Root cause candidate: old OHA `local_mode_laning_generic.GetDesire()` sat before the 1v1 desire override and could yield laning ownership after horn. The 1v1 override now returns before OHA local-mode fallback, so Think keeps running and internal recovery/retreat owns decisions.
 
 Pre-match rune bug fixes:
 - `stage_unchecked` no longer closes the bottle rune staging window unless the bot actually observed the staged rune spot.
