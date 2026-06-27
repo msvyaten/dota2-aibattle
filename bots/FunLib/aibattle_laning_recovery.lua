@@ -52,9 +52,10 @@ function M.ThinkIfAllowed(ctx, hpThreshold, diagKey)
 	if ctx.surviveThink(bot, ctx.dials, ctx.enemyCreeps) then return true end
 	-- No items/TP: if taking recent hero damage in the 45-55% HP gap, step back toward safety
 	-- rather than stalling with empty_action and letting visual-hold suppress all movement.
-	if diagKey == "lane-low" and bot:WasRecentlyDamagedByAnyHero(3.0) then
+	if diagKey == "lane-low" then
 		return M.ActiveLowHp(ctx, hpThreshold, true)
 	end
+	if hp < 0.45 then return M.ActiveLowHp(ctx, 0.45, true) end
 	return false
 end
 

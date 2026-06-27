@@ -88,7 +88,10 @@ function M.KillWindow(ctx)
 	if not (enemies and #enemies > 0) then return nil end
 
 	for _, enemy in ipairs(enemies) do
-		if enemy ~= nil and enemy:IsAlive() then
+		if enemy ~= nil and enemy:IsAlive()
+			and enemy.GetHealth ~= nil and enemy:GetHealth() > 0
+			and enemy.GetMaxHealth ~= nil and enemy:GetMaxHealth() > 0
+			and not J.IsSuspiciousIllusion(enemy) then
 			local hp = J.GetHP(bot)
 			local ehp = J.GetHP(enemy)
 			local dist = GetUnitToUnitDistance(bot, enemy)

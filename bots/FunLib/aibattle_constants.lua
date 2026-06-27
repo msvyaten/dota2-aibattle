@@ -13,12 +13,12 @@ M.Visual = {
 M.Rune = {
 	commitSeconds = 30.0,
 	bottleMaxDist = 1900.0,
-	bottleStageMaxDist = 3600.0,
+	bottleStageMaxDist = 4300.0,
 	bottleLaneBudget = 1500.0,
-	waterRecoveryMaxDist = 4300.0,
+	waterRecoveryMaxDist = 4700.0,
 	recoveryMaxDist = 3600.0,
-	recoveryStageMaxDist = 4200.0,
-	waterMidContextMax = 3200.0,
+	recoveryStageMaxDist = 4700.0,
+	waterMidContextMax = 4200.0,
 }
 
 M.Recovery = {

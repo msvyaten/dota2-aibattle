@@ -28,6 +28,7 @@ Post-match fix from `8869519932`:
 - Match ran on `2206b49` and confirmed lane-line clamp telemetry (`clamp=front`), but it is not a clean behavior baseline because both bots emitted ~100 `AIB ERR` crashes from `aibattle_style.lua:709`.
 - Root cause: `aibattle_style.lua` used global `J` inside `AntiIdleGlobal()` and Aegis policy without importing it; adding a direct `jmz_func` require would risk a `style <-> jmz_func` cycle.
 - Fix: style now uses local `hpFrac()` and `heroPosition()` helpers, with `aba_role` loaded through guarded `pcall`, so the global `J` dependency is gone from the fallback path.
+- Follow-up from audit notes: prewave duel now actively backs off when an aggressive-mid trade is blocked by uphill, instead of standing lower-ground and giving free attacks. `KillWindow()` now rejects invalid/dead/suspicious enemies before recovery-yield or KillLock can log fake `ehp=-66600`. Empty-bottle water recovery reaches farther within the mid-water corridor and logs actual nearest/water/mid distances. Recover desire now has a final safe-step contract instead of returning `empty_action` after survival yields.
 
 Post-regression fixes from `8868630321`:
 - Root cause #1: old OHA hero-damage/offlane gate in `GetDesire()` could return `BOT_MODE_DESIRE_NONE` before the 1v1 laning override. With `heal=active`, Dire stopped thinking after early damage, producing no `top-arbiter`, no CS, and `LH=0`. In 1v1 this gate is now bypassed so AIBattle recovery/farm/fight owners keep running.

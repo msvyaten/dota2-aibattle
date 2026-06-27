@@ -25,6 +25,12 @@ local function duelState(ctx, enemy, dist, phase, hpFloor, approachExtra)
 	end
 	if dist > range and AIBUtils.UphillMiss(bot, enemy) then
 		ctx.blocked("prewave-duel", "uphill", string.format("phase=%s dist=%.0f", phase, dist), 3.0)
+		local back = ctx.towardFountain(bot:GetLocation(), (phase == "pregame") and 360 or 300)
+		if back ~= nil then
+			bot:Action_MoveToLocation(back)
+			ctx.diag(keyPrefix .. "-uphill-back")
+			return true
+		end
 		return false
 	end
 	if Style.AbilityExecute(bot, enemy) then return true end

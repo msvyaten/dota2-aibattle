@@ -310,12 +310,15 @@ function M.SeekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 	end
 
 	local bestRune, bestLoc, bestDist, bestScore = nil, nil, math.huge, math.huge
+	local nearestDist, nearestWaterDist = math.huge, math.huge
 	for _, runeId in ipairs({ RUNE_POWERUP_1, RUNE_POWERUP_2 }) do
 		if GetRuneStatus(runeId) == RUNE_STATUS_AVAILABLE and not isRuneKnownEmpty(bot, runeId, now) then
 			local loc = GetRuneSpawnLocation(runeId)
 			if loc ~= nil then
 				local dist = GetUnitToLocationDistance(bot, loc)
 				local runeType = GetRuneType(runeId)
+				if dist < nearestDist then nearestDist = dist end
+				if runeType == RUNE_WATER and dist < nearestWaterDist then nearestWaterDist = dist end
 				local score = dist + ((runeType == RUNE_WATER) and 0 or 350)
 				local allowedDist = dist <= (maxDist or 2600)
 					or (runeType == RUNE_WATER and waterRecoveryAllowed(bot, hp, mana, dist, forceEmptyBottle))
@@ -450,7 +453,9 @@ function M.SeekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 				return true
 			end
 		end
-		Style.Blocked(bot, diagKey, "no_close_rune", string.format("max=%.0f water=%.0f", maxDist or 2600, Const.Rune.waterRecoveryMaxDist), 8.0)
+		Style.Blocked(bot, diagKey, "no_close_rune",
+			string.format("max=%.0f waterMax=%.0f nearest=%.0f water=%.0f mid=%.0f",
+				maxDist or 2600, Const.Rune.waterRecoveryMaxDist, nearestDist, nearestWaterDist, midContextDistance(bot)), 8.0)
 		return false
 	end
 

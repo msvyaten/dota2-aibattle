@@ -54,6 +54,7 @@ The active laning loop is intentionally ordered:
 4. `critical-recovery` lock, but active DD/Haste/Arcane or a valid kill window can clear it.
 5. Prewave duel and pre-creep standoff:
    - `prewave-duel-*`;
+   - `prewave-duel-uphill-back` / `pg-duel-uphill-back` when aggressive-mid would fight from low ground;
    - `precreep-contact`;
    - `precreep-close`;
    - `precreep-space`.
