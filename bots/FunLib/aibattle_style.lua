@@ -6,6 +6,22 @@
 local M = {}
 local AIBIntents = require(GetScriptDirectory()..'/FunLib/aibattle_intents')
 
+local function hpFrac(unit)
+    if unit == nil or unit.GetHealth == nil or unit.GetMaxHealth == nil then return 1.0 end
+    local maxHp = unit:GetMaxHealth()
+    if maxHp == nil or maxHp <= 0 then return 1.0 end
+    return unit:GetHealth() / maxHp
+end
+
+local function heroPosition(unit)
+    local ok, Role = pcall(require, GetScriptDirectory()..'/FunLib/aba_role')
+    if ok and Role ~= nil and Role.GetPosition ~= nil then
+        local pos = Role.GetPosition(unit)
+        if pos ~= nil then return pos end
+    end
+    return 2
+end
+
 -- per-team cache (both heroes on a team share the same config)
 local _cache = {}
 
@@ -603,7 +619,7 @@ end
 -- Call from ItemOpsDesire/ItemOpsThink in mode_team_roam_generic.lua.
 function M.ShouldPickupAegis(bot)
     local policy = M.Get().rules.aegis_policy or DEFAULT_AEGIS
-    local pos = J.GetPosition(bot)
+    local pos = heroPosition(bot)
 
     if policy == "any" then return true end
 
@@ -616,7 +632,7 @@ function M.ShouldPickupAegis(bot)
     if pos == 1 then return true end
     for i = 1, 5 do
         local ally = GetTeamMember(i)
-        if ally ~= nil and ally ~= bot and ally:IsAlive() and J.GetPosition(ally) == 1 then
+        if ally ~= nil and ally ~= bot and ally:IsAlive() and heroPosition(ally) == 1 then
             return false  -- carry alive; let them take it
         end
     end
@@ -706,7 +722,7 @@ end
 -- No meaningful-action gate: caller must place this after all normal mode logic.
 function M.AntiIdleGlobal(bot)
     M.DiagRL(bot, "anti-idle-enter", 3)
-    local lowHp = J.GetHP(bot) < 0.25
+    local lowHp = hpFrac(bot) < 0.25
     local lane = bot:GetAssignedLane()
 
     if antiIdleCombat(bot, lowHp) then return true end

@@ -27,6 +27,7 @@ Make the 1v1 mid bot watchable and debuggable:
 - `aibattle_engine.lua`: shared runtime helpers including power-rune state/use policy and action-rune classification.
 - `aibattle_intents.lua`: public intent family taxonomy (`fight/farm/rune/recover/safety/...`) for logs.
 - `aibattle_item_policy.lua`: AIBattle bottle/mango/TP/purchase guards outside generic item files.
+- `aibattle_style.lua`: playstyle/rules loader plus global style fallbacks; it must not depend on `jmz_func.lua` because `jmz_func` can load style for item/skill builds.
 
 `mode_laning_generic.lua` is now about 950 lines, down from about 2000 before the split work.
 

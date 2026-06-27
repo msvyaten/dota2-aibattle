@@ -24,6 +24,11 @@ Post-match fix from `8869466858`:
 - Fix: `lane-line-fallback` now yields while low HP, healing, recently recovering, recently creep-relieving, after top-arbiter `empty_action`, after recent creep damage, when an attackable creep is already in range, or when an enemy-dead siege candidate exists. This keeps it as a true last-resort lane unstick, not a second positioning brain.
 - Follow-up: the fallback target is now clamped by the actual allied creep front. It can no longer always run to the static `forwardness=0.72` point between mid T1 towers while waves are still near base; if no allied creep front is visible, it is capped at midline. Telemetry includes `clamp=front/no_creep/none`.
 
+Post-match fix from `8869519932`:
+- Match ran on `2206b49` and confirmed lane-line clamp telemetry (`clamp=front`), but it is not a clean behavior baseline because both bots emitted ~100 `AIB ERR` crashes from `aibattle_style.lua:709`.
+- Root cause: `aibattle_style.lua` used global `J` inside `AntiIdleGlobal()` and Aegis policy without importing it; adding a direct `jmz_func` require would risk a `style <-> jmz_func` cycle.
+- Fix: style now uses local `hpFrac()` and `heroPosition()` helpers, with `aba_role` loaded through guarded `pcall`, so the global `J` dependency is gone from the fallback path.
+
 Post-regression fixes from `8868630321`:
 - Root cause #1: old OHA hero-damage/offlane gate in `GetDesire()` could return `BOT_MODE_DESIRE_NONE` before the 1v1 laning override. With `heal=active`, Dire stopped thinking after early damage, producing no `top-arbiter`, no CS, and `LH=0`. In 1v1 this gate is now bypassed so AIBattle recovery/farm/fight owners keep running.
 - Root cause #2: `PreCreepStandoff()` ignored `pregame_behavior` and always built an `aggressive_mid` anchor after horn. `pgb=safe_tower` could still be dragged into mid contact, take early damage, and fall into recovery. Post-horn precreep anchor now respects the configured pregame behavior.
