@@ -74,12 +74,14 @@ function M.PreCreepStandoff(ctx)
 		if ctx.moveToAttackEdge(enemy, "precreep-close", 0) then return true end
 	end
 
-	local anchor, totalDist, dirX, dirY = towerLineAnchor(ctx, "aggressive_mid")
+	local anchor, totalDist, dirX, dirY = towerLineAnchor(ctx, preMode)
 	if anchor ~= nil then
 		local ownT1 = GetTower(GetTeam(), TOWER_MID_1)
-		local a = ownT1:GetLocation()
-		local anchorDist = math.min(totalDist * 0.46, totalDist - range - 250)
-		anchor = Vector(a.x + dirX * anchorDist, a.y + dirY * anchorDist, a.z)
+		if preMode == "aggressive_mid" then
+			local a = ownT1:GetLocation()
+			local anchorDist = math.min(totalDist * 0.46, totalDist - range - 250)
+			anchor = Vector(a.x + dirX * anchorDist, a.y + dirY * anchorDist, a.z)
+		end
 		local anchorGap = GetUnitToLocationDistance(bot, anchor)
 		if anchorGap <= 160 then
 			if enemy ~= nil and dist < range * 0.70 then

@@ -17,6 +17,11 @@ Claude currently owns config/playstyle changes. Do not stage or commit these fil
 
 ## Latest Codex Commits
 
+Post-regression fixes from `8868630321`:
+- Root cause #1: old OHA hero-damage/offlane gate in `GetDesire()` could return `BOT_MODE_DESIRE_NONE` before the 1v1 laning override. With `heal=active`, Dire stopped thinking after early damage, producing no `top-arbiter`, no CS, and `LH=0`. In 1v1 this gate is now bypassed so AIBattle recovery/farm/fight owners keep running.
+- Root cause #2: `PreCreepStandoff()` ignored `pregame_behavior` and always built an `aggressive_mid` anchor after horn. `pgb=safe_tower` could still be dragged into mid contact, take early damage, and fall into recovery. Post-horn precreep anchor now respects the configured pregame behavior.
+- Match evidence: `8868630321` Dire stood at `-427,-296` from 31s to 97s with enemy at ~780u and LH=0, while no top-arbiter/farm/fight intents were emitted. That pattern means mode ownership was disabled, not merely a bad last-hit choice.
+
 Pre-match rune bug fixes:
 - `stage_unchecked` no longer closes the bottle rune staging window unless the bot actually observed the staged rune spot.
 - Added `AIBEngine.IsActionPowerRune()` so `double_damage/haste/arcane/regen/invis/illusion` are handled through one runtime helper instead of four hard-coded combat-rune lists.

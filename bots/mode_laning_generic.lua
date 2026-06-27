@@ -294,7 +294,8 @@ function GetDesire()
 	and #J.Utils.GetLastSeenEnemyIdsNearLocation(bot:GetLocation(), 800) > 0 then
 		local nLaneFrontLocation = GetLaneFrontLocation(GetTeam(), bot:GetAssignedLane(), 0)
 		local nDistFromLane = GetUnitToLocationDistance(bot, nLaneFrontLocation)
-		if not J.WeAreStronger(bot, 1200) or (nDistFromLane > 700 and J.GetHP(bot) < 0.7) then
+		if GetGameMode() ~= GAMEMODE_1V1MID
+		and (not J.WeAreStronger(bot, 1200) or (nDistFromLane > 700 and J.GetHP(bot) < 0.7)) then
 			-- AIBattle: regen_lane handles its own retreat logic in Think(); keep laning active
 			-- so our regen-lane / retreat-blocked code can run even during fights.
 			if Style.Get().rules.low_hp_behavior ~= "regen_lane" then
