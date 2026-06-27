@@ -1,8 +1,8 @@
 # AIBattle Current State
 
-Last updated by Codex on 2026-06-26 after the arbiter audit tooling pass.
-Current live bot build before this pass: `0b7e813`.
-Current repo HEAD before this pass: `0b7e813`.
+Last updated by Codex on 2026-06-27 after the lane-line fallback suppression pass.
+Current live bot build before this pass: `fca88cc`.
+Current repo HEAD before this pass: `fca88cc`.
 Codex-specific compact memory: `docs/CODEX_MEMORY.md`.
 Architecture guide: `docs/ARCHITECTURE.md`.
 
@@ -33,7 +33,7 @@ Make the 1v1 mid bot watchable and debuggable:
 Keep `tools/deploy.bat` and `tools/check_all.py` synced with every new runtime module. `tools/check_all.py` now fails if the deploy manifest and check manifest drift, or if a `bots/FunLib/aibattle_*.lua` runtime module is not listed.
 Retired runtime modules must also be removed from live Dota; `deploy.bat code` deletes known stale files and `check_all.py` fails if `FunLib/aibattle_laning_intents.lua` is still present.
 
-Config/playstyle ownership note: Claude currently owns canonical/live config changes. Codex should not stage or commit `canonical_ganker.lua`, `canonical_pusher.lua`, `playstyle_radiant.lua`, or `playstyle_dire.lua` unless the user explicitly asks.
+Config/playstyle ownership note: Claude currently owns canonical/live config changes. Codex should not stage or commit `canonical_ganker.lua`, `canonical_pusher.lua`, `canonical_farmer.lua`, `playstyle_radiant.lua`, or `playstyle_dire.lua` unless the user explicitly asks.
 
 ## Current Laning Order
 
@@ -66,7 +66,9 @@ The active laning loop is intentionally ordered:
 8. Low-HP safe last-hit can fire before normal recovery if the creep is already in range.
 9. Last-hit, survival, emergency retreat, kill-priority, harass, CS-walk, push/deny/siege.
 10. Last-hit watchdog, ranged melee-pack spacing, and final positioning via `fwd-position`.
-11. Last-resort `AntiIdleGlobal`.
+11. Last-resort visual hold / visual AFK.
+12. `lane-line-fallback` only if recovery/safety/siege/creep gates are quiet; it must not override low-HP recovery, recent `empty_action`, creep damage, or an enemy-dead siege candidate.
+13. Last-resort `AntiIdleGlobal`.
 
 ## Removed From Active Laning
 

@@ -78,6 +78,9 @@ M.Forward = {
 	cooldown = 10.0,
 	longMoveOverrideDist = 1600,
 	suppressAfterEmptyDesire = 3.0,
+	laneFallbackMinHp = 0.55,
+	laneFallbackRecoveryCooldown = 2.5,
+	laneFallbackCreepReliefCooldown = 1.8,
 }
 
 local function add(parts, key, value)

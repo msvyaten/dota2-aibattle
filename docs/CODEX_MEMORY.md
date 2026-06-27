@@ -1,6 +1,6 @@
 # Codex Memory
 
-Last updated: 2026-06-26.
+Last updated: 2026-06-27.
 
 Current live code build before latest arbiter-audit pass: `0b7e813`.
 Current repo HEAD before latest arbiter-audit commit: `0b7e813`.
@@ -12,10 +12,16 @@ Codex owns engine/code cleanup and behavior fixes.
 Claude currently owns config/playstyle changes. Do not stage or commit these files unless the user explicitly asks:
 - `bots/Customize/canonical_ganker.lua`
 - `bots/Customize/canonical_pusher.lua`
+- `bots/Customize/canonical_farmer.lua`
 - `bots/Customize/playstyle_radiant.lua`
 - `bots/Customize/playstyle_dire.lua`
 
 ## Latest Codex Commits
+
+Post-match fix from `8869466858`:
+- Radiant did not calmly convert first-blood into highground pressure because the death-window started at very low HP (`hp=26-31%`) and yielded into recovery; later, when recovery/top-arbiter produced `empty_action`, the bottom `lane-line-fallback` ignored the same suppression gates that already protect `forwardness`.
+- Root evidence: `lane-line-fallback` moved Radiant by ~2023u at `hp=42` right after `recover` won and returned no concrete action; this can pull the bot behind enemy creeps instead of holding a safe lane/siege anchor.
+- Fix: `lane-line-fallback` now yields while low HP, healing, recently recovering, recently creep-relieving, after top-arbiter `empty_action`, after recent creep damage, when an attackable creep is already in range, or when an enemy-dead siege candidate exists. This keeps it as a true last-resort lane unstick, not a second positioning brain.
 
 Post-regression fixes from `8868630321`:
 - Root cause #1: old OHA hero-damage/offlane gate in `GetDesire()` could return `BOT_MODE_DESIRE_NONE` before the 1v1 laning override. With `heal=active`, Dire stopped thinking after early damage, producing no `top-arbiter`, no CS, and `LH=0`. In 1v1 this gate is now bypassed so AIBattle recovery/farm/fight owners keep running.

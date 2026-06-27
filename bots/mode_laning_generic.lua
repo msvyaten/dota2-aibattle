@@ -653,6 +653,39 @@ end
 
 local function AIB_LaneLineFallback(dials)
 	if GetGameMode() ~= GAMEMODE_1V1MID then return false end
+	local now = DotaTime()
+	if J.GetHP(bot) < AIBLanePolicy.Forward.laneFallbackMinHp then
+		Style.DiagRL(bot, "lane-line-suppressed-lowhp", 5)
+		return false
+	end
+	if AIB_HealingChannelActive() then
+		Style.DiagRL(bot, "lane-line-suppressed-heal", 5)
+		return false
+	end
+	if bot.aib_recMoveLast ~= nil and now - bot.aib_recMoveLast < AIBLanePolicy.Forward.laneFallbackRecoveryCooldown then
+		Style.DiagRL(bot, "lane-line-suppressed-recovery", 5)
+		return false
+	end
+	if bot.aib_creepReliefLast ~= nil and now - bot.aib_creepReliefLast < AIBLanePolicy.Forward.laneFallbackCreepReliefCooldown then
+		Style.DiagRL(bot, "lane-line-suppressed-damage", 5)
+		return false
+	end
+	if bot.aib_topArbiterEmptyLast ~= nil and now - bot.aib_topArbiterEmptyLast < AIBLanePolicy.Forward.suppressAfterEmptyDesire then
+		Style.DiagRL(bot, "lane-line-suppressed-empty", 5)
+		return false
+	end
+	if bot:WasRecentlyDamagedByCreep(2.0) then
+		Style.DiagRL(bot, "lane-line-suppressed-creep-dmg", 5)
+		return false
+	end
+	if AIB_HasAttackableEnemyCreep((botAttackRange or bot:GetAttackRange()) + 60) then
+		Style.DiagRL(bot, "lane-line-suppressed-creep", 5)
+		return false
+	end
+	if AIB_EnemyDeadRecently() and AIB_HasSiegeCandidate() then
+		Style.DiagRL(bot, "lane-line-suppressed-siege", 5)
+		return false
+	end
 	local ownT1 = GetTower(GetTeam(), TOWER_MID_1)
 	local enmT1 = GetTower(GetOpposingTeam(), TOWER_MID_1)
 	if ownT1 == nil or enmT1 == nil then return false end
