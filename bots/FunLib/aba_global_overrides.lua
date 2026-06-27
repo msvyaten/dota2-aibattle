@@ -11,6 +11,11 @@ end
 
 local Utils = require( GetScriptDirectory()..'/FunLib/utils')
 
+local function SafeTraceback()
+	if debug ~= nil and debug.traceback ~= nil then return debug.traceback() end
+	return "traceback unavailable"
+end
+
 -- Override this func for the script to use
 local orig_GetTeamPlayers = GetTeamPlayers
 local direTeamPlaters = nil
@@ -87,13 +92,13 @@ local original_GetUnitToUnitDistance = GetUnitToUnitDistance
 function GetUnitToUnitDistance(unit1, unit2)
 	if not unit1 then
 		print("[Error] GetUnitToUnitDistance called with invalid unit 1")
-		print("Stack Trace:", debug.traceback())
+		print("Stack Trace:", SafeTraceback())
 		return 1000
 	end
 	if unit2 == nil or unit2:GetLocation() == nil then
 		if unit1 then
 			print("[Error] GetUnitToUnitDistance called with invalid unit 2, the unit 1 is: " .. unit1:GetUnitName())
-			print("Stack Trace:", debug.traceback())
+			print("Stack Trace:", SafeTraceback())
 		end
 		return 1000
 	end
