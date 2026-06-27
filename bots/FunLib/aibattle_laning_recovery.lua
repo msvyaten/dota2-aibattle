@@ -49,7 +49,13 @@ function M.ThinkIfAllowed(ctx, hpThreshold, diagKey)
 		return false
 	end
 	Style.Intent(bot, "recovery-policy", string.format("action=recover hp=%.0f gate=%.0f source=%s", hp * 100, hpThreshold * 100, diagKey or "unknown"), 2.0)
-	return ctx.surviveThink(bot, ctx.dials, ctx.enemyCreeps)
+	if ctx.surviveThink(bot, ctx.dials, ctx.enemyCreeps) then return true end
+	-- No items/TP: if taking recent hero damage in the 45-55% HP gap, step back toward safety
+	-- rather than stalling with empty_action and letting visual-hold suppress all movement.
+	if diagKey == "lane-low" and bot:WasRecentlyDamagedByAnyHero(3.0) then
+		return M.ActiveLowHp(ctx, hpThreshold, true)
+	end
+	return false
 end
 
 function M.CriticalLock(ctx)
@@ -101,28 +107,32 @@ function M.CriticalLock(ctx)
 	return true
 end
 
-function M.ActiveLowHp(ctx)
+-- retreatOnly=true skips the fight/CS branches and goes straight to positional retreat.
+-- Used by ThinkIfAllowed's no-items fallback so the recover desire produces movement, not combat.
+function M.ActiveLowHp(ctx, hpThreshOverride, retreatOnly)
 	local bot = ctx.bot
 	local hp = J.GetHP(bot)
-	if hp >= (ctx.rules.low_hp_hold or 0.45) then return false end
+	if hp >= (hpThreshOverride or ctx.rules.low_hp_hold or 0.45) then return false end
 	if ctx.bottleIfUseful(0.62, 0.30, "low-hp-bottle") then return true end
 	local range = attackRange(ctx)
-	local enemies = bot:GetNearbyHeroes(range + 60, true, BOT_MODE_NONE)
-	if hp >= 0.32 and enemies and #enemies > 0 and enemies[1]:IsAlive()
-		and not ctx.towerThreatening(ctx.enemyTowerDanger()) then
-		bot:Action_AttackUnit(enemies[1], false)
-		ctx.diag("low-hp-fight")
-		return true
-	end
-	for _, creep in pairs(ctx.enemyCreeps or {}) do
-		if J.IsValid(creep) and J.CanBeAttacked(creep)
-			and GetUnitToUnitDistance(bot, creep) <= range + 40 then
-			if hp >= 0.35 or (hp >= 0.28 and bot:WasRecentlyDamagedByCreep(1.5)) then
-				bot:Action_AttackUnit(creep, true)
-				ctx.diag("low-hp-creep")
-				return true
+	if not retreatOnly then
+		local enemies = bot:GetNearbyHeroes(range + 60, true, BOT_MODE_NONE)
+		if hp >= 0.32 and enemies and #enemies > 0 and enemies[1]:IsAlive()
+			and not ctx.towerThreatening(ctx.enemyTowerDanger()) then
+			bot:Action_AttackUnit(enemies[1], false)
+			ctx.diag("low-hp-fight")
+			return true
+		end
+		for _, creep in pairs(ctx.enemyCreeps or {}) do
+			if J.IsValid(creep) and J.CanBeAttacked(creep)
+				and GetUnitToUnitDistance(bot, creep) <= range + 40 then
+				if hp >= 0.35 or (hp >= 0.28 and bot:WasRecentlyDamagedByCreep(1.5)) then
+					bot:Action_AttackUnit(creep, true)
+					ctx.diag("low-hp-creep")
+					return true
+				end
+				break
 			end
-			break
 		end
 	end
 	local back = AIBUtils.SafeRetreatTowerLoc(bot)
