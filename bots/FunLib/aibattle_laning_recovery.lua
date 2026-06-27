@@ -136,7 +136,8 @@ function M.ActiveLowHp(ctx, hpThreshOverride, retreatOnly)
 		end
 	end
 	local back = AIBUtils.SafeRetreatTowerLoc(bot)
-	if back ~= nil and (bot:WasRecentlyDamagedByCreep(2.0) or bot:WasRecentlyDamagedByAnyHero(2.0)) then
+	if back ~= nil and (bot:WasRecentlyDamagedByCreep(2.0) or bot:WasRecentlyDamagedByAnyHero(2.0))
+		and (bot.aib_lowHpActiveLast == nil or DotaTime() - bot.aib_lowHpActiveLast >= 3.0) then
 		local farBack = ctx.towardFountain(bot:GetLocation(), 430) or (back + RandomVector(260))
 		bot.aib_lowHpActiveLast = DotaTime()
 		bot:Action_MoveToLocation(farBack)

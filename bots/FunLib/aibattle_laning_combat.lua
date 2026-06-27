@@ -66,9 +66,11 @@ function M.ContactHero(ctx)
 	end
 
 	if hp >= 0.45 and ctx.enemyTowerDanger() == nil and not ctx.uphillMiss(enemy) then
-		bot.aib_contactHeroLast = now
 		Style.Intent(bot, "hero-contact", string.format("dist=%.0f hp=%.0f reason=close_enemy", dist, hp * 100))
-		return ctx.moveToAttackEdge(enemy, "hero-contact-chase", 0)
+		if ctx.moveToAttackEdge(enemy, "hero-contact-chase", 0) then
+			bot.aib_contactHeroLast = now
+			return true
+		end
 	end
 
 	ctx.blocked("hero-contact", "unsafe", string.format("dist=%.0f hp=%.0f tower=%s", dist, hp * 100, tostring(ctx.enemyTowerDanger() ~= nil)), 3.0)
@@ -183,6 +185,11 @@ end
 function M.UphillReposition(ctx)
 	if ctx.lowHpHold then return false end
 	local bot = ctx.bot
+	-- 6-second cooldown prevents oscillation with lane-line-fallback when bot repeatedly
+	-- enters the low-ground ramp at the enemy side of mid.
+	if bot.aib_uphillRepoLast ~= nil and DotaTime() - bot.aib_uphillRepoLast < 6.0 then
+		return false
+	end
 	local uphEnemy = bot:GetNearbyHeroes(1200, true, BOT_MODE_NONE)
 	if uphEnemy and #uphEnemy > 0 and uphEnemy[1]:IsAlive()
 		and ctx.uphillMiss(uphEnemy[1]) then
@@ -190,6 +197,7 @@ function M.UphillReposition(ctx)
 		local highPos = (ownT1uph ~= nil and ownT1uph:IsAlive()) and ownT1uph:GetLocation()
 			or ctx.forwardSurvivingTowerLoc()
 		if highPos and GetUnitToLocationDistance(bot, highPos) > 300 then
+			bot.aib_uphillRepoLast = DotaTime()
 			bot:Action_MoveToLocation(highPos + RandomVector(50))
 			ctx.diag("uphill-reposition")
 			return true
