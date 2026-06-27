@@ -877,7 +877,7 @@ local function ThinkLaningCore(dials, rules)
 	local hpScale    = math.max(0.0, math.min(1.0, (J.GetHP(bot) - 0.5) / 0.5))  -- 0 at HP<=50%, 1 at HP=100%
 	local safeOffset = math.floor(nLongestAttackRange * (1.0 - 0.65 * hpScale))   -- 600u at 50% HP, ~210u at 100%
 	local target_loc = GetLaneFrontLocation(GetTeam(), botAssignedLane, -safeOffset)
-	if fLaneFrontAmount_enemy < fLaneFrontAmount then
+	if (fLaneFrontAmount_enemy or 0) < (fLaneFrontAmount or 1) then
 		target_loc = GetLaneFrontLocation(GetOpposingTeam(), botAssignedLane, -safeOffset)
 	end
 
@@ -1006,7 +1006,15 @@ function Think()
 
 	ThinkAnnounce(ctx.dials)
 	ThinkLocationReport()
-	AIBEngine.Run(LANING_STAGES, ctx)
+	local ok, err = pcall(function() AIBEngine.Run(LANING_STAGES, ctx) end)
+	if not ok then
+		local side = bot:GetTeam() == TEAM_RADIANT and "R" or "D"
+		local msg = tostring(err or "nil"):sub(1, 100)
+		if bot.aib_crashLogLast == nil or DotaTime() - bot.aib_crashLogLast >= 4.0 then
+			bot.aib_crashLogLast = DotaTime()
+			bot:ActionImmediate_Chat("AIB[" .. side .. "] ERR: " .. msg, true)
+		end
+	end
 end
 
 
