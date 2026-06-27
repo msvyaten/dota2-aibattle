@@ -67,7 +67,7 @@ M.Score = {
 	siegeLowHpPenalty = -18,
 }
 
-M.Siege = {
+M.SiegeConfig = {
 	candidateExtra = 560,
 	alliedCreepsRequired = 2,
 	towerCreepRangeExtra = 240,

@@ -643,8 +643,9 @@ local function AIB_HasSiegeCandidate()
 	if twr ~= nil then return true end
 	local midT1 = GetTower(GetOpposingTeam(), TOWER_MID_1)
 	if midT1 == nil then return false end
-	return GetUnitToUnitDistance(bot, midT1) <= range + AIBLanePolicy.Siege.candidateExtra
-		and AIB_AlliedCreepsAtTower(midT1, midT1:GetAttackRange() + AIBLanePolicy.Siege.towerCreepRangeExtra) >= AIBLanePolicy.Siege.alliedCreepsRequired
+	local siege = AIBLanePolicy.SiegeConfig
+	return GetUnitToUnitDistance(bot, midT1) <= range + siege.candidateExtra
+		and AIB_AlliedCreepsAtTower(midT1, midT1:GetAttackRange() + siege.towerCreepRangeExtra) >= siege.alliedCreepsRequired
 end
 
 local function AIB_LaneLineFallback(dials)

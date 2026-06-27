@@ -82,7 +82,7 @@ end
 
 -- True when bot (ranged) is on lower terrain than target by >30 units; 25% miss applies.
 function M.UphillMiss(bot, target)
-	if bot:GetAttackCapabilities() ~= ATTACK_CAPABILITY_RANGED_ATTACK then return false end
+	if (bot:GetAttackRange() or 0) <= 310 then return false end
 	return GetGroundHeight(target:GetLocation(), target) > GetGroundHeight(bot:GetLocation(), bot) + 30
 end
 
