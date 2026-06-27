@@ -42,6 +42,7 @@ LIVE_CODE_FILES = [
     "FunLib/aibattle_laning_survival.lua",
     "FunLib/aibattle_laning_trade.lua",
     "FunLib/aibattle_utils.lua",
+    "FunLib/aba_global_overrides.lua",
     "FunLib/jmz_func.lua",
     "ability_item_usage_generic.lua",
     "item_purchase_generic.lua",

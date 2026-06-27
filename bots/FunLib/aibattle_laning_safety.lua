@@ -150,10 +150,10 @@ function M.CreepHitReact(ctx)
 		return false
 	end
 
-	bot.aib_creepReactLast = now
 	local repeatedDamage = (bot.aib_creepReactCount or 0) >= 3
 	local safeToTrade = hp >= 0.55 and dist <= range + 80 and ctx.enemyTowerDanger() == nil
 	if safeToTrade then
+		bot.aib_creepReactLast = now
 		Style.Intent(bot, "creep-hit-react", string.format("dist=%.0f hp=%.0f hits=%d reason=attack", dist, hp * 100, bot.aib_creepReactCount or 0), 1.5)
 		bot:Action_AttackUnit(creep, true)
 		ctx.diag("creep-hit-react-atk")
@@ -163,6 +163,7 @@ function M.CreepHitReact(ctx)
 	local hasted = bot:HasModifier("modifier_rune_haste")
 	local forcedAttackHp = hasted and 0.24 or 0.30
 	if hp >= forcedAttackHp and repeatedDamage and dist <= range + 110 and ctx.enemyTowerDanger() == nil then
+		bot.aib_creepReactLast = now
 		Style.Intent(bot, "creep-hit-react", string.format("dist=%.0f hp=%.0f hits=%d reason=forced_attack", dist, hp * 100, bot.aib_creepReactCount or 0), 1.0)
 		bot:Action_AttackUnit(creep, true)
 		ctx.diag("creep-hit-react-force-atk")
@@ -171,7 +172,10 @@ function M.CreepHitReact(ctx)
 
 	if hp >= 0.38 and dist <= range + 160 and ctx.enemyTowerDanger() == nil then
 		Style.Intent(bot, "creep-hit-react", string.format("dist=%.0f hp=%.0f hits=%d reason=edge_attack", dist, hp * 100, bot.aib_creepReactCount or 0), 1.5)
-		return ctx.moveToAttackEdge(creep, "creep-hit-react-step", 35)
+		if ctx.moveToAttackEdge(creep, "creep-hit-react-step", 35) then
+			bot.aib_creepReactLast = now
+			return true
+		end
 	end
 
 	local safe = nil
@@ -185,6 +189,7 @@ function M.CreepHitReact(ctx)
 	end
 	if safe ~= nil then
 		bot.aib_creepReliefLast = now
+		bot.aib_creepReactLast = now
 		bot.aib_creepReliefDest = safe
 		Style.Intent(bot, "creep-hit-react", string.format("dist=%.0f hp=%.0f hits=%d reason=short_step", dist, hp * 100, bot.aib_creepReactCount or 0), 1.0)
 		bot:Action_MoveToLocation(safe)

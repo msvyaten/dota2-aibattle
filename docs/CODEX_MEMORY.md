@@ -138,9 +138,20 @@ Post-match audit from `8868910894`:
   - `aba_global_overrides.lua` direct traceback prints now use `SafeTraceback`.
 - Next match must first confirm zero `AIB ERR`. If clean, next real behavior target is `top-arbiter empty_action` (`D=86`, `R=79`) and the stationary-with-actions window.
 
+Post-match audit from `8868970379`:
+- Live build was `1b1391b`, but live did not actually contain the fixed `aba_global_overrides.lua` because `deploy.bat` did not copy it; this is why old `debug.traceback` errors survived despite the build SHA.
+- Symptom was no longer pure AFK: bots were visibly oscillating between conflicting movement goals.
+- Claude commit `93812e6` addressed the largest direct oscillation sources: `uphill-reposition` cooldown and `low-hp-safe-step` cooldown.
+- Codex intentionally dropped the broader arbiter hysteresis experiment (`sticky` / `empty_cooldown`) for now, to avoid mixing two broad stabilizers before a match.
+- Codex kept only narrow follow-up fixes:
+  - deploy/check now include `FunLib/aba_global_overrides.lua`, so live drift catches this file.
+  - `CreepHitReact` updates its cooldown only after a real attack/move action succeeds.
+  - top-level safety can fall back to `ActiveLowHp(..., retreatOnly=true)` on hero damage / low HP when creep/damage-unstuck cannot act.
+
 ## Next Match Watchlist
 
 - `AIB ERR` should be zero after the runtime hardening from the `8868910894` audit.
+- After `93812e6` plus the narrow Codex follow-up, watch `uphill-reposition`, `low-hp-safe-step`, `top-arbiter empty_action`, and visible back/forth movement separately.
 - If errors are gone but standing remains, inspect `top-arbiter empty_action` and action contracts before adding new fallbacks.
 - `rune-stage-override` should replace repeated water `stage_cooldown` when bottle is empty and water rune is reachable.
 - `recovery-policy yield_kill` should not fire against healthy enemies above roughly 60% HP.

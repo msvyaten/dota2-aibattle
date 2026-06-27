@@ -70,6 +70,7 @@ if "%DO_CODE%"=="1" (
 	call :copyfile "FunLib\aibattle_laning_survival.lua" || exit /b 1
 	call :copyfile "FunLib\aibattle_laning_trade.lua" || exit /b 1
 	call :copyfile "FunLib\aibattle_utils.lua" || exit /b 1
+	call :copyfile "FunLib\aba_global_overrides.lua" || exit /b 1
 	call :copyfile "FunLib\jmz_func.lua" || exit /b 1
 	call :deletefile "FunLib\aibattle_laning_intents.lua" || exit /b 1
 	call :copyfile "ability_item_usage_generic.lua" || exit /b 1

@@ -703,6 +703,8 @@ local function AIB_RunTopDesireArbiter(dials, rules, runtimeCtx, intentCtx)
 			function()
 				if AIBLaneSafety.CreepHitReact(runtimeCtx) then return true end
 				if AIBLaneSafety.DamageUnstuck(runtimeCtx) then return true end
+				if (recentHeroDamage or hp < AIBLanePolicy.Hp.activeRecovery)
+					and AIBLaneRecovery.ActiveLowHp(runtimeCtx, AIBLanePolicy.Hp.softRecovery, true) then return true end
 				return false
 			end)
 	end
