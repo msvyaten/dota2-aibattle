@@ -264,8 +264,7 @@ function M.HarassAndChase(ctx)
 				and (not creepNear or not ctx.csAllowed)
 			if hpAdvChase or killPressureChase or closeVisibleChase or lowFarmHeroChase or laneOverrideChase
 				or (chaseDist <= 950 and not ctx.csAllowed and not creepNear) then
-				ctx.moveToAttackEdge(chase[1], "hero-prio-chase")
-				return true
+				return ctx.moveToAttackEdge(chase[1], "hero-prio-chase")
 			end
 			ctx.blocked("hero-prio-chase", "lane_work",
 				string.format("dist=%.0f cs=%s creep=%s hp_adv=%s kill_pressure=%s close=%s low_farm=%s lane_override=%s", chaseDist, tostring(ctx.csAllowed), tostring(creepNear), tostring(hpAdvChase), tostring(killPressureChase), tostring(closeVisibleChase), tostring(lowFarmHeroChase), tostring(laneOverrideChase)), 3.0)

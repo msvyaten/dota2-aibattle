@@ -22,6 +22,12 @@ Post-regression fixes from `8868630321`:
 - Root cause #2: `PreCreepStandoff()` ignored `pregame_behavior` and always built an `aggressive_mid` anchor after horn. `pgb=safe_tower` could still be dragged into mid contact, take early damage, and fall into recovery. Post-horn precreep anchor now respects the configured pregame behavior.
 - Match evidence: `8868630321` Dire stood at `-427,-296` from 31s to 97s with enemy at ~780u and LH=0, while no top-arbiter/farm/fight intents were emitted. That pattern means mode ownership was disabled, not merely a bad last-hit choice.
 
+Post-regression fixes from `8868671903`:
+- Match still had 0 hero damage and almost no CS on `bff62b6`; both bots stayed on pregame anchors for minutes while `tick-owner stage=laning-core` misleadingly implied work happened.
+- Fixed `ThinkLaningCore()` return semantics so `laning-core` only reports handled when a real owner/fallback returns true; this should make future `tick-owner` telemetry honest.
+- Fixed `HarassAndChase()` so a failed `moveToAttackEdge()` no longer returns handled=true.
+- Added a 1v1 lane-line last resort that moves along the own-T1 -> enemy-T1 line by `forwardness` when all normal owners yield, preventing silent parking on pregame anchors.
+
 Pre-match rune bug fixes:
 - `stage_unchecked` no longer closes the bottle rune staging window unless the bot actually observed the staged rune spot.
 - Added `AIBEngine.IsActionPowerRune()` so `double_damage/haste/arcane/regen/invis/illusion` are handled through one runtime helper instead of four hard-coded combat-rune lists.

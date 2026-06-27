@@ -649,6 +649,21 @@ local function AIB_HasSiegeCandidate()
 		and AIB_AlliedCreepsAtTower(midT1, midT1:GetAttackRange() + AIBLanePolicy.Siege.towerCreepRangeExtra) >= AIBLanePolicy.Siege.alliedCreepsRequired
 end
 
+local function AIB_LaneLineFallback(dials)
+	if GetGameMode() ~= GAMEMODE_1V1MID then return false end
+	local ownT1 = GetTower(GetTeam(), TOWER_MID_1)
+	local enmT1 = GetTower(GetOpposingTeam(), TOWER_MID_1)
+	if ownT1 == nil or enmT1 == nil then return false end
+	local a, b = ownT1:GetLocation(), enmT1:GetLocation()
+	local fwd = math.max(0.35, math.min(0.72, (dials or {}).forwardness or 0.5))
+	local dest = Vector(a.x + (b.x - a.x) * fwd, a.y + (b.y - a.y) * fwd, a.z)
+	if GetUnitToLocationDistance(bot, dest) <= 220 then return false end
+	bot:Action_MoveToLocation(dest + RandomVector(45))
+	AIB_Diag("lane-line-fallback")
+	Style.TickOwner(bot, "lane-line-fallback", string.format("dist=%.0f fwd=%.2f", GetUnitToLocationDistance(bot, dest), fwd), 2.0)
+	return true
+end
+
 local function AIB_RunTopDesireArbiter(dials, rules, runtimeCtx, intentCtx)
 	local hp = J.GetHP(bot)
 	local range = botAttackRange or bot:GetAttackRange()
@@ -741,21 +756,21 @@ local function ThinkLaningCore(dials, rules)
 		AIB_ClearRecoveryState()
 		AIB_State("post-horn-reset", "reason=laning-start", 2.0)
 	end
-	if J.GetHP(bot) < AIBConst.Recovery.trueEmergencyHp and AIBSurvive.Think(bot, dials, nEnemyCreeps) then return end
-	if AIBLaneRecovery.ThinkIfAllowed(runtimeCtx, AIBConst.Recovery.emergencyHp, "emergency-low") then return end
+	if J.GetHP(bot) < AIBConst.Recovery.trueEmergencyHp and AIBSurvive.Think(bot, dials, nEnemyCreeps) then return true end
+	if AIBLaneRecovery.ThinkIfAllowed(runtimeCtx, AIBConst.Recovery.emergencyHp, "emergency-low") then return true end
 	local urgentIntents = {}
 	intentCtx.arbiter = "urgent"
 	local urgentKill = AIBLaneTrade.KillLock(intentCtx)
 	if urgentKill ~= nil then urgentIntents[#urgentIntents + 1] = urgentKill end
 	local urgentInterrupt = AIBLaneTrade.HealInterrupt(intentCtx)
 	if urgentInterrupt ~= nil then urgentIntents[#urgentIntents + 1] = urgentInterrupt end
-	if AIBEngine.Resolve(urgentIntents, intentCtx) then return end
+	if AIBEngine.Resolve(urgentIntents, intentCtx) then return true end
 
-	if AIBLaneRecovery.ThinkIfAllowed(runtimeCtx, AIBLanePolicy.Hp.danger, "early-low") then return end
-	if AIBLaneRecovery.CriticalLock(runtimeCtx) then return end
-	if AIB_PreWaveDuelStep(rules) then return end
-	if AIBLaneTempo.PreCreepStandoff(runtimeCtx) then return end
-	if AIB_RunTopDesireArbiter(dials, rules, runtimeCtx, intentCtx) then return end
+	if AIBLaneRecovery.ThinkIfAllowed(runtimeCtx, AIBLanePolicy.Hp.danger, "early-low") then return true end
+	if AIBLaneRecovery.CriticalLock(runtimeCtx) then return true end
+	if AIB_PreWaveDuelStep(rules) then return true end
+	if AIBLaneTempo.PreCreepStandoff(runtimeCtx) then return true end
+	if AIB_RunTopDesireArbiter(dials, rules, runtimeCtx, intentCtx) then return true end
 	if J.GetHP(bot) >= AIBLanePolicy.Hp.safeLastHitMin and J.GetHP(bot) < AIBLanePolicy.Hp.softRecovery then
 		local safeCs, safeCsSoon = GetBestLastHitCreep(nEnemyCreeps)
 		if J.IsValid(safeCs) and safeCsSoon ~= true
@@ -765,7 +780,7 @@ local function ThinkLaningCore(dials, rules)
 			bot:SetTarget(safeCs)
 			bot:Action_AttackUnit(safeCs, true)
 			AIB_Diag("low-hp-cs")
-			return
+			return true
 		end
 	end
 
@@ -781,27 +796,27 @@ local function ThinkLaningCore(dials, rules)
 	local csDistNow = csAllowed and GetUnitToUnitDistance(bot, hitCreep) or nil
 	local needMove = csAllowed and (csDistNow > botAttackRange or csSoon == true)
 
-	if AIBLaneCombat.HeroOverCreep(runtimeCtx) then return end
+	if AIBLaneCombat.HeroOverCreep(runtimeCtx) then return true end
 
 	-- 1) grab a securable last-hit that's already in range
 	if csAllowed and not needMove and csSoon ~= true then
 		bot:SetTarget(hitCreep)
 		bot:Action_AttackUnit(hitCreep, true)
 		AIB_Diag("cs-inrange")
-		return
+		return true
 	end
 
-	if AIBSurvive.Think(bot, dials, nEnemyCreeps) then return end
+	if AIBSurvive.Think(bot, dials, nEnemyCreeps) then return true end
 
 	-- Global emergency retreat: critically low HP (<25%) and far from tower means go back now.
 	-- Only fires at true emergency level; regen_lane handles the normal 25-45% range.
-	if AIBLaneRecovery.EmergencyRetreat(runtimeCtx) then return end
+	if AIBLaneRecovery.EmergencyRetreat(runtimeCtx) then return true end
 
 	-- Forward low-HP pullback: being low on the ENEMY's half is the gap that emergency-retreat
 	-- (HP<25%) and low-hp-hold (near OWN tower) both miss. Match 8862516153: the bot pushed onto
 	-- the enemy side at 25-30% HP and was killed by the respawned enemy. Skip during the enemy-dead
 	-- window -- that's a safe siege (fix #5), not an overextension.
-	if AIBLaneRecovery.ForwardLowHpPullback(runtimeCtx) then return end
+	if AIBLaneRecovery.ForwardLowHpPullback(runtimeCtx) then return true end
 
 	-- Survival gate: if already died once, don't risk a second death at low HP.
 	-- Second death = game over in 1v1 mid. Retreat instead of fighting.
@@ -811,17 +826,17 @@ local function ThinkLaningCore(dials, rules)
 	-- AIBattle: kill-priority. Enemy HP below execute_threshold means always attack.
 	-- Runs before harass so a killable enemy is not ignored for a creep action.
 	-- Opt-in: active only when execute_threshold > 0.
-	if AIBLaneCombat.EmergencyKillPriority(runtimeCtx) then return end
+	if AIBLaneCombat.EmergencyKillPriority(runtimeCtx) then return true end
 
 	-- Survival baseline: low HP near own tower limits risky actions, but it must not
 	-- consume the tick by itself. Only take an active low-HP step when danger is present.
 	local aib_lowHpHold, aib_lowHpDanger = AIBLaneRecovery.LowHpHoldState(runtimeCtx)
 	runtimeCtx.lowHpHold = aib_lowHpHold
-	if aib_lowHpHold and aib_lowHpDanger and AIBLaneRecovery.ActiveLowHp(runtimeCtx) then return end
+	if aib_lowHpHold and aib_lowHpDanger and AIBLaneRecovery.ActiveLowHp(runtimeCtx) then return true end
 
 	-- Uphill repositioning: fires BEFORE harass; no trading from low ground.
 	-- Target = own T1 location (guaranteed high ground). 350u-ahead offset overshoots the ramp.
-	if AIBLaneCombat.UphillReposition(runtimeCtx) then return end
+	if AIBLaneCombat.UphillReposition(runtimeCtx) then return true end
 
 	-- 2) Harass hero (uphill already handled above; bot is on own ramp or has no terrain disadvantage).
 	--    hero_priority=never skips entirely (pure creep focus).
@@ -830,7 +845,7 @@ local function ThinkLaningCore(dials, rules)
 	--                            gate only applies when enemy is out of range (seeking behaviour).
 	runtimeCtx.csAllowed = csAllowed
 	runtimeCtx.needMove = needMove
-	if AIBLaneCombat.HarassAndChase(runtimeCtx) then return end
+	if AIBLaneCombat.HarassAndChase(runtimeCtx) then return true end
 
 	if AIBLaneCreeps.HandleCreepWork({
 		bot = bot,
@@ -850,7 +865,7 @@ local function ThinkLaningCore(dials, rules)
 		enemyTowerDanger = AIB_EnemyTowerDanger,
 		siegeIntent = function() return AIB_SiegeIntent(dials, rules) end,
 		bestDeny = GetBestDenyCreep,
-	}) then return end
+	}) then return true end
 
 	local fLaneFrontAmount = GetLaneFrontAmount(GetTeam(), botAssignedLane, false)
 	local fLaneFrontAmount_enemy = GetLaneFrontAmount(GetOpposingTeam(), botAssignedLane, false)
@@ -869,7 +884,7 @@ local function ThinkLaningCore(dials, rules)
 	-- aibattle_style.lua. Heroes not in the config return false and fall through silently.
 	-- Execute is checked first (higher priority: kill a fleeing enemy over general harassment).
 	-- AbilityHarass shares the same HP-disadvantage gate as auto-attack harass above.
-	if AIBLaneCombat.AbilityHarass(runtimeCtx) then return end
+	if AIBLaneCombat.AbilityHarass(runtimeCtx) then return true end
 
 	-- Forwardness is only a final lane-positioning preference. Keep it rare and
 	-- quiet: it must yield to combat, creep damage, recovery/rune commits, CS,
@@ -921,7 +936,7 @@ local function ThinkLaningCore(dials, rules)
 				bot:Action_MoveToLocation(dest)
 				AIB_Diag("fwd-position")
 				Style.TickOwner(bot, "forwardness", string.format("dist=%.0f", GetUnitToLocationDistance(bot, dest)), 2.0)
-				return
+				return true
 			else
 				Style.DiagRL(bot, "fwd-hold", 5)
 			end
@@ -957,10 +972,11 @@ local function ThinkLaningCore(dials, rules)
 
 	-- AIBattle: anti-idle fallback - reached when forwardness had no dest OR bot is already at target.
 	-- Attack a visible enemy or move to assist an ally in combat.
-	if AIBLaneSafety.VisualHoldHeartbeat(runtimeCtx) then return end
-	if AIBLaneSafety.VisualAFK(runtimeCtx) then return end
+	if AIBLaneSafety.VisualHoldHeartbeat(runtimeCtx) then return true end
+	if AIBLaneSafety.VisualAFK(runtimeCtx) then return true end
+	if AIB_LaneLineFallback(dials) then return true end
 	Style.DiagRL(bot, "pre-aig", 3)
-	Style.AntiIdleGlobal(bot)
+	return Style.AntiIdleGlobal(bot)
 end
 
 local LANING_STAGES = {
@@ -968,8 +984,7 @@ local LANING_STAGES = {
 	AIBEngine.Stage("dive", function(ctx) return AIBLaneTempo.DivePolicy(AIB_RuntimeCtx(ctx.dials, ctx.rules)) end),
 	AIBEngine.Stage("death-window", function(ctx) return AIBLaneTempo.DeathWindow(AIB_RuntimeCtx(ctx.dials, ctx.rules)) end),
 	AIBEngine.Stage("laning-core", function(ctx)
-		ThinkLaningCore(ctx.dials, ctx.rules)
-		return true
+		return ThinkLaningCore(ctx.dials, ctx.rules)
 	end),
 }
 
