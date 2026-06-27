@@ -52,6 +52,8 @@ LIVE_CODE_FILES = [
 ]
 
 LIVE_PLAYSTYLE_FILES = [
+    "Customize/canonical_brawler.lua",
+    "Customize/canonical_farmer.lua",
     "Customize/canonical_pusher.lua",
     "Customize/canonical_ganker.lua",
     "Customize/playstyle_radiant.lua",

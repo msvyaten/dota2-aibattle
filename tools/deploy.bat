@@ -84,6 +84,8 @@ if "%DO_CODE%"=="1" (
 
 if "%DO_PLAYSTYLE%"=="1" (
 	echo -- playstyle --
+	call :copyfile "Customize\canonical_brawler.lua" || exit /b 1
+	call :copyfile "Customize\canonical_farmer.lua" || exit /b 1
 	call :copyfile "Customize\canonical_pusher.lua" || exit /b 1
 	call :copyfile "Customize\canonical_ganker.lua" || exit /b 1
 	call :copyfile "Customize\playstyle_radiant.lua" || exit /b 1
