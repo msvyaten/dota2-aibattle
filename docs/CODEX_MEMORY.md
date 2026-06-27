@@ -158,6 +158,9 @@ Post-match audit from `8869003005`:
   - trade chase callbacks propagate failed movement as `empty_action` instead of pretending they acted.
   - no-resource recovery pins `aib_recWaitDest`/`aib_recWaitKind` for the 10s wait window.
   - when already at critical recovery destination, `CriticalLock` holds position instead of generating a new toward-fountain point.
+- Follow-up clarification/fix:
+  - `CriticalLock` itself does not target enemy bodies; its kill-yield path goes through `KillWindow`, which already filters `enemy:IsAlive()`.
+  - `ActiveLowHp.low-hp-back` still could pull a bot forward to `SafeRetreatTowerLoc` (`T1+520`) when the bot was already closer to fountain. Fixed by adding `AIBUtils.IsCloserToFountain()` and holding/stepping farther back instead of moving forward to the tower anchor.
 
 ## Next Match Watchlist
 

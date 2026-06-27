@@ -69,6 +69,16 @@ function M.SafeRetreatTowerLoc(bot)
 	return J.GetTeamFountain()
 end
 
+function M.IsCloserToFountain(bot, loc)
+	if bot == nil or loc == nil then return false end
+	local fl = J.GetTeamFountain()
+	if fl == nil then return false end
+	local bl = bot:GetLocation()
+	local botDist = math.sqrt((fl.x-bl.x)^2 + (fl.y-bl.y)^2)
+	local locDist = math.sqrt((fl.x-loc.x)^2 + (fl.y-loc.y)^2)
+	return botDist + 80 < locDist
+end
+
 -- Centroid of nearby enemy lane creeps. Returns Vector or nil.
 function M.EnemyCreepCentroid(enemyCreeps)
 	local cx, cy, n = 0, 0, 0
