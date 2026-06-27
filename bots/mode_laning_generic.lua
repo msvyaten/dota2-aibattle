@@ -994,7 +994,7 @@ local LANING_STAGES = {
 -- Vanilla only defined it inside a condition that's false for normal heroes in all-bot games,
 -- causing EXC_GUARD when the engine tried to call nil.
 function Think()
-	if local_mode_laning_generic then local_mode_laning_generic.Think(); return end
+	if GetGameMode() ~= GAMEMODE_1V1MID and local_mode_laning_generic then local_mode_laning_generic.Think(); return end
 	if AIB_HandleRespawn() then return end
 
 	local style = Style.Get()
