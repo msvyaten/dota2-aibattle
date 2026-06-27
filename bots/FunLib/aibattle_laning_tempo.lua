@@ -93,7 +93,7 @@ function M.PreCreepStandoff(ctx)
 				end
 			end
 			Style.DiagRL(bot, "precreep-hold", 5)
-			return true
+			return false
 		end
 		bot:Action_MoveToLocation(anchor)
 		ctx.diag("precreep-anchor")

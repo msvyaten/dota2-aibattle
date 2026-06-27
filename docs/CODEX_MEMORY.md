@@ -27,6 +27,7 @@ Post-regression fixes from `8868671903`:
 - Fixed `ThinkLaningCore()` return semantics so `laning-core` only reports handled when a real owner/fallback returns true; this should make future `tick-owner` telemetry honest.
 - Fixed `HarassAndChase()` so a failed `moveToAttackEdge()` no longer returns handled=true.
 - Added a 1v1 lane-line last resort that moves along the own-T1 -> enemy-T1 line by `forwardness` when all normal owners yield, preventing silent parking on pregame anchors.
+- Follow-up without logs: `PreCreepStandoff()` no longer consumes the tick with `precreep-hold` when already at anchor and no action is issued; it yields to core fallback instead.
 
 Pre-match rune bug fixes:
 - `stage_unchecked` no longer closes the bottle rune staging window unless the bot actually observed the staged rune spot.
