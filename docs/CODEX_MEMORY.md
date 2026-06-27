@@ -28,6 +28,7 @@ Post-regression fixes from `8868671903`:
 - Fixed `HarassAndChase()` so a failed `moveToAttackEdge()` no longer returns handled=true.
 - Added a 1v1 lane-line last resort that moves along the own-T1 -> enemy-T1 line by `forwardness` when all normal owners yield, preventing silent parking on pregame anchors.
 - Follow-up without logs: `PreCreepStandoff()` no longer consumes the tick with `precreep-hold` when already at anchor and no action is issued; it yields to core fallback instead.
+- Follow-up from interrupted `8868751540`: if lane-line fallback's first target is too close to the current anchor, it advances the target by +0.12 forwardness instead of silently yielding. Dire had sat at `170,299` with the enemy ~1105u away and no actions.
 
 Pre-match rune bug fixes:
 - `stage_unchecked` no longer closes the bottle rune staging window unless the bot actually observed the staged rune spot.

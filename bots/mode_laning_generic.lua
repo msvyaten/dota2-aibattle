@@ -657,7 +657,11 @@ local function AIB_LaneLineFallback(dials)
 	local a, b = ownT1:GetLocation(), enmT1:GetLocation()
 	local fwd = math.max(0.35, math.min(0.72, (dials or {}).forwardness or 0.5))
 	local dest = Vector(a.x + (b.x - a.x) * fwd, a.y + (b.y - a.y) * fwd, a.z)
-	if GetUnitToLocationDistance(bot, dest) <= 220 then return false end
+	if GetUnitToLocationDistance(bot, dest) <= 220 then
+		fwd = math.min(0.84, fwd + 0.12)
+		dest = Vector(a.x + (b.x - a.x) * fwd, a.y + (b.y - a.y) * fwd, a.z)
+		if GetUnitToLocationDistance(bot, dest) <= 220 then return false end
+	end
 	bot:Action_MoveToLocation(dest + RandomVector(45))
 	AIB_Diag("lane-line-fallback")
 	Style.TickOwner(bot, "lane-line-fallback", string.format("dist=%.0f fwd=%.2f", GetUnitToLocationDistance(bot, dest), fwd), 2.0)
