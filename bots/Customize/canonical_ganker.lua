@@ -1,14 +1,16 @@
 -- Canonical LLM playstyle: Ganker.
 -- Copy into playstyle_radiant.lua or playstyle_dire.lua for a deliberate run.
+-- Config tuned by Claude (2026-06-25): lowered execute_threshold and retreat_caution
+-- for earlier kills, raised forwardness for more aggressive lane presence.
 
 return {
 	dials = {
 		harass_desire     = 0.85,
 		farm_focus        = 0.20,
-		forwardness       = 0.70,
-		retreat_caution   = 0.40,
+		forwardness       = 0.75,
+		retreat_caution   = 0.35,
 		rune_control      = 0.80,
-		execute_threshold = 0.50,
+		execute_threshold = 0.42,
 		ability_aggro     = 0.65,
 		gank_desire       = 0.90,
 		push_desire       = 0.65,

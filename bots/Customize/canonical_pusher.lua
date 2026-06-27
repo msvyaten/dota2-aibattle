@@ -1,17 +1,19 @@
 -- Canonical LLM playstyle: Pusher.
 -- Copy into playstyle_radiant.lua or playstyle_dire.lua for a deliberate run.
+-- Config tuned by Claude (2026-06-25): raised harass/rune_control to stay competitive
+-- in lane, lowered push_desire/retreat_caution to fight instead of over-push.
 
 return {
 	dials = {
-		harass_desire     = 0.75,
+		harass_desire     = 0.85,
 		farm_focus        = 0.35,
 		forwardness       = 0.65,
-		retreat_caution   = 0.45,
-		rune_control      = 0.75,
-		execute_threshold = 0.50,
+		retreat_caution   = 0.38,
+		rune_control      = 0.85,
+		execute_threshold = 0.45,
 		ability_aggro     = 0.65,
 		gank_desire       = 0.25,
-		push_desire       = 0.90,
+		push_desire       = 0.72,
 		defend_desire     = 0.60,
 		ward_desire       = 0.90,
 		roshan_desire     = 0.85,
