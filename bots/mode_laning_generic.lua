@@ -170,6 +170,13 @@ local function AIB_TowerAggroDrop(twr)
 	return false
 end
 
+local function AIB_GetMainItem(name)
+	local slot = bot:FindItemSlot(name)
+	if slot == nil or slot < 0 then return nil end
+	if bot:GetItemSlotType(slot) ~= ITEM_SLOT_TYPE_MAIN then return nil end
+	return bot:GetItemInSlot(slot)
+end
+
 -- AIBattle: on death->alive transition, act per rules.respawn_behavior. Returns true if it issued an action.
 local function AIB_HandleRespawn()
 	if not bot:IsAlive() then
@@ -193,7 +200,7 @@ local function AIB_HandleRespawn()
 		-- Channel ended or interrupted. If scroll still in inventory the cast failed silently; retry.
 		-- If scroll is gone it was consumed; clear wasDead and let bot walk.
 		bot.aib_tping = false
-		local tpStill = bot:GetItemInSlot(bot:FindItemSlot("item_tpscroll"))
+		local tpStill = AIB_GetMainItem("item_tpscroll")
 		if tpStill ~= nil then return false end   -- scroll intact: retry TP on next tick
 		bot.aib_wasDead = false; return false     -- scroll consumed: channel done, walk normally
 	end
@@ -204,7 +211,7 @@ local function AIB_HandleRespawn()
 	local behavior = GetRules().respawn_behavior
 	if behavior == "walk_back" then bot.aib_wasDead = false; return false end
 
-	local tp = bot:GetItemInSlot(bot:FindItemSlot("item_tpscroll"))
+	local tp = AIB_GetMainItem("item_tpscroll")
 	if tp == nil then
 		Style.DiagRL(bot, "respawn-no-tp", 5)
 		-- No TP: walk out of fountain explicitly so normal laning picks up at dist>1500.
@@ -464,9 +471,7 @@ local function AIB_TowardFountainFrom(loc, distance)
 end
 
 local function AIB_BottleIfUseful(hpLimit, manaLimit, diagKey)
-	local bSlot = bot:FindItemSlot("item_bottle")
-	if bSlot < 0 then return false end
-	local bottle = bot:GetItemInSlot(bSlot)
+	local bottle = AIB_GetMainItem("item_bottle")
 	if bottle == nil or not bottle:IsFullyCastable() or bottle:GetCurrentCharges() <= 0 then return false end
 	local maxMana = bot:GetMaxMana()
 	local mana = maxMana > 0 and (bot:GetMana() / maxMana) or 1.0

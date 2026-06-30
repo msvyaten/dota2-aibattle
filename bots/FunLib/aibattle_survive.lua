@@ -20,13 +20,14 @@ local RECOVERY_RUNE_STAGE_MAX_DIST = Const.Rune.recoveryStageMaxDist
 local function getItem(bot, name)
 	local slot = bot:FindItemSlot(name)
 	if slot < 0 then return nil end
+	if bot:GetItemSlotType(slot) ~= ITEM_SLOT_TYPE_MAIN then return nil end
 	local it = bot:GetItemInSlot(slot)
 	return (it ~= nil and it:IsFullyCastable()) and it or nil
 end
 
 local function hasItem(bot, name)
 	local slot = bot:FindItemSlot(name)
-	return slot >= 0 and bot:GetItemInSlot(slot) ~= nil
+	return slot >= 0 and bot:GetItemSlotType(slot) == ITEM_SLOT_TYPE_MAIN and bot:GetItemInSlot(slot) ~= nil
 end
 
 local function forwardTowerLoc(bot) return AIBUtils.SafeRetreatTowerLoc(bot) end
@@ -75,6 +76,7 @@ end
 local function bottleCharges(bot)
 	local bSlot = bot:FindItemSlot("item_bottle")
 	if bSlot < 0 then return nil end
+	if bot:GetItemSlotType(bSlot) ~= ITEM_SLOT_TYPE_MAIN then return nil end
 	local bottle = bot:GetItemInSlot(bSlot)
 	if bottle == nil then return nil end
 	return bottle:GetCurrentCharges()
@@ -440,7 +442,7 @@ local function recovery(bot, dials, nEnemyCreeps)
 	-- around rune windows, but outside those windows it yields back to lane play.
 	do
 		local bSlot = bot:FindItemSlot("item_bottle")
-		if bSlot >= 0 then
+		if bSlot >= 0 and bot:GetItemSlotType(bSlot) == ITEM_SLOT_TYPE_MAIN then
 			local bItem = bot:GetItemInSlot(bSlot)
 			if bItem ~= nil then
 				if bot:HasModifier("modifier_bottle_regeneration") then

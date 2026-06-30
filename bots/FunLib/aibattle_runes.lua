@@ -10,6 +10,7 @@ local Const = require(GetScriptDirectory()..'/FunLib/aibattle_constants')
 local function bottleCharges(bot)
 	local bSlot = bot:FindItemSlot("item_bottle")
 	if bSlot < 0 then return nil end
+	if bot:GetItemSlotType(bSlot) ~= ITEM_SLOT_TYPE_MAIN then return nil end
 	local bottle = bot:GetItemInSlot(bSlot)
 	if bottle == nil then return nil end
 	return bottle:GetCurrentCharges()
@@ -180,6 +181,7 @@ function M.SeekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 
 	local bSlot = bot:FindItemSlot("item_bottle")
 	if bSlot < 0 then return false end
+	if bot:GetItemSlotType(bSlot) ~= ITEM_SLOT_TYPE_MAIN then return false end
 	local bottle = bot:GetItemInSlot(bSlot)
 	local now = DotaTime()
 	if bottle == nil then return false end
@@ -364,9 +366,11 @@ function M.SeekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 				if bot.aib_bottleRuneStageUntil ~= nil and now <= bot.aib_bottleRuneStageUntil
 					and bot.aib_bottleRuneStageTarget ~= nil then
 					local followDist = GetUnitToLocationDistance(bot, bot.aib_bottleRuneStageTarget)
-					if followDist > 120 and (bot.aib_bottleRuneStageFollowLast == nil or now - bot.aib_bottleRuneStageFollowLast >= 1.0) then
-						bot.aib_bottleRuneStageFollowLast = now
-						runeTxn(bot, "rune_stage", "stage_follow", diagKey, string.format("dist=%.0f eta=%.0f", followDist, secsToSpawn), math.max(0, secsToSpawn), 1.5)
+					if followDist > 120 then
+						if bot.aib_bottleRuneStageFollowLast == nil or now - bot.aib_bottleRuneStageFollowLast >= 1.0 then
+							bot.aib_bottleRuneStageFollowLast = now
+							runeTxn(bot, "rune_stage", "stage_follow", diagKey, string.format("dist=%.0f eta=%.0f", followDist, secsToSpawn), math.max(0, secsToSpawn), 1.5)
+						end
 						bot:Action_MoveToLocation(bot.aib_bottleRuneStageTarget)
 						return true
 					end
