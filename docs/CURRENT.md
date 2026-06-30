@@ -403,6 +403,14 @@ Open code candidates:
 - Keep using `check_all.py` live drift checks for `Customize/canonical_*.lua` and `Customize/playstyle_*.lua`
   after any config/playstyle deploy.
 
+Latest Gate 0 follow-up:
+- Match `8874174746` ran on live build `e28c2a5`.
+- Stash item-use errors are gone, but VScript/invalid-index runtime noise still exists.
+- Bottle behavior improved only partly: Dire reached some rune staging, Radiant still spent most samples empty.
+- Main visual failure: low-HP Radiant stayed under own tower while Dire farmed/pushed.
+- Root cause fixed in code: `ActiveLowHp` no longer treats `low-hp-behind-safe` as a completed action when it issues no command.
+  If the bot is already behind the safe retreat anchor, recovery now yields so lane/fight/rune/siege logic can act.
+
 ## Current Debug Philosophy
 
 Do not add another fallback first.

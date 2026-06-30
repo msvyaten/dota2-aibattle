@@ -153,8 +153,8 @@ function M.ActiveLowHp(ctx, hpThreshOverride, retreatOnly)
 		return true
 	end
 	if back ~= nil and alreadyBehindBack then
-		ctx.diag("low-hp-behind-safe")
-		return true
+		Style.DiagRL(bot, "low-hp-behind-safe", 3.0)
+		return false
 	end
 	if back ~= nil and GetUnitToLocationDistance(bot, back) > 140 then
 		if bot.aib_lowHpActiveLast == nil or DotaTime() - bot.aib_lowHpActiveLast >= 0.8 then
