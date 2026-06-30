@@ -1,10 +1,27 @@
 # AIBattle Current State
 
-Last updated by Codex on 2026-06-27 after the lane-line fallback suppression pass.
-Current live bot build before this pass: `fca88cc`.
-Current repo HEAD before this pass: `fca88cc`.
+Last updated by Codex on 2026-06-30 after Gate 0 attempt `8874134176`.
+Current live bot build: `f4e59a4`.
+Current repo HEAD: `f4e59a4` plus Claude-owned uncommitted config changes.
 Codex-specific compact memory: `docs/CODEX_MEMORY.md`.
 Architecture guide: `docs/ARCHITECTURE.md`.
+
+## Latest Gate 0 Attempt
+
+Match `8874134176` was played on live/repo build `f4e59a4`.
+
+Gate 0 status: **not accepted as clean**.
+- Real `AIB ERR`: 0.
+- `top-arbiter` exists: R#178 / D#201.
+- LH > 0 both sides: Radiant 33, Dire 28.
+- `top-arbiter empty_action` is below old `8868017746` levels: R=99 / D=121, versus old R=278 / D=212.
+- Technical blocker: the log still has VScript/stash noise (`Script Runtime Error`=20, `Item can't be used from stash`=43, `invalid index`=37). Treat this as the next single targeted Gate 0 fix before behavior work.
+
+Behavior watchlist from the same match, after Gate 0 is technically clean:
+- Dire jittered around own tower near 9:30.
+- Radiant stood inside creeps.
+- Around 10:50 Radiant retreated all the way to own tower despite normal HP and allied creeps pushing.
+- Match ended by tower death, not a satisfying kill/fight result.
 
 ## Goal
 
