@@ -25,8 +25,21 @@ local function duelState(ctx, enemy, dist, phase, hpFloor, approachExtra)
 	end
 	if dist > range and AIBUtils.UphillMiss(bot, enemy) then
 		ctx.blocked("prewave-duel", "uphill", string.format("phase=%s dist=%.0f", phase, dist), 3.0)
+		local now = DotaTime()
+		if bot.aib_preDuelBackUntil ~= nil and now < bot.aib_preDuelBackUntil then
+			local dest = bot.aib_preDuelBackDest
+			if dest ~= nil and GetUnitToLocationDistance(bot, dest) > 90 then
+				bot:Action_MoveToLocation(dest)
+				ctx.diag(keyPrefix .. "-uphill-back")
+			else
+				ctx.diag(keyPrefix .. "-uphill-hold")
+			end
+			return true
+		end
 		local back = ctx.towardFountain(bot:GetLocation(), (phase == "pregame") and 360 or 300)
 		if back ~= nil then
+			bot.aib_preDuelBackDest = back
+			bot.aib_preDuelBackUntil = now + ((phase == "pregame") and 1.6 or 1.0)
 			bot:Action_MoveToLocation(back)
 			ctx.diag(keyPrefix .. "-uphill-back")
 			return true

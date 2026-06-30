@@ -1007,12 +1007,13 @@ local function ItemUsageComplement()
 	local aether = J.IsItemAvailable( "item_aether_lens" )
 	if aether ~= nil then aetherRange = 250 else aetherRange = 0 end
 
-	local nItemSlot = { 5, 4, 3, 2, 1, 0, 15, 16 }
+	local nItemSlot = { 5, 4, 3, 2, 1, 0 }
 
 	for _, nSlot in pairs( nItemSlot )
 	do
 		local hItem = bot:GetItemInSlot( nSlot )
 		if J.CanCastAbility(hItem)
+			and bot:GetItemSlotType(nSlot) == ITEM_SLOT_TYPE_MAIN
 		then
 			local sItemName = hItem:GetName()
 			if	X.ConsiderItemDesire[sItemName] ~= nil

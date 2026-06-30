@@ -311,6 +311,9 @@ def check_live_build():
     head = git_head()
     live = live_build_sha()
     print(f"  repo={head or 'unknown'} live={live or 'unknown'}", flush=True)
+    if live in {"dev", "unknown"}:
+        print("[fail] live build sha is not a deployed git commit", flush=True)
+        return False
     if not head or not live or head != live:
         print("[fail] live build sha does not match repo HEAD", flush=True)
         return False
