@@ -175,9 +175,27 @@ Post-match audit from `8869003005`:
   - `CriticalLock` itself does not target enemy bodies; its kill-yield path goes through `KillWindow`, which already filters `enemy:IsAlive()`.
   - `ActiveLowHp.low-hp-back` still could pull a bot forward to `SafeRetreatTowerLoc` (`T1+520`) when the bot was already closer to fountain. Fixed by adding `AIBUtils.IsCloserToFountain()` and holding/stepping farther back instead of moving forward to the tower anchor.
 
+Gate 0 prep from `8874174746`:
+- Live build was `e28c2a5`; stash item-use errors were gone, but `invalid index` / VScript runtime noise remained.
+- Bottle improved only partly: Dire staged/picked more often, Radiant still spent most samples empty.
+- User-visible failure: low-HP Radiant stayed under own tower while Dire farmed/pushed.
+- Root cause fixed in `4e73991 codex: let safe low hp bots resume lane work`:
+  - `ActiveLowHp` no longer treats `low-hp-behind-safe` as a completed action when it issues no command.
+  - If the bot is already behind the safe retreat anchor, recovery yields so lane/fight/rune/siege logic can act.
+- Follow-up fixed in `d9e593c codex: tighten post kill recovery and rune staging`:
+  - `post_fight_regen` now yields during the early enemy-dead window when HP is not below early-low,
+    so a bot that just killed the enemy can farm/push instead of immediately running home.
+  - Empty-bottle water emergency staging is capped at `20s` before spawn and logs `stage_too_early`
+    instead of pulling the bot off lane around `eta=28`.
+- Current deployed live code after this prep: `d9e593c`.
+- Config/playstyle files are dirty and Claude-owned; Codex did not stage or commit them.
+
 ## Next Match Watchlist
 
 - `AIB ERR` should be zero after the runtime hardening from the `8868910894` audit.
+- On live build `d9e593c`, watch whether `low-hp-behind-safe` no longer correlates with standing under own tower.
+- After a kill, `post_fight_regen` should not immediately pull a non-critical bot away from free farm/push.
+- Water rune staging should not start around `eta=28`; expected marker for prevented early movement is `stage_too_early`.
 - After `93812e6` plus the narrow Codex follow-up, watch `uphill-reposition`, `low-hp-safe-step`, `top-arbiter empty_action`, and visible back/forth movement separately.
 - After the `8869003005` fix, watch Dire/Radiant after a low-HP kill: expected behavior is one safe anchor + heal/wait, not T1/T2 ping-pong.
 - If errors are gone but standing remains, inspect `top-arbiter empty_action` and action contracts before adding new fallbacks.
