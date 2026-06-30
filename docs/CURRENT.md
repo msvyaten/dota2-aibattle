@@ -410,6 +410,11 @@ Latest Gate 0 follow-up:
 - Main visual failure: low-HP Radiant stayed under own tower while Dire farmed/pushed.
 - Root cause fixed in code: `ActiveLowHp` no longer treats `low-hp-behind-safe` as a completed action when it issues no command.
   If the bot is already behind the safe retreat anchor, recovery now yields so lane/fight/rune/siege logic can act.
+- Pre-Gate-0 follow-up:
+  - `post_fight_regen` now yields during the early enemy-dead window when HP is not below early-low,
+    so a bot that just killed the enemy can keep farming/pushing instead of immediately running home.
+  - Empty-bottle water emergency staging is capped at `20s` before spawn and logs `stage_too_early`
+    instead of pulling the bot off lane around `eta=28`.
 
 ## Current Debug Philosophy
 

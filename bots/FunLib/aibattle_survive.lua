@@ -16,6 +16,7 @@ local BOTTLE_RUNE_MAX_DIST = Const.Rune.bottleMaxDist
 local BOTTLE_RUNE_STAGE_MAX_DIST = Const.Rune.bottleStageMaxDist
 local RECOVERY_RUNE_MAX_DIST = Const.Rune.recoveryMaxDist
 local RECOVERY_RUNE_STAGE_MAX_DIST = Const.Rune.recoveryStageMaxDist
+local WATER_EMERGENCY_STAGE_WINDOW = Const.Rune.waterEmergencyStageWindow
 
 local function getItem(bot, name)
 	local slot = bot:FindItemSlot(name)
@@ -457,7 +458,7 @@ local function recovery(bot, dials, nEnemyCreeps)
 						lane_aware = false,
 						force_empty_bottle = true,
 						stage_upcoming = true,
-						stage_window = 24.0,
+						stage_window = WATER_EMERGENCY_STAGE_WINDOW,
 						stage_max_dist = RECOVERY_RUNE_STAGE_MAX_DIST,
 					}) then return true end
 					if hp < 0.65 or mana < 0.45 then
@@ -494,8 +495,10 @@ local function recovery(bot, dials, nEnemyCreeps)
 	do
 		local postFightBack = 0.45 + 0.20 * (dials.retreat_caution or 0.5)
 		local tangoWalk = bot.aib_tangoLast ~= nil and DotaTime() - bot.aib_tangoLast < 12.0
+		local enemyDeadWindow = bot.aib_eDeadSince ~= nil and DotaTime() - bot.aib_eDeadSince < 24.0
 		if hp < postFightBack
 			and bot:WasRecentlyDamagedByAnyHero(8.0)
+			and not (enemyDeadWindow and hp >= Const.Recovery.earlyLowHp)
 			and not bot:HasModifier("modifier_tango_heal")
 			and not tangoWalk then
 			local back, backKind = xpRecoveryLoc(bot, nEnemyCreeps, hp)

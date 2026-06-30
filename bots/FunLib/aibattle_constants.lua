@@ -18,6 +18,7 @@ M.Rune = {
 	waterRecoveryMaxDist = 4700.0,
 	recoveryMaxDist = 3600.0,
 	recoveryStageMaxDist = 4700.0,
+	waterEmergencyStageWindow = 20.0,
 	waterMidContextMax = 4200.0,
 }
 

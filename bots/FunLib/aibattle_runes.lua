@@ -346,12 +346,14 @@ function M.SeekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 			if bot.aib_bottleRuneStageBlockedWindow == nextSpawnAt
 				and bot.aib_bottleRuneStageBlockedUntil ~= nil
 				and now < bot.aib_bottleRuneStageBlockedUntil then
-				if waterRuneEmergency(bot, hp, mana, stageDist, spawnKind, forceEmptyBottle) then
+				if waterRuneEmergency(bot, hp, mana, stageDist, spawnKind, forceEmptyBottle)
+					and secsToSpawn <= Const.Rune.waterEmergencyStageWindow then
 					bot.aib_bottleRuneStageBlockedWindow = nil
 					bot.aib_bottleRuneStageBlockedUntil = nil
 					Style.Intent(bot, "rune-stage-override", string.format("reason=water_emergency eta=%.0f dist=%.0f hp=%.0f mana=%.0f", secsToSpawn, stageDist, hp*100, mana*100), 2.0)
 				else
-					Style.Blocked(bot, diagKey, "stage_cooldown", string.format("eta=%.0f", secsToSpawn), 4.0)
+					local reason = waterRuneEmergency(bot, hp, mana, stageDist, spawnKind, forceEmptyBottle) and "stage_too_early" or "stage_cooldown"
+					Style.Blocked(bot, diagKey, reason, string.format("eta=%.0f", secsToSpawn), 4.0)
 					return false
 				end
 			end
@@ -429,6 +431,9 @@ function M.SeekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 					bot.aib_bottleRuneStageBlockedUntil = now + math.max(3.0, math.min(8.0, secsToSpawn + 1.0))
 				end
 				return false
+			end
+			if waterRuneEmergency(bot, hp, mana, stageDist, spawnKind, forceEmptyBottle) then
+				stageWindow = math.min(stageWindow, Const.Rune.waterEmergencyStageWindow)
 			end
 			if stageRune ~= nil and stageLoc ~= nil and secsToSpawn >= 0 and secsToSpawn <= stageWindow and stageDist <= stageMaxDist then
 				if laneAware and stageDist > 700 and hp > 0.62 and hasLastHitWindow(bot) and secsToSpawn > 5 then
