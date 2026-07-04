@@ -45,6 +45,14 @@ local function duelState(ctx, enemy, dist, phase, hpFloor, approachExtra)
 			-- every ~2s all pregame (pg-duel-uphill-back=172-179 per match).
 			bot.aib_duelUphillHoldUntil = now + 5.0
 			if phase == "pregame" then
+				-- Two uphill retreats in one pregame = the river duel is unwinnable
+				-- from low ground; disengage fully (tempo parks us at the safe spot).
+				bot.aib_pgUphillEpisodes = (bot.aib_pgUphillEpisodes or 0) + 1
+				if bot.aib_pgUphillEpisodes >= 2 then
+					bot.aib_pgDisengaged = true
+				end
+			end
+			if phase == "pregame" then
 				-- Freeze the pregame anchor here. Otherwise the retreat drops the enemy
 				-- out of the duel scan, tower-line positioning pulls us forward again,
 				-- and the uphill-retreat loop repeats all pregame (pg-duel-uphill-back

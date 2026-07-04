@@ -106,6 +106,17 @@ function M.Pregame(ctx)
 	local bot = ctx.bot
 	if DotaTime() >= 0 or GetGameMode() ~= GAMEMODE_1V1MID then return false end
 	if ctx.surviveThink(bot, ctx.dials, nil) then return true end
+	-- Two uphill retreats mean the river duel can't be taken from our side of the
+	-- ramp; park at the safe pregame spot until creeps spawn instead of feeding the
+	-- retreat/advance dance for the whole pregame.
+	if bot.aib_pgDisengaged then
+		local target = towerLineAnchor(ctx, "safe_tower")
+		if target ~= nil and GetUnitToLocationDistance(bot, target) > 120 then
+			bot:Action_MoveToLocation(target)
+		end
+		Style.DiagRL(bot, "pg-disengage", 5)
+		return true
+	end
 	if ctx.pregameDuel ~= nil and ctx.pregameDuel() then return true end
 	-- Hold the uphill-retreat anchor while the enemy is still around. Without this the
 	-- tower-line anchor below pulls the bot straight back into the duel scan and the
