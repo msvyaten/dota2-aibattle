@@ -40,6 +40,10 @@ local function duelState(ctx, enemy, dist, phase, hpFloor, approachExtra)
 		if back ~= nil then
 			bot.aib_preDuelBackDest = back
 			bot.aib_preDuelBackUntil = now + ((phase == "pregame") and 1.6 or 1.0)
+			-- Uphill hysteresis: UphillMiss flickers while both bots move across the
+			-- river ramps, so without this hold the duel alternates retreat/approach
+			-- every ~2s all pregame (pg-duel-uphill-back=172-179 per match).
+			bot.aib_duelUphillHoldUntil = now + 5.0
 			if phase == "pregame" then
 				-- Freeze the pregame anchor here. Otherwise the retreat drops the enemy
 				-- out of the duel scan, tower-line positioning pulls us forward again,
@@ -65,6 +69,12 @@ local function duelState(ctx, enemy, dist, phase, hpFloor, approachExtra)
 		return true
 	end
 	if hp >= hpFloor + 0.10 and dist <= range + (approachExtra or 300) then
+		-- Recently retreated from an uphill spot: hold instead of walking straight
+		-- back up. Enemy entering our attack range is handled by the trade branch above.
+		if bot.aib_duelUphillHoldUntil ~= nil and DotaTime() < bot.aib_duelUphillHoldUntil then
+			ctx.blocked("prewave-duel", "uphill_hold", string.format("phase=%s dist=%.0f", phase, dist), 3.0)
+			return true
+		end
 		return ctx.moveToAttackEdge(enemy, keyPrefix .. "-approach", 0)
 	end
 	ctx.blocked("prewave-duel", "too_far", string.format("phase=%s dist=%.0f", phase, dist), 3.0)

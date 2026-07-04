@@ -645,6 +645,24 @@ local function AIB_RunFightArbiter(intentCtx)
 	return AIBEngine.Resolve(intents, intentCtx)
 end
 
+-- True when the bot has any consumable that recover could actually use.
+local function AIB_HasRecoveryResources()
+	for _, name in ipairs({ "item_tango", "item_tango_single", "item_flask",
+		"item_faerie_fire", "item_enchanted_mango" }) do
+		local slot = bot:FindItemSlot(name)
+		if slot >= 0 and bot:GetItemSlotType(slot) == ITEM_SLOT_TYPE_MAIN then
+			local it = bot:GetItemInSlot(slot)
+			if it ~= nil and it:IsFullyCastable() then return true end
+		end
+	end
+	local bSlot = bot:FindItemSlot("item_bottle")
+	if bSlot >= 0 and bot:GetItemSlotType(bSlot) == ITEM_SLOT_TYPE_MAIN then
+		local bottle = bot:GetItemInSlot(bSlot)
+		if bottle ~= nil and bottle:GetCurrentCharges() > 0 then return true end
+	end
+	return false
+end
+
 local function AIB_HasSiegeCandidate()
 	local range = botAttackRange or bot:GetAttackRange()
 	local twr = AIB_EnemyTowerDanger()
@@ -809,9 +827,22 @@ local function AIB_RunTopDesireArbiter(dials, rules, runtimeCtx, intentCtx)
 
 	local recoverPolicy = AIBLanePolicy.Recover(policyArgs)
 	if recoverPolicy ~= nil then
-		candidates[#candidates + 1] = AIBTopArbiter.Candidate("recover", recoverPolicy.score, recoverPolicy.reason,
-			recoverPolicy.detail,
-			function() return AIBLaneRecovery.ThinkIfAllowed(runtimeCtx, AIBLanePolicy.Hp.softRecovery, "lane-low") end)
+		-- Resource gate: with no heal items, no bottle charges and the bot already behind
+		-- its safe anchor while not being hit, recover has no possible action. Letting it
+		-- win the arbiter anyway froze lane work for 10-40s in the 40-55% HP band
+		-- (8880453130 t=436-449, 8880823408 t=264-299: LH frozen, 2000u ping-pong).
+		local recoverUseless = hp >= 0.30
+			and not recentHeroDamage and not recentCreepDamage
+			and not AIB_HasRecoveryResources()
+			and AIBUtils.IsCloserToFountain(bot, AIBUtils.SafeRetreatTowerLoc(bot))
+		if recoverUseless then
+			Style.Blocked(bot, "recover-candidate", "no_resources_behind_safe",
+				string.format("hp=%.0f score=%.0f", hp * 100, recoverPolicy.score or 0), 3.0)
+		else
+			candidates[#candidates + 1] = AIBTopArbiter.Candidate("recover", recoverPolicy.score, recoverPolicy.reason,
+				recoverPolicy.detail,
+				function() return AIBLaneRecovery.ThinkIfAllowed(runtimeCtx, AIBLanePolicy.Hp.softRecovery, "lane-low") end)
+		end
 	end
 
 	policyArgs.hasSiegeCandidate = AIB_HasSiegeCandidate()

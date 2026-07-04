@@ -44,6 +44,22 @@ function M.Run(candidates, ctx)
 		end
 	end
 	if #active == 0 then return false, nil end
+
+	-- Winner hysteresis: the previous winner stays sticky for a short window so
+	-- transient score spikes (e.g. the 2s recent-damage boost on safety) don't flip
+	-- tick ownership every tick and cancel attack windups mid-swing.
+	local bot0 = ctx and ctx.bot
+	if bot0 ~= nil and bot0.aib_desireWinner ~= nil and bot0.aib_desireWinnerAt ~= nil
+		and DotaTime() - bot0.aib_desireWinnerAt < 1.5 then
+		for _, c in ipairs(active) do
+			if c.name == bot0.aib_desireWinner then
+				c.priority = (c.priority or 0) + 18
+				c.detail = (c.detail or "") .. " hyst=18"
+				break
+			end
+		end
+	end
+
 	table.sort(active, function(a, b)
 		if (a.priority or 0) == (b.priority or 0) then
 			return tostring(a.name) < tostring(b.name)
@@ -60,6 +76,10 @@ function M.Run(candidates, ctx)
 		local handled = c.action()
 		if handled then
 			if ctx ~= nil then ctx.last_desire = c.name end
+			if bot ~= nil then
+				bot.aib_desireWinner = c.name
+				bot.aib_desireWinnerAt = DotaTime()
+			end
 			Style.TickOwner(bot, "desire/" .. tostring(c.name), candidateDetail(c), 2.0)
 			return true, c.name
 		end

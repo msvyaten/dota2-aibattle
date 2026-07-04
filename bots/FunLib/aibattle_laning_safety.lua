@@ -298,7 +298,11 @@ function M.LastHitWatchdog(ctx)
 	end
 	bot.aib_csWatchLast = now
 	Style.Intent(bot, "cs-watchdog", string.format("lh=%d idle=%.0f creep_hp=%.0f dist=%.0f", lh, noGainFor, hp or -1, dist or -1), 2.0)
-	if dist <= range + 35 then
+	-- Only swing at creeps that are actually finishable; whacking a full-HP creep in
+	-- place looks like a frozen bot (8880823408 t~160: creep_hp=550) and breaks the
+	-- last_hit_only equilibrium. Otherwise just close distance to the wave.
+	local finishable = (hp or math.huge) <= (bot:GetAttackDamage() or 50) * 2
+	if dist <= range + 35 and finishable then
 		bot:Action_AttackUnit(creep, true)
 		ctx.diag("cs-watchdog-atk")
 	else
