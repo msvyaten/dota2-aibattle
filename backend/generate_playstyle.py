@@ -6,13 +6,27 @@ from openai import OpenAI
 
 MODEL = "gpt-5.5"  # current flagship (June 2026). Switch to "gpt-5.4-mini" for cheaper runs.
 
+# Full engine schema. Must stay in sync with bots/FunLib/aibattle_style.lua whitelists.
 DIAL_KEYS = (
-    "harass_desire", "farm_focus", "forwardness",
-    "ability_aggro", "rune_control", "retreat_caution",
+    "harass_desire", "farm_focus", "forwardness", "retreat_caution",
+    "rune_control", "execute_threshold", "ability_aggro", "gank_desire",
+    "push_desire", "defend_desire", "ward_desire", "roshan_desire",
 )
-RESPAWN_VALUES = ("tp_to_tower", "tp_to_lane", "walk_back")
+# rule -> allowed values. A rule absent from the LLM answer is OMITTED from the
+# output config so the engine falls back to its own default for that rule.
+RULE_VALUES = {
+    "respawn_behavior":    ("tp_to_tower", "tp_to_lane", "walk_back"),
+    "pregame_behavior":    ("safe_tower", "aggressive_mid", "jungle_pressure"),
+    "dive_policy":         ("never", "finish_only", "when_grouped", "when_ahead", "always"),
+    "low_hp_behavior":     ("tp_fountain", "run_to_tower", "fight_back", "regen_lane", "walk_fountain"),
+    "healing_style":       ("active", "default", "passive", "never"),
+    "ability_usage":       ("aggressive", "default", "basic"),
+    "ability_timing":      ("on_cooldown", "save_for_execute", "harass_only"),
+    "creep_wave_priority": ("push", "last_hit_only", "freeze"),
+    "hero_priority":       ("always", "default", "never"),
+    "deny_policy":         ("always", "default", "never"),
+}
 DEFAULT_DIAL = 0.5
-DEFAULT_RESPAWN = "walk_back"
 
 _client = None
 
@@ -45,10 +59,14 @@ def _sanitize_style(raw: dict) -> dict:
         dials[k] = v if v is not None else DEFAULT_DIAL
 
     raw_rules = raw.get("rules") if isinstance(raw.get("rules"), dict) else {}
-    rb = raw_rules.get("respawn_behavior")
-    respawn = rb if rb in RESPAWN_VALUES else DEFAULT_RESPAWN
+    rules = {}
+    for k, allowed in RULE_VALUES.items():
+        v = raw_rules.get(k)
+        if v in allowed:
+            rules[k] = v
+        # invalid or missing -> omit; the engine applies its own default
 
-    return {"dials": dials, "rules": {"respawn_behavior": respawn}}
+    return {"dials": dials, "rules": rules}
 
 def _parse_llm_json(raw_text: str) -> dict:
     """Extract a JSON object from the LLM response (tolerates ```json fences)."""
@@ -90,10 +108,12 @@ def write_playstyle_lua(style: dict, output_path: str) -> None:
     style = _sanitize_style(style)
     lines = ["return {", "    dials = {"]
     for k in DIAL_KEYS:
-        lines.append(f"        {k:<15} = {_lua_value(style['dials'][k])},")
+        lines.append(f"        {k:<17} = {_lua_value(style['dials'][k])},")
     lines.append("    },")
     lines.append("    rules = {")
-    lines.append(f'        respawn_behavior = {_lua_value(style["rules"]["respawn_behavior"])},')
+    for k in RULE_VALUES:
+        if k in style["rules"]:
+            lines.append(f"        {k:<19} = {_lua_value(style['rules'][k])},")
     lines.append("    },")
     lines.append("}")
     with open(output_path, "w") as f:
