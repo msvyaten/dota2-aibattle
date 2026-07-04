@@ -8316,12 +8316,19 @@ local function UseGlyph()
 	if GetGlyphCooldown( ) > 0
 		or DotaTime() < 60
 		or bot ~= GetTeamMember( 1 )
-		or not GetTeamMember( 2 ):IsBot()
-		or not GetTeamMember( 3 ):IsBot()
-		or not GetTeamMember( 4 ):IsBot()
-		or not GetTeamMember( 5 ):IsBot()
 	then
 		return
+	end
+
+	-- Only auto-glyph when the whole team is bots. A nil member is an empty/kicked
+	-- slot (e.g. 1v1 mid), NOT a human -- treat it as absent, not as a blocker.
+	-- Guarding against nil avoids "GetTeamMember(n):IsBot() on nil" crashes that
+	-- start at t=180 (glyph cooldown expiry) and spam every 2s until throttled.
+	for i = 2, 5 do
+		local member = GetTeamMember( i )
+		if member ~= nil and not member:IsBot() then
+			return
+		end
 	end
 
 	local T1 = {
