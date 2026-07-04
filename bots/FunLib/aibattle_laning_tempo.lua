@@ -107,6 +107,22 @@ function M.Pregame(ctx)
 	if DotaTime() >= 0 or GetGameMode() ~= GAMEMODE_1V1MID then return false end
 	if ctx.surviveThink(bot, ctx.dials, nil) then return true end
 	if ctx.pregameDuel ~= nil and ctx.pregameDuel() then return true end
+	-- Hold the uphill-retreat anchor while the enemy is still around. Without this the
+	-- tower-line anchor below pulls the bot straight back into the duel scan and the
+	-- uphill-retreat cycle restarts every ~2s for the whole pregame.
+	local frozen = bot.aib_pgUphillBackAnchor
+	if frozen ~= nil then
+		local frzRange = ctx.attackRange or bot:GetAttackRange()
+		local frzEnemy = ctx.nearestEnemyHero(frzRange + 700)
+		if frzEnemy ~= nil then
+			if GetUnitToLocationDistance(bot, frozen) > 100 then
+				bot:Action_MoveToLocation(frozen)
+			end
+			Style.DiagRL(bot, "pg-uphill-freeze", 5)
+			return true
+		end
+		bot.aib_pgUphillBackAnchor = nil
+	end
 	Style.DiagRL(bot, "pg-pos", 5)
 	local pgb = (ctx.rules or {}).pregame_behavior
 	if pgb == "water_rune" then

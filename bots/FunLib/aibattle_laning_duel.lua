@@ -40,6 +40,13 @@ local function duelState(ctx, enemy, dist, phase, hpFloor, approachExtra)
 		if back ~= nil then
 			bot.aib_preDuelBackDest = back
 			bot.aib_preDuelBackUntil = now + ((phase == "pregame") and 1.6 or 1.0)
+			if phase == "pregame" then
+				-- Freeze the pregame anchor here. Otherwise the retreat drops the enemy
+				-- out of the duel scan, tower-line positioning pulls us forward again,
+				-- and the uphill-retreat loop repeats all pregame (pg-duel-uphill-back
+				-- was ~177 events per pregame in mirror matches).
+				bot.aib_pgUphillBackAnchor = back
+			end
 			bot:Action_MoveToLocation(back)
 			ctx.diag(keyPrefix .. "-uphill-back")
 			return true

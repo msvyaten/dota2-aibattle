@@ -273,7 +273,7 @@ function M.LastHitWatchdog(ctx)
 	if now < 65 or now > 8 * 60 then return false end
 	local lh = ctx.safeCounter("GetLastHits")
 	if lh == nil then return false end
-	if bot.aib_csWatchLastCheck == nil or now - bot.aib_csWatchLastCheck >= 20.0 then
+	if bot.aib_csWatchLastCheck == nil or now - bot.aib_csWatchLastCheck >= 10.0 then
 		if bot.aib_csWatchLH == nil or lh > bot.aib_csWatchLH then
 			bot.aib_csWatchLH = lh
 			bot.aib_csWatchNoGainSince = now
@@ -283,7 +283,9 @@ function M.LastHitWatchdog(ctx)
 		bot.aib_csWatchLastCheck = now
 	end
 	local noGainFor = now - (bot.aib_csWatchNoGainSince or now)
-	if lh > 0 and noGainFor < 40.0 then return false end
+	-- 18s: a full free wave dies in ~20s, so 40s meant the watchdog slept through an
+	-- entire farmable wave (bot stood in creeps 21s with 0 LH in 8880652189 t=175-196).
+	if lh > 0 and noGainFor < 18.0 then return false end
 	if lh == 0 and now < 80 then return false end
 	if bot.aib_csWatchLast ~= nil and now - bot.aib_csWatchLast < 1.2 then return false end
 	if ctx.enemyTowerDanger() ~= nil and ctx.towerThreatening(ctx.enemyTowerDanger()) then return false end
