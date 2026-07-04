@@ -177,7 +177,25 @@ LLM-генератор до полной схемы (§2 — можно пара
 
 ## 6. Известные открытые баги (не блокеры, с пруфами)
 
-- VScript-шум: `Script Runtime Error`×20, `invalid index`×37 (8874134176) — блокер Gate 0.
+- ✅ ДИАГНОСТИРОВАНО (Claude, 2026-07-04) — VScript-шум, блокер Gate 0. Два класса:
+  1. `Script Runtime Error: error in error handling`×20 — КОРЕНЬ:
+     `ability_item_usage_generic.lua:8319-8322` (`UseGlyph`): `GetTeamMember(2):IsBot()`
+     без nil-гарда. В 1v1 слоты 2-5 кикнуты → GetTeamMember(2)=nil → index nil.
+     Механика: стартовый КД глифа истекает на 3:00 → с t=180 условие
+     `GetGlyphCooldown()>0` перестаёт отсекать → краш каждые 2.0s (троттлинг
+     `BuybackUsageThink`, строка 8405), оба бота в одном кадре (=пары), движок
+     глушит идентичный спам после 10 повторов (=ровно 20 ошибок, тишина после 3:20).
+     Подтверждено в 4 матчах: burst строго t=180-200 (8874174746, 8874134176,
+     8874100152, 8869519932). «error in error handling» вместо текста — потому что
+     движковый error-хэндлер зовёт debug.traceback, а debug в бот-песочнице урезан.
+     ФИКС (Codex): nil-гард на GetTeamMember(2..5) в UseGlyph (nil-член = пропустить).
+     Бонус: тот же паттерн в `jmz_func.lua:4613` (GetCoresTotalNetworth) — мёртвый
+     код, никем не вызывается, можно не трогать.
+  2. `invalid index`×37-38 — НЕ баг бота: `CLocalize::FindSafe failed to localize:
+     'invalid index'` — клиентский UI-шум от пустых (кикнутых) слотов лобби.
+     Первые строки на 11:41:09 — до загрузки бот-скриптов. Исключить из подсчёта
+     ошибок Gate 0 (match_stats/критерий приёмки), чинить нечего.
+  3. `Item can't be used from stash` — уже 0 в 8874174746 (закрыто e28c2a5/f4e59a4).
 - KillLock целится в мёртвого врага (`ehp=-66600`, нет `IsAlive()`-гейта) — 8874134176.
 - Pregame uphill-петля у Dire: `pg-duel-uphill-back`=179 за прегейм (8874174746);
   фикс f4e59a4 помог Radiant-стороне, Dire-сторона крутится.
