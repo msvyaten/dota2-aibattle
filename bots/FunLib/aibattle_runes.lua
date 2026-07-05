@@ -80,6 +80,25 @@ local function nextBottleRuneSpawn(now)
 	return (math.floor(now / 120) + 1) * 120, "power"
 end
 
+-- True when a visible alive enemy hero is within radius of loc. Used to avoid
+-- staging at the contested river spot: at water windows BOTH spots spawn a rune,
+-- so walking to the uncontested one converts staging into a guaranteed fill
+-- instead of a pickup race the bot loses (result=gone age=2-3 at dist=42-96,
+-- filled=0 across matches while the enemy bottle filled).
+local function enemyNearLoc(loc, radius)
+	if loc == nil then return false end
+	for _, h in pairs(GetUnitList(UNIT_LIST_ENEMY_HEROES) or {}) do
+		if h ~= nil and h:CanBeSeen() and h:IsAlive() then
+			local hl = h:GetLocation()
+			if hl ~= nil then
+				local dx, dy = hl.x - loc.x, hl.y - loc.y
+				if dx * dx + dy * dy <= radius * radius then return true end
+			end
+		end
+	end
+	return false
+end
+
 local function runeMemoryUntil(now)
 	local nextSpawnAt = nextBottleRuneSpawn(now)
 	if nextSpawnAt == nil then return nil end
@@ -100,14 +119,16 @@ local function markRuneKnownEmpty(bot, runeId, now)
 	bot.aib_knownEmptyRunes[runeId] = untilTime
 end
 
-local function nearestRuneSpot(bot, now)
-	local bestRune, bestLoc, bestDist = nil, nil, math.huge
+local function nearestRuneSpot(bot, now, avoidContested)
+	local bestRune, bestLoc, bestDist, bestScore = nil, nil, math.huge, math.huge
 	for _, runeId in ipairs({ RUNE_POWERUP_1, RUNE_POWERUP_2 }) do
 		local loc = GetRuneSpawnLocation(runeId)
 		if loc ~= nil and not isRuneKnownEmpty(bot, runeId, now) then
 			local dist = GetUnitToLocationDistance(bot, loc)
-			if dist < bestDist then
-				bestRune, bestLoc, bestDist = runeId, loc, dist
+			-- Water windows spawn a rune at BOTH spots; prefer the uncontested one.
+			local score = dist + ((avoidContested and enemyNearLoc(loc, 700)) and 1400 or 0)
+			if score < bestScore then
+				bestRune, bestLoc, bestDist, bestScore = runeId, loc, dist, score
 			end
 		end
 	end
@@ -335,7 +356,7 @@ function M.SeekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 			local nextSpawnAt, spawnKind = nextBottleRuneSpawn(now)
 			local secsToSpawn = nextSpawnAt ~= nil and (nextSpawnAt - now) or math.huge
 			local stageWindow = opts.stage_window or 16.0
-			local stageRune, stageLoc, stageDist = nearestRuneSpot(bot, now)
+			local stageRune, stageLoc, stageDist = nearestRuneSpot(bot, now, spawnKind == "water")
 			local stageMaxDist = opts.stage_max_dist or math.max(maxDist or 2600, 2600)
 			if bot.aib_bottleRuneStageClosedWindow == nextSpawnAt then
 				Style.Blocked(bot, diagKey, "stage_done", string.format("eta=%.0f closed=1", secsToSpawn), 6.0)
@@ -391,6 +412,11 @@ function M.SeekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 								local dist = GetUnitToLocationDistance(bot, loc)
 								local runeType = GetRuneType(runeId)
 								local score = dist + ((runeType == RUNE_WATER) and 0 or 350)
+								-- Both water spots are up: don't race the enemy for the
+								-- contested one when the other is free.
+								if runeType == RUNE_WATER and enemyNearLoc(loc, 700) then
+									score = score + 1400
+								end
 								if dist <= stageMaxDist and score < checkScore then
 									checkRune, checkLoc, checkDist, checkScore = runeId, loc, dist, score
 								end
