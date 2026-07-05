@@ -68,6 +68,15 @@ GENERATED_CODE_FILES = {
 
 STALE_LIVE_FILES = [
     "FunLib/aibattle_laning_intents.lua",
+    # phase-22 era relics (can reappear after old-build comparison deploys)
+    "FunLib/aibattle_heal.lua",
+    "mode_laning_generic.aibattle.lua",
+    "mode_retreat_generic_wip.lua",
+    "--mode_item_generic.lua",
+    # retired experiment configs (June bettability era)
+    "Customize/playstyle_A_duelist.lua",
+    "Customize/playstyle_B_farmer.lua",
+    "Customize/playstyle_C_trader.lua",
 ]
 
 # Files we hand-edit and deploy: a syntax slip here crashes the live match. Mirrors deploy.bat.
