@@ -383,7 +383,7 @@ local function ThinkAnnounce(dials)
 		dials.gank_desire, dials.push_desire), true)
 	local r = Style.Get().rules
 	bot:ActionImmediate_Chat(string.format(
-		"AIB[%s] defend=%.2f ward=%.2f roshan=%.2f dive=%s heal=%s abil=%s cw=%s at=%s pgb=%s",
+		"AIB[%s] defend=%.2f ward=%.2f roshan=%.2f dive=%s heal=%s abil=%s cw=%s at=%s pgb=%s ta=%s",
 		AIB_SIDE,
 		dials.defend_desire, dials.ward_desire, dials.roshan_desire,
 		tostring(r.dive_policy or "finish_only"),
@@ -391,7 +391,8 @@ local function ThinkAnnounce(dials)
 		tostring(r.ability_usage or "default"),
 		tostring(r.creep_wave_priority or "last_hit_only"),
 		tostring(r.ability_timing or "on_cooldown"),
-		tostring(r.pregame_behavior or "default")), true)
+		tostring(r.pregame_behavior or "default"),
+		tostring(r.tower_aggression or "default")), true)
 end
 
 local function AIB_TowerActuallyThreatening(twr)
@@ -845,13 +846,17 @@ local function AIB_RunTopDesireArbiter(dials, rules, runtimeCtx, intentCtx)
 		end
 	end
 
-	policyArgs.hasSiegeCandidate = AIB_HasSiegeCandidate()
-	policyArgs.enemyDeadRecently = AIB_EnemyDeadRecently()
-	local siegePolicy = AIBLanePolicy.Siege(policyArgs)
-	if siegePolicy ~= nil then
-		candidates[#candidates + 1] = AIBTopArbiter.Candidate("siege", siegePolicy.score, siegePolicy.reason,
-			siegePolicy.detail,
-			function() return AIB_SiegeIntent(dials, rules) end)
+	-- tower_aggression=never: the siege action is hard-vetoed, so don't let the
+	-- desire win the arbiter just to return empty_action.
+	if (rules.tower_aggression or "default") ~= "never" then
+		policyArgs.hasSiegeCandidate = AIB_HasSiegeCandidate()
+		policyArgs.enemyDeadRecently = AIB_EnemyDeadRecently()
+		local siegePolicy = AIBLanePolicy.Siege(policyArgs)
+		if siegePolicy ~= nil then
+			candidates[#candidates + 1] = AIBTopArbiter.Candidate("siege", siegePolicy.score, siegePolicy.reason,
+				siegePolicy.detail,
+				function() return AIB_SiegeIntent(dials, rules) end)
+		end
 	end
 
 	return AIBTopArbiter.Run(candidates, runtimeCtx)

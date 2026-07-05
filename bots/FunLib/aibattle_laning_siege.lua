@@ -21,7 +21,16 @@ function M.Think(ctx)
 			twr = midT1
 		end
 	end
-	if twr == nil or ctx.towerThreatening(twr) then return false end
+	if twr == nil then return false end
+
+	-- tower_aggression: risk gates for sieging. Desire knobs (push_desire, cwp)
+	-- say how much the bot wants the tower; this rule says what risk it accepts.
+	local towerAggr = rules.tower_aggression or "default"
+	if towerAggr == "never" then
+		ctx.blocked("siege", "tower_aggression_never", string.format("tower=%.0f", GetUnitToUnitDistance(bot, twr)), 5.0)
+		return false
+	end
+	if ctx.towerThreatening(twr) and towerAggr ~= "always" then return false end
 
 	local cwp = rules.creep_wave_priority or "last_hit_only"
 	local enemy, enemyDist = ctx.nearestEnemyHero(2200)
@@ -30,8 +39,9 @@ function M.Think(ctx)
 	local waveAtTower = waveCount >= 1
 	local strongWaveAtTower = waveCount >= 3
 	local advantageSiege = ctx.enemyDeadRecently() or (waveAtTower and enemyFarOrWeak)
-	local wantsSiege = cwp == "push" or advantageSiege or (dials.push_desire or 0.5) >= 0.65
+	local wantsSiege = towerAggr == "always" or cwp == "push" or advantageSiege or (dials.push_desire or 0.5) >= 0.65
 	local siegeHpFloor = ctx.enemyDeadRecently() and 0.22 or 0.35
+	if towerAggr == "always" then siegeHpFloor = ctx.enemyDeadRecently() and 0.20 or 0.28 end
 	if not wantsSiege or J.GetHP(bot) < siegeHpFloor then
 		ctx.blocked("siege", "desire_or_hp", string.format("hp=%.0f adv=%s", J.GetHP(bot) * 100, tostring(advantageSiege)), 5.0)
 		ctx.towerOpportunity("blocked_desire_or_hp", string.format("wave=%d hp=%.0f adv=%s", waveCount, J.GetHP(bot) * 100, tostring(advantageSiege)), 5.0)
@@ -50,7 +60,7 @@ function M.Think(ctx)
 			end
 		end
 	end
-	if not alliedTank then
+	if not alliedTank and towerAggr ~= "always" then
 		if ctx.enemyDeadRecently() and twrDist > attackRange + 60 then
 			ctx.state("siege-window", string.format("ttl=2 wave=%d tower=%.0f hp=%.0f adv=%s", waveCount, twrDist, J.GetHP(bot) * 100, tostring(advantageSiege)), 2.0)
 			ctx.towerOpportunity("step", string.format("phase=dead_no_tank wave=%d tower=%.0f", waveCount, twrDist), 2.0)
@@ -60,6 +70,19 @@ function M.Think(ctx)
 		ctx.blocked("siege", "no_allied_tank", string.format("tower=%.0f", GetUnitToUnitDistance(bot, twr)), 5.0)
 		ctx.towerOpportunity("blocked_no_tank", string.format("wave=%d tower=%.0f", waveCount, GetUnitToUnitDistance(bot, twr)), 5.0)
 		return false
+	end
+	if not alliedTank then
+		-- tower_aggression=always without wave cover: reckless tower hits.
+		if twrDist <= attackRange + 60 then
+			bot.aib_siegeCommitUntil = now + 2.0
+			bot:Action_AttackUnit(twr, true)
+			ctx.towerOpportunity("hit", string.format("phase=no_tank_always wave=%d tower=%.0f", waveCount, twrDist), 2.0)
+			ctx.diag("siege-no-tank-tower")
+			return true
+		end
+		bot.aib_siegeCommitUntil = now + 2.0
+		ctx.towerOpportunity("step", string.format("phase=no_tank_always wave=%d tower=%.0f", waveCount, twrDist), 2.0)
+		return ctx.moveToAttackEdge(twr, "siege-no-tank-step", 40)
 	end
 
 	local inTowerAttackRange = twrDist <= attackRange + 60

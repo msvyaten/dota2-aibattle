@@ -12,6 +12,7 @@ end
 
 local function powerRuneTowerTarget(ctx, range)
 	local bot = ctx.bot
+	if (ctx.rules or {}).tower_aggression == "never" then return nil, 0 end
 	local twr = ctx.enemyTowerDanger()
 	if not J.IsValid(twr) then
 		local midT1 = GetTower(GetOpposingTeam(), TOWER_MID_1)

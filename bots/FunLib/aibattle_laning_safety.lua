@@ -350,6 +350,7 @@ function M.VisualHoldHeartbeat(ctx)
 	if reason == "tower" then
 		local twr = ctx.enemyTowerDanger()
 		if twr ~= nil and not ctx.towerThreatening(twr)
+			and (ctx.rules or {}).tower_aggression ~= "never"
 			and ctx.alliedCreepsAtTower(twr, twr:GetAttackRange() + 120) >= 1
 			and J.GetHP(bot) >= 0.35 then
 			if GetUnitToUnitDistance(bot, twr) <= range + 60 then

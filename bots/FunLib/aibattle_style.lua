@@ -133,6 +133,16 @@ local DEFAULT_ABILITY_TIMING = "on_cooldown"
 local HERO_PRIORITY_VALUES = { always = true, default = true, never = true }
 local DEFAULT_HERO_PRIORITY = "default"
 
+-- tower_aggression: risk tolerance for attacking enemy towers. Orthogonal to
+-- push_desire / creep_wave_priority, which express how much the bot WANTS to siege;
+-- this rule controls which SAFETY GATES apply once it wants to.
+-- always  = hit the tower even without an allied creep wave tanking it, lower HP floor.
+-- default = current behavior: require allied tank cover and the standard HP floor.
+-- never   = hard veto on attacking towers from laning logic (siege, visual-hold,
+--           power-rune tower pressure). Pure kill/farm strategies become expressible.
+local TOWER_AGGRESSION_VALUES = { always = true, default = true, never = true }
+local DEFAULT_TOWER_AGGRESSION = "default"
+
 -- deny_policy: how aggressively the bot denies allied creeps.
 -- always  = deny any allied creep below 60% HP (wider window than kill-guarantee).
 -- default = OHA behaviour (deny only when health <= attackDamage).
@@ -345,6 +355,9 @@ local function buildStyle(raw)
 
     local denp = rawRules.deny_policy
     local deny_policy = (type(denp) == "string" and DENY_POLICY_VALUES[denp]) and denp or DEFAULT_DENY_POLICY
+
+    local ta = rawRules.tower_aggression
+    local tower_aggression = (type(ta) == "string" and TOWER_AGGRESSION_VALUES[ta]) and ta or DEFAULT_TOWER_AGGRESSION
     local rune_use_policy = parseRuneUsePolicy(rawRules.rune_use_policy)
 
     local low_hp_hold = ruleNumber(rawRules, "low_hp_hold")
@@ -361,6 +374,7 @@ local function buildStyle(raw)
         healing_style = healing_style, ability_usage = ability_usage,
         creep_wave_priority = creep_wave_priority, ability_timing = ability_timing,
         hero_priority = hero_priority, deny_policy = deny_policy,
+        tower_aggression = tower_aggression,
         rune_use_policy = rune_use_policy,
         low_hp_hold = low_hp_hold,
         creep_aggro_relief_hp = creep_aggro_relief_hp,
