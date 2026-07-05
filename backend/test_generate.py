@@ -5,7 +5,7 @@ from generate_playstyle import (
 
 def test_schema_is_full_engine_surface():
     assert len(DIAL_KEYS) == 12
-    assert len(RULE_VALUES) == 10
+    assert len(RULE_VALUES) == 11
 
 def test_sanitize_clamps_dials_into_range():
     s = _sanitize_style({"dials": {"harass_desire": 1.7, "farm_focus": -0.4}, "rules": {}})

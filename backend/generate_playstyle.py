@@ -25,6 +25,7 @@ RULE_VALUES = {
     "creep_wave_priority": ("push", "last_hit_only", "freeze"),
     "hero_priority":       ("always", "default", "never"),
     "deny_policy":         ("always", "default", "never"),
+    "tower_aggression":    ("always", "default", "never"),
 }
 DEFAULT_DIAL = 0.5
 
