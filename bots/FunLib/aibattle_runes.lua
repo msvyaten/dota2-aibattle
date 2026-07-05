@@ -461,6 +461,10 @@ function M.SeekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 			if waterRuneEmergency(bot, hp, mana, stageDist, spawnKind, forceEmptyBottle) then
 				stageWindow = math.min(stageWindow, Const.Rune.waterEmergencyStageWindow)
 			end
+			-- Travel-aware departure: leaving a 20s window for a 6s walk parks the bot
+			-- at the spot for 10+ idle seconds (8882969763: left at eta=17, dist=1708,
+			-- hp=99 - lost farm for nothing). Depart when travel time + 5s buffer says so.
+			stageWindow = math.min(stageWindow, stageDist / 300.0 + 5.0)
 			if stageRune ~= nil and stageLoc ~= nil and secsToSpawn >= 0 and secsToSpawn <= stageWindow and stageDist <= stageMaxDist then
 				if laneAware and stageDist > 700 and hp > 0.62 and hasLastHitWindow(bot) and secsToSpawn > 5 then
 					Style.Blocked(bot, diagKey, "last_hit_window", string.format("stage=1 rune=%.0f hp=%.0f eta=%.0f", stageDist, hp*100, secsToSpawn), 6.0)

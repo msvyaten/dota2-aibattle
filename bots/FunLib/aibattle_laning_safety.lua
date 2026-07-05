@@ -150,12 +150,20 @@ function M.CreepHitReact(ctx)
 		return false
 	end
 
+	-- Re-issuing Action_AttackUnit every 0.75s cancels the attack windup: standing
+	-- inside the enemy wave the bot "tries to swing but never hits" and LH stalls
+	-- (8882969763 t=186-196: idle=30s at cw=push). If a swing is already underway,
+	-- own the tick without touching the order.
+	local alreadySwinging = bot:GetCurrentActionType() == BOT_ACTION_TYPE_ATTACK
+
 	local repeatedDamage = (bot.aib_creepReactCount or 0) >= 3
 	local safeToTrade = hp >= 0.55 and dist <= range + 80 and ctx.enemyTowerDanger() == nil
 	if safeToTrade then
 		bot.aib_creepReactLast = now
 		Style.Intent(bot, "creep-hit-react", string.format("dist=%.0f hp=%.0f hits=%d reason=attack", dist, hp * 100, bot.aib_creepReactCount or 0), 1.5)
-		bot:Action_AttackUnit(creep, true)
+		if not alreadySwinging then
+			bot:Action_AttackUnit(creep, true)
+		end
 		ctx.diag("creep-hit-react-atk")
 		return true
 	end
@@ -165,7 +173,9 @@ function M.CreepHitReact(ctx)
 	if hp >= forcedAttackHp and repeatedDamage and dist <= range + 110 and ctx.enemyTowerDanger() == nil then
 		bot.aib_creepReactLast = now
 		Style.Intent(bot, "creep-hit-react", string.format("dist=%.0f hp=%.0f hits=%d reason=forced_attack", dist, hp * 100, bot.aib_creepReactCount or 0), 1.0)
-		bot:Action_AttackUnit(creep, true)
+		if not alreadySwinging then
+			bot:Action_AttackUnit(creep, true)
+		end
 		ctx.diag("creep-hit-react-force-atk")
 		return true
 	end
