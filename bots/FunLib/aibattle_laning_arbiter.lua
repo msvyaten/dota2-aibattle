@@ -85,7 +85,17 @@ function M.Run(candidates, ctx)
 		end
 		Style.Blocked(bot, "top-arbiter", "empty_action",
 			string.format("winner=%s score=%.0f", tostring(c.name), c.priority or 0), 1.5)
-		if bot ~= nil then bot.aib_topArbiterEmptyLast = DotaTime() end
+		if bot ~= nil then
+			bot.aib_topArbiterEmptyLast = DotaTime()
+			-- A sticky winner that can no longer act must not keep its hysteresis
+			-- bonus: otherwise a dead desire (e.g. safety after the damage window)
+			-- outbids a live fight for another 1.5s and the bot half-turns without
+			-- ever attacking (8882121289 t=73-80).
+			if bot.aib_desireWinner == c.name then
+				bot.aib_desireWinner = nil
+				bot.aib_desireWinnerAt = nil
+			end
+		end
 	end
 	return false, nil
 end

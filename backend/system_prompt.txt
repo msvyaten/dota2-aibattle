@@ -48,6 +48,11 @@ imply it (the engine then uses its own default). Allowed values ONLY:
       freeze = never touch enemy creeps (drags the wave back to own tower).
   hero_priority : "always" | "default" | "never"
       always = auto-attack the hero whenever in range; never = pure creep focus.
+  tower_aggression : "always" | "default" | "never"
+      Risk tolerance for attacking towers -- independent of push_desire, which says
+      how much the bot WANTS towers. always = hit the tower even without a creep
+      wave tanking it and at lower HP (reckless siege); default = only attack with
+      wave cover; never = never attack towers at all (pure kill/farm styles).
   deny_policy : "always" | "default" | "never"
       always = deny any allied creep under 60% HP; never = never deny.
 
@@ -63,6 +68,10 @@ Interpretation rules:
   "freeze", healing_style "active", low_hp_behavior "regen_lane".
 - Pusher / tower pressure -> push_desire > 0.7, creep_wave_priority "push",
   forwardness > 0.6, dive_policy "when_ahead" or "always" if the prompt is reckless.
+  Add tower_aggression "always" ONLY when the prompt accepts risk for buildings
+  ("take towers at any cost", "tank the tower"); a patient pusher keeps "default".
+- "Ignore towers" / pure kill hunter / pure farmer -> tower_aggression "never"
+  (plus the matching harass/farm dials).
 - Kill-focused / assassin -> execute_threshold > 0.45, ability_timing
   "save_for_execute", gank_desire > 0.7, dive_policy "finish_only" or "when_ahead".
 - Poke / attrition without committing -> ability_timing "harass_only",
