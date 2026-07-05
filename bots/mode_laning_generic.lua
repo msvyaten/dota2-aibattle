@@ -54,6 +54,7 @@ local AIBLaneRecovery = require(GetScriptDirectory()..'/FunLib/aibattle_laning_r
 local AIBLaneCombat = require(GetScriptDirectory()..'/FunLib/aibattle_laning_combat')
 local AIBLaneTempo = require(GetScriptDirectory()..'/FunLib/aibattle_laning_tempo')
 local AIBTopArbiter = require(GetScriptDirectory()..'/FunLib/aibattle_laning_arbiter')
+local AIBMotor = require(GetScriptDirectory()..'/FunLib/aibattle_motor')
 local AIBLanePolicy = require(GetScriptDirectory()..'/FunLib/aibattle_laning_policy')
 
 local function AIB_ClearRecoveryState()
@@ -684,6 +685,10 @@ local function AIB_LaneLineFallback(dials)
 	end
 	if AIB_HealingChannelActive() then
 		Style.DiagRL(bot, "lane-line-suppressed-heal", 5)
+		return false
+	end
+	if AIBMotor.Active(bot) ~= nil then
+		Style.DiagRL(bot, "lane-line-suppressed-motor", 5)
 		return false
 	end
 	if bot.aib_recMoveLast ~= nil and now - bot.aib_recMoveLast < AIBLanePolicy.Forward.laneFallbackRecoveryCooldown then

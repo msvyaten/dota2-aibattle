@@ -64,6 +64,7 @@ if "%DO_CODE%"=="1" (
 	call :copyfile "FunLib\aibattle_laning_combat.lua" || exit /b 1
 	call :copyfile "FunLib\aibattle_laning_tempo.lua" || exit /b 1
 	call :copyfile "FunLib\aibattle_laning_arbiter.lua" || exit /b 1
+	call :copyfile "FunLib\aibattle_motor.lua" || exit /b 1
 	call :copyfile "FunLib\aibattle_laning_policy.lua" || exit /b 1
 	call :copyfile "FunLib\aibattle_laning_duel.lua" || exit /b 1
 	call :copyfile "FunLib\aibattle_laning_siege.lua" || exit /b 1

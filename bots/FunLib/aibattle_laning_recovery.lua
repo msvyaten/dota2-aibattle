@@ -6,6 +6,7 @@ local J = require(GetScriptDirectory()..'/FunLib/jmz_func')
 local Style = require(GetScriptDirectory()..'/FunLib/aibattle_style')
 local AIBEngine = require(GetScriptDirectory()..'/FunLib/aibattle_engine')
 local AIBUtils = require(GetScriptDirectory()..'/FunLib/aibattle_utils')
+local Motor = require(GetScriptDirectory()..'/FunLib/aibattle_motor')
 
 local function attackRange(ctx)
 	return ctx.attackRange or ctx.bot:GetAttackRange()
@@ -105,6 +106,7 @@ function M.CriticalLock(ctx)
 	end
 	if bot.aib_criticalRecoverLast == nil or now - bot.aib_criticalRecoverLast >= 0.8 then
 		bot.aib_criticalRecoverLast = now
+		Motor.Claim(bot, "critical-recover", 100, 1.2)
 		Style.Intent(bot, "critical-recovery", string.format("hp=%.0f dist=%.0f ttl=%.0f", hp * 100, GetUnitToLocationDistance(bot, dest), bot.aib_criticalRecoverUntil - now), 2.0)
 		bot:Action_MoveToLocation(dest)
 		ctx.diag("critical-recover-lock")
@@ -148,6 +150,7 @@ function M.ActiveLowHp(ctx, hpThreshOverride, retreatOnly)
 			or ctx.towardFountain(bot:GetLocation(), 430)
 			or (back + RandomVector(260))
 		bot.aib_lowHpActiveLast = DotaTime()
+		Motor.Claim(bot, "low-hp", 80, 1.2)
 		bot:Action_MoveToLocation(farBack)
 		ctx.diag("low-hp-safe-step")
 		return true
@@ -157,6 +160,7 @@ function M.ActiveLowHp(ctx, hpThreshOverride, retreatOnly)
 		return false
 	end
 	if back ~= nil and GetUnitToLocationDistance(bot, back) > 140 then
+		Motor.Claim(bot, "low-hp", 80, 1.2)
 		if bot.aib_lowHpActiveLast == nil or DotaTime() - bot.aib_lowHpActiveLast >= 0.8 then
 			bot.aib_lowHpActiveLast = DotaTime()
 			bot:Action_MoveToLocation(back)

@@ -5,6 +5,7 @@ local M = {}
 local J = require(GetScriptDirectory()..'/FunLib/jmz_func')
 local Style = require(GetScriptDirectory()..'/FunLib/aibattle_style')
 local AIBEngine = require(GetScriptDirectory()..'/FunLib/aibattle_engine')
+local Motor = require(GetScriptDirectory()..'/FunLib/aibattle_motor')
 
 local function attackRange(ctx)
 	return ctx.attackRange or ctx.bot:GetAttackRange()
@@ -186,6 +187,8 @@ end
 function M.UphillReposition(ctx)
 	if ctx.lowHpHold then return false end
 	local bot = ctx.bot
+	-- Positioning yields while a recovery-class mover owns the motor (P2 v1).
+	if Motor.Active(bot) ~= nil then return false end
 	-- 6-second cooldown prevents oscillation with lane-line-fallback when bot repeatedly
 	-- enters the low-ground ramp at the enemy side of mid.
 	if bot.aib_uphillRepoLast ~= nil and DotaTime() - bot.aib_uphillRepoLast < 6.0 then
