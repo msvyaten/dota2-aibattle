@@ -878,7 +878,13 @@ local function AIB_RunTopDesireArbiter(dials, rules, runtimeCtx, intentCtx)
 	end
 
 	-- tower_aggression=never: the siege action is hard-vetoed, so don't let the
-	-- desire win the arbiter just to return empty_action.
+	-- desire win the arbiter just to return empty_action. Log the veto here (the
+	-- siege module never runs) so 'never' has a positive validation signature.
+	if (rules.tower_aggression or "default") == "never" then
+		if AIB_HasSiegeCandidate() then
+			Style.Blocked(bot, "siege", "tower_aggression_never", "candidate_skipped", 6.0)
+		end
+	end
 	if (rules.tower_aggression or "default") ~= "never" then
 		policyArgs.hasSiegeCandidate = AIB_HasSiegeCandidate()
 		policyArgs.enemyDeadRecently = AIB_EnemyDeadRecently()
