@@ -58,6 +58,9 @@ M.Score = {
 	fightHpAdvBonus = 8,
 	fightExecuteBonus = 20,
 	fightRuneBonus = 8,
+	-- Score cap when the enemy is visible but every fight action is gated
+	-- (out of range + uphill/low-hp block the approach). See safetyNoAction.
+	fightNoAction = 40,
 
 	recoverBase = 74,
 	recoverCritical = 118,
@@ -206,9 +209,15 @@ function M.Fight(args)
 		score = score + M.Score.fightRuneBonus
 		add(parts, "rune", M.Score.fightRuneBonus)
 	end
+	local reason = "enemy_seen"
+	-- canAct contract (P4), fight side: seen-but-unreachable must not own the tick.
+	if args.fightCanAct == false then
+		score = math.min(score, M.Score.fightNoAction)
+		reason = "seen_unreachable"
+	end
 	return {
 		score = score,
-		reason = "enemy_seen",
+		reason = reason,
 		detail = detail(base, parts, string.format("dist=%.0f hp=%.0f ehp=%.0f", enemyDist, hp * 100, enemyHp * 100)),
 	}
 end

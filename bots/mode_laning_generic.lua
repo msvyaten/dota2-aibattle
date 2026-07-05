@@ -792,8 +792,18 @@ local function AIB_RunTopDesireArbiter(dials, rules, runtimeCtx, intentCtx)
 		and ((bot.aib_damageAnchorHp or 100) - hp * 100) >= 5.0
 		and (bot.aib_damageUnstuckLast == nil or nowSafety - bot.aib_damageUnstuckLast >= 3.0)
 	local safetyCanAct = creepReactReady or lowHpRetreatReady or unstuckArmed
+	-- Same canAct contract for the fight desire: an enemy merely being SEEN must not
+	-- win the tick when every fight action would refuse (out of attack range while
+	-- the approach paths are gated by uphill/low-hp). In-range trade, low-hp kite and
+	-- downhill chase with hp/execute justification always count as actionable.
+	local fightCanAct = enemy ~= nil and (
+		(enemyDist or 99999) <= range + 80
+		or hp < 0.32
+		or (not AIB_UphillMiss(enemy)
+			and (hp >= 0.45 or enemyHp <= (dials.execute_threshold or 0))))
 	local policyArgs = {
 		safetyCanAct = safetyCanAct,
+		fightCanAct = fightCanAct,
 		bot = bot,
 		dials = dials,
 		rules = rules,
