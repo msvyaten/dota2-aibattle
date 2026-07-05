@@ -15,6 +15,15 @@ local function duelState(ctx, enemy, dist, phase, hpFloor, approachExtra)
 	local keyPrefix = (phase == "pregame") and "pg-duel" or "prewave-duel"
 	ctx.state("prewave-duel", string.format("ttl=2 phase=%s dist=%.0f hp=%.0f", phase, dist, hp * 100), 2.0)
 
+	-- Post-horn: after 2 uphill retreats, stop feeding the retreat/re-approach loop.
+	-- Yield to laning-core so the bot settles at the (downhill) creep line and last-hits
+	-- instead of being stepped back 300u every second by the unwinnable uphill duel.
+	if phase ~= "pregame" and bot.aib_phDisengageUntil ~= nil
+		and DotaTime() < bot.aib_phDisengageUntil then
+		ctx.blocked("prewave-duel", "uphill_disengage", string.format("dist=%.0f", dist), 3.0)
+		return false
+	end
+
 	if hp < hpFloor then
 		ctx.blocked("prewave-duel", "low_hp", string.format("phase=%s dist=%.0f hp=%.0f", phase, dist, hp * 100), 3.0)
 		return false
@@ -50,6 +59,17 @@ local function duelState(ctx, enemy, dist, phase, hpFloor, approachExtra)
 				bot.aib_pgUphillEpisodes = (bot.aib_pgUphillEpisodes or 0) + 1
 				if bot.aib_pgUphillEpisodes >= 2 then
 					bot.aib_pgDisengaged = true
+				end
+			else
+				-- Post-horn equivalent: count episodes in a rolling window; after 2,
+				-- disengage from the duel for 6s and let laning-core hold the creep line.
+				if bot.aib_phUphillWindowStart == nil or now - bot.aib_phUphillWindowStart > 8.0 then
+					bot.aib_phUphillWindowStart = now
+					bot.aib_phUphillEpisodes = 0
+				end
+				bot.aib_phUphillEpisodes = (bot.aib_phUphillEpisodes or 0) + 1
+				if bot.aib_phUphillEpisodes >= 2 then
+					bot.aib_phDisengageUntil = now + 6.0
 				end
 			end
 			if phase == "pregame" then
