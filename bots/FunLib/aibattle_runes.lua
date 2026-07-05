@@ -72,12 +72,25 @@ local function waterRuneEmergency(bot, hp, mana, dist, spawnKind, forceEmptyBott
 	return forceEmptyBottle or hp < 0.65 or mana < 0.35 or emptyFor >= 20.0
 end
 
+local function bottleSpawnKindAt(t)
+	if t == 120 or t == 240 then return "water" end
+	return "power"
+end
+
 local function nextBottleRuneSpawn(now)
 	if now == nil or now < 0 then return nil end
-	if now < 120 then return 120, "water" end
-	if now < 240 then return 240, "water" end
-	if now < 360 then return 360, "power" end
-	return (math.floor(now / 120) + 1) * 120, "power"
+	-- Keep the just-passed window "current" for 12s. Without this the window id
+	-- flips to the NEXT spawn on the very tick the rune appears, sameStageWindow
+	-- goes false and the at-spawn both-spots commit scan (secsToSpawn <= 0 >= -12)
+	-- is unreachable: the bot staged perfectly, then "forgot" why it was standing
+	-- there and walked off with no_close_rune - filled=0 in every match.
+	local prev = math.floor(now / 120) * 120
+	if prev >= 120 and now - prev <= 12.0 then
+		return prev, bottleSpawnKindAt(prev)
+	end
+	local nxt = prev + 120
+	if nxt < 120 then nxt = 120 end
+	return nxt, bottleSpawnKindAt(nxt)
 end
 
 -- True when a visible alive enemy hero is within radius of loc. Used to avoid
