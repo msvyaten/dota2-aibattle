@@ -777,7 +777,23 @@ local function AIB_RunTopDesireArbiter(dials, rules, runtimeCtx, intentCtx)
 	local recentCreepDamage = bot:WasRecentlyDamagedByCreep(AIBLanePolicy.RecentDamage.creepSeconds)
 	local recentHeroDamage = bot:WasRecentlyDamagedByAnyHero(AIBLanePolicy.RecentDamage.heroSeconds)
 	local attackableCreep = AIB_NearestAttackableEnemyCreep(range + AIBLanePolicy.Scan.safetyCreepExtra) ~= nil
+	-- Feasibility probe for the safety candidate (canAct contract, П4). Mirrors the
+	-- entry throttles of CreepHitReact / ActiveLowHp / DamageUnstuck without side
+	-- effects, so a symptom-only safety desire stops outbidding a live fight while
+	-- all of its actions would return empty this tick.
+	local nowSafety = DotaTime()
+	local creepReactReady = recentCreepDamage and attackableCreep
+		and (bot.aib_creepReactLast == nil or nowSafety - bot.aib_creepReactLast >= 0.75)
+		and (bot.aib_creepReliefLast == nil or nowSafety - bot.aib_creepReliefLast >= 1.2)
+	local lowHpRetreatReady = (recentHeroDamage or hp < AIBLanePolicy.Hp.activeRecovery)
+		and hp < AIBLanePolicy.Hp.softRecovery
+	local unstuckArmed = bot.aib_damageAnchorTime ~= nil
+		and nowSafety - bot.aib_damageAnchorTime >= 3.5
+		and ((bot.aib_damageAnchorHp or 100) - hp * 100) >= 5.0
+		and (bot.aib_damageUnstuckLast == nil or nowSafety - bot.aib_damageUnstuckLast >= 3.0)
+	local safetyCanAct = creepReactReady or lowHpRetreatReady or unstuckArmed
 	local policyArgs = {
+		safetyCanAct = safetyCanAct,
 		bot = bot,
 		dials = dials,
 		rules = rules,

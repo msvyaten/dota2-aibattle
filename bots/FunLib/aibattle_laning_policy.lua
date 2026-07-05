@@ -42,6 +42,11 @@ M.Score = {
 	safetyHealthy = 108,
 	safetyDanger = 126,
 	safetyCreepDamageBonus = 8,
+	-- Score cap when safety has damage SYMPTOMS but no feasible ACTION right now
+	-- (creep-react on its internal throttle, hp too high for retreat, unstuck not
+	-- armed). Below fightBase so a live fight takes the tick; above zero so safety
+	-- still wins quiet ticks and keeps the damage-unstuck anchor upkeep running.
+	safetyNoAction = 44,
 
 	powerRuneBase = 104,
 	powerRuneDoubleDamageBonus = 10,
@@ -132,9 +137,17 @@ function M.Safety(args)
 		score = score + M.Score.safetyCreepDamageBonus
 		add(parts, "creep_dmg", M.Score.safetyCreepDamageBonus)
 	end
+	local reason = "recent_damage"
+	-- canAct contract (П4): damage symptoms alone must not outbid a live fight when
+	-- every safety action is currently infeasible/throttled. Empty safety wins were
+	-- 8-14 per match (8882870342 t=0-18: safety:116 won 8x, 11 empty_action).
+	if args.safetyCanAct == false and hp >= M.Hp.danger then
+		score = math.min(score, M.Score.safetyNoAction)
+		reason = "symptom_no_action"
+	end
 	return {
 		score = score,
-		reason = "recent_damage",
+		reason = reason,
 		detail = detail(base, parts, string.format("hp=%.0f creep=%s hero=%s", hp * 100, tostring(recentCreepDamage), tostring(recentHeroDamage))),
 	}
 end
