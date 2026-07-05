@@ -777,7 +777,7 @@ local function AIB_RunTopDesireArbiter(dials, rules, runtimeCtx, intentCtx)
 	local recentCreepDamage = bot:WasRecentlyDamagedByCreep(AIBLanePolicy.RecentDamage.creepSeconds)
 	local recentHeroDamage = bot:WasRecentlyDamagedByAnyHero(AIBLanePolicy.RecentDamage.heroSeconds)
 	local attackableCreep = AIB_NearestAttackableEnemyCreep(range + AIBLanePolicy.Scan.safetyCreepExtra) ~= nil
-	-- Feasibility probe for the safety candidate (canAct contract, П4). Mirrors the
+	-- Feasibility probe for the safety candidate (canAct contract, P4). Mirrors the
 	-- entry throttles of CreepHitReact / ActiveLowHp / DamageUnstuck without side
 	-- effects, so a symptom-only safety desire stops outbidding a live fight while
 	-- all of its actions would return empty this tick.

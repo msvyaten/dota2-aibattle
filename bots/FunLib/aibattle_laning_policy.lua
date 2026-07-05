@@ -138,7 +138,7 @@ function M.Safety(args)
 		add(parts, "creep_dmg", M.Score.safetyCreepDamageBonus)
 	end
 	local reason = "recent_damage"
-	-- canAct contract (П4): damage symptoms alone must not outbid a live fight when
+	-- canAct contract (P4): damage symptoms alone must not outbid a live fight when
 	-- every safety action is currently infeasible/throttled. Empty safety wins were
 	-- 8-14 per match (8882870342 t=0-18: safety:116 won 8x, 11 empty_action).
 	if args.safetyCanAct == false and hp >= M.Hp.danger then
