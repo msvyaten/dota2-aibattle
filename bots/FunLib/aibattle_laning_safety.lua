@@ -149,6 +149,20 @@ function M.CreepHitReact(ctx)
 		ctx.blocked("creep-hit-react", "no_creep", string.format("hp=%.0f", hp * 100), 3.0)
 		return false
 	end
+	-- Sticky target: retargeting the nearest creep on every 0.75s throttle tick made
+	-- the bot walk between wind-ups (target dist jumping 41->238->289 in 8883083476
+	-- t=245-251) and never land a hit. Keep the same creep for 2s while it's valid.
+	if bot.aib_creepReactTgt ~= nil and bot.aib_creepReactTgtUntil ~= nil
+		and now < bot.aib_creepReactTgtUntil
+		and J.IsValid(bot.aib_creepReactTgt) and bot.aib_creepReactTgt:IsAlive()
+		and J.CanBeAttacked(bot.aib_creepReactTgt)
+		and GetUnitToUnitDistance(bot, bot.aib_creepReactTgt) <= range + 160 then
+		creep = bot.aib_creepReactTgt
+		dist = GetUnitToUnitDistance(bot, creep)
+	else
+		bot.aib_creepReactTgt = creep
+		bot.aib_creepReactTgtUntil = now + 2.0
+	end
 
 	-- Re-issuing Action_AttackUnit every 0.75s cancels the attack windup: standing
 	-- inside the enemy wave the bot "tries to swing but never hits" and LH stalls

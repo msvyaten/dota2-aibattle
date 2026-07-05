@@ -174,7 +174,12 @@ end
 local function AIB_GetMainItem(name)
 	local slot = bot:FindItemSlot(name)
 	if slot == nil or slot < 0 then return nil end
-	if bot:GetItemSlotType(slot) ~= ITEM_SLOT_TYPE_MAIN then return nil end
+	-- The TP scroll lives in the dedicated TP slot (not MAIN) since 7.x; rejecting
+	-- everything non-MAIN made respawn logic report respawn-no-tp while a scroll
+	-- was sitting in the TP slot and the bot walked back the whole lane. Castable
+	-- means "not in backpack/stash", so gate on those instead.
+	local st = bot:GetItemSlotType(slot)
+	if st == ITEM_SLOT_TYPE_BACKPACK or st == ITEM_SLOT_TYPE_STASH then return nil end
 	return bot:GetItemInSlot(slot)
 end
 
