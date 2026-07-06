@@ -6,6 +6,7 @@ local M = {}
 local J = require(GetScriptDirectory()..'/FunLib/jmz_func')
 local Style = require(GetScriptDirectory()..'/FunLib/aibattle_style')
 local AIBUtils = require(GetScriptDirectory()..'/FunLib/aibattle_utils')
+local Motor = require(GetScriptDirectory()..'/FunLib/aibattle_motor')
 
 local function duelState(ctx, enemy, dist, phase, hpFloor, approachExtra)
 	local bot = ctx.bot
@@ -38,6 +39,7 @@ local function duelState(ctx, enemy, dist, phase, hpFloor, approachExtra)
 		if bot.aib_preDuelBackUntil ~= nil and now < bot.aib_preDuelBackUntil then
 			local dest = bot.aib_preDuelBackDest
 			if dest ~= nil and GetUnitToLocationDistance(bot, dest) > 90 then
+				Motor.Claim(bot, "prewave-duel", 70, 1.5)
 				bot:Action_MoveToLocation(dest)
 				ctx.diag(keyPrefix .. "-uphill-back")
 			else
@@ -79,6 +81,7 @@ local function duelState(ctx, enemy, dist, phase, hpFloor, approachExtra)
 				-- was ~177 events per pregame in mirror matches).
 				bot.aib_pgUphillBackAnchor = back
 			end
+			Motor.Claim(bot, "prewave-duel", 70, 1.5)
 			bot:Action_MoveToLocation(back)
 			ctx.diag(keyPrefix .. "-uphill-back")
 			return true

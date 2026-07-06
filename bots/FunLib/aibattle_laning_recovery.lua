@@ -106,7 +106,7 @@ function M.CriticalLock(ctx)
 	end
 	if bot.aib_criticalRecoverLast == nil or now - bot.aib_criticalRecoverLast >= 0.8 then
 		bot.aib_criticalRecoverLast = now
-		Motor.Claim(bot, "critical-recover", 100, 1.2)
+		Motor.Claim(bot, "critical-recover", 110, 1.2)
 		Style.Intent(bot, "critical-recovery", string.format("hp=%.0f dist=%.0f ttl=%.0f", hp * 100, GetUnitToLocationDistance(bot, dest), bot.aib_criticalRecoverUntil - now), 2.0)
 		bot:Action_MoveToLocation(dest)
 		ctx.diag("critical-recover-lock")
@@ -150,27 +150,44 @@ function M.ActiveLowHp(ctx, hpThreshOverride, retreatOnly)
 			or ctx.towardFountain(bot:GetLocation(), 430)
 			or (back + RandomVector(260))
 		bot.aib_lowHpActiveLast = DotaTime()
-		Motor.Claim(bot, "low-hp", 80, 1.2)
+		Motor.Claim(bot, "low-hp", 90, 1.2)
 		bot:Action_MoveToLocation(farBack)
 		ctx.diag("low-hp-safe-step")
 		return true
 	end
 	if back ~= nil and alreadyBehindBack then
+		-- Already behind the safe anchor. Under danger, COMMIT to a hold instead of
+		-- returning empty_action: recover keeps acting -> arbiter hysteresis holds ->
+		-- the fight<->recover half-turn twitch under the tower stops, and the bot reads
+		-- as an intentional regen hold. Claim the motor so positioners yield too.
+		-- When safe, still yield (return false) so the free window goes to lane work/farm.
+		local holdDanger = bot:WasRecentlyDamagedByCreep(2.0) or bot:WasRecentlyDamagedByAnyHero(2.0)
+		if not holdDanger then
+			local holdHeroes = bot:GetNearbyHeroes(900, true, BOT_MODE_NONE)
+			holdDanger = holdHeroes and #holdHeroes > 0 and holdHeroes[1]:IsAlive()
+		end
+		if holdDanger then
+			Motor.Claim(bot, "low-hp-hold", 90, 1.2)
+			if bot.aib_lowHpHoldLast == nil or DotaTime() - bot.aib_lowHpHoldLast >= 1.0 then
+				bot.aib_lowHpHoldLast = DotaTime()
+				Style.Intent(bot, "low-hp-hold", string.format("hp=%.0f behind_anchor=1", J.GetHP(bot) * 100), 1.5)
+				ctx.diag("low-hp-committed-hold")
+			end
+			return true
+		end
 		Style.DiagRL(bot, "low-hp-behind-safe", 3.0)
 		return false
 	end
 	if back ~= nil and GetUnitToLocationDistance(bot, back) > 140 then
-		Motor.Claim(bot, "low-hp", 80, 1.2)
+		Motor.Claim(bot, "low-hp", 90, 1.2)
+		-- Committed retreat to the single anchor. The old else-branch re-issued a
+		-- divergent fountain-ward "nudge" between the rate-limited back-steps, so the
+		-- bot re-pathed anchor<->fountain every tick = the twitch under the tower. The
+		-- move to `back` persists between ticks; no divergent nudge needed.
 		if bot.aib_lowHpActiveLast == nil or DotaTime() - bot.aib_lowHpActiveLast >= 0.8 then
 			bot.aib_lowHpActiveLast = DotaTime()
 			bot:Action_MoveToLocation(back)
 			ctx.diag("low-hp-back")
-		else
-			local nudge = ctx.towardFountain(bot:GetLocation(), 220)
-			if nudge ~= nil then
-				bot:Action_MoveToLocation(nudge)
-				ctx.diag("low-hp-nudge")
-			end
 		end
 		return true
 	end
@@ -188,7 +205,10 @@ function M.ActiveLowHp(ctx, hpThreshOverride, retreatOnly)
 		if dangerNear
 			and (bot.aib_lowHpActiveLast == nil or DotaTime() - bot.aib_lowHpActiveLast >= 1.2) then
 			bot.aib_lowHpActiveLast = DotaTime()
-			bot:Action_MoveToLocation((ctx.towardFountain(bot:GetLocation(), 300) or back) + RandomVector(35))
+			-- Head to the SAME committed anchor, not a divergent fountain point. Pushing
+			-- toward fountain+random when already near the anchor shoved the bot off the
+			-- spot it just reached, restarting the anchor<->fountain zigzag every tick.
+			bot:Action_MoveToLocation(back)
 			ctx.diag("low-hp-watch-step")
 			return true
 		end
@@ -212,6 +232,7 @@ function M.EmergencyRetreat(ctx)
 			if Style.AbilityHarass(bot, emergEnemies[1]) then return true end
 		end
 	end
+	Motor.Claim(bot, "emerg-retreat", 110, 1.6)
 	bot:Action_MoveToLocation(back)
 	return true
 end
@@ -231,6 +252,7 @@ function M.ForwardLowHpPullback(ctx)
 	if back == nil or GetUnitToLocationDistance(bot, back) <= 200 then return false end
 	if bot.aib_fwdPullLast == nil or DotaTime() - bot.aib_fwdPullLast >= 1.2 then
 		bot.aib_fwdPullLast = DotaTime()
+		Motor.Claim(bot, "fwd-lowhp-pull", 90, 1.3)
 		ctx.diag("fwd-lowhp-pull")
 		bot:Action_MoveToLocation(back)
 	end
