@@ -836,6 +836,31 @@ local function AIB_RunTopDesireArbiter(dials, rules, runtimeCtx, intentCtx)
 	}
 	local candidates = {}
 
+	-- Last-hit-urgent: a creep dying to the bot's NEXT hit is now-or-never and must not be
+	-- starved by safety/fight desires. Aggressive configs (harass 0.9, aggressive_mid) kept
+	-- winning the arbiter every tick, so the bot "hit creeps but never last-hit" (LH ~0 for
+	-- 90s). Fire only when a creep dies this hit, is already in range, away from the enemy
+	-- tower and above critical HP; secure it then yield. Score beats safety(<=134)/fight;
+	-- hero kills live in the urgent arbiter (earlier stage) and still preempt.
+	do
+		local lhCreep, lhSoon = GetBestLastHitCreep(nEnemyCreeps)
+		local siegeCommitted = bot.aib_siegeCommitUntil ~= nil and DotaTime() < bot.aib_siegeCommitUntil
+		if lhCreep ~= nil and not lhSoon
+			and not siegeCommitted  -- yield to an active tower siege so pushers keep advancing
+			and J.GetHP(bot) >= 0.32
+			and AIBUtils.EnemyTowerDanger(bot) == nil
+			and GetUnitToUnitDistance(bot, lhCreep) <= botAttackRange + 40 then
+			candidates[#candidates + 1] = AIBTopArbiter.Candidate("last-hit", 140, "killable_creep",
+				string.format("dist=%.0f", GetUnitToUnitDistance(bot, lhCreep)),
+				function()
+					bot:SetTarget(lhCreep)
+					bot:Action_AttackUnit(lhCreep, true)
+					Style.Diag(bot, "last-hit-urgent")
+					return true
+				end)
+		end
+	end
+
 	local safetyPolicy = AIBLanePolicy.Safety(policyArgs)
 	if safetyPolicy ~= nil then
 		candidates[#candidates + 1] = AIBTopArbiter.Candidate("safety", safetyPolicy.score, safetyPolicy.reason,
