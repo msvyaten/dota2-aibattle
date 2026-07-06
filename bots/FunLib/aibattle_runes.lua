@@ -136,10 +136,17 @@ local function nearestRuneSpot(bot, now, avoidContested)
 	local bestRune, bestLoc, bestDist, bestScore = nil, nil, math.huge, math.huge
 	for _, runeId in ipairs({ RUNE_POWERUP_1, RUNE_POWERUP_2 }) do
 		local loc = GetRuneSpawnLocation(runeId)
-		if loc ~= nil and not isRuneKnownEmpty(bot, runeId, now) then
+		-- An actually-available rune on the ground is free value. Never skip it because
+		-- of a stale known-empty mark -- that mark is why runes sat uncollected for
+		-- minutes while the bot ignored them.
+		local available = loc ~= nil and GetRuneStatus(runeId) == RUNE_STATUS_AVAILABLE
+		if loc ~= nil and (available or not isRuneKnownEmpty(bot, runeId, now)) then
 			local dist = GetUnitToLocationDistance(bot, loc)
 			-- Water windows spawn a rune at BOTH spots; prefer the uncontested one.
+			-- Small tie-break toward a rune that is actually present, but let distance
+			-- dominate so the bot does not abandon farm to chase a far rune.
 			local score = dist + ((avoidContested and enemyNearLoc(loc, 700)) and 1400 or 0)
+				- (available and 300 or 0)
 			if score < bestScore then
 				bestRune, bestLoc, bestDist, bestScore = runeId, loc, dist, score
 			end
