@@ -480,10 +480,15 @@ end
 local function AIB_BottleIfUseful(hpLimit, manaLimit, diagKey)
 	local bottle = AIB_GetMainItem("item_bottle")
 	if bottle == nil or not bottle:IsFullyCastable() or bottle:GetCurrentCharges() <= 0 then return false end
+	-- Don't re-sip while the regen is still channelling: this path had no cooldown
+	-- and could fire a second bottle a tick after survive.lua's sip, cutting the
+	-- 3s regen tail short (observed: bottle pressed twice, HP heal wasted).
+	if bot:HasModifier("modifier_bottle_regeneration") then return false end
 	local maxMana = bot:GetMaxMana()
 	local mana = maxMana > 0 and (bot:GetMana() / maxMana) or 1.0
 	if J.GetHP(bot) > hpLimit and mana > manaLimit then return false end
 	bot:Action_UseAbility(bottle)
+	bot.aib_healLast = DotaTime()
 	AIB_Diag(diagKey or "bottle-heal")
 	return true
 end
