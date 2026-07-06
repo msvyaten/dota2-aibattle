@@ -536,23 +536,36 @@ local function recovery(bot, dials, nEnemyCreeps)
 			Style.Blocked(bot, "recovery-buy", "flask_in_inventory", string.format("hp=%.0f", hp*100), 8.0)
 			return false
 		end
-		if (bot.aib_recBuyCount or 0) >= 2 then
-			Style.Blocked(bot, "recovery-buy", "budget_cap", string.format("hp=%.0f gold=%d", hp*100, gold), 8.0)
-			return false
-		end
-		if wantsBottleFromStyle(bot) and hp >= 0.22 then
-			Style.DiagRL(bot, "bottle-gold-protect", 8)
-			return false
-		end
-		if consumableSpendBlocked(bot, hp, gold, "item_flask") then
-			return false
+		-- Critical-stuck escape (8884639175 t=410-436): the bot froze at its anchor for
+		-- ~26s at 26-29% HP while its tower was sieged, with 136 idle gold, because
+		-- budget_cap AND bottle-gold-protect both blocked the one buy that would un-stick
+		-- it (no bottle charge, no reachable rune, no second TP). When in-lane sustain is
+		-- genuinely exhausted, survival > saving: allow ONE flask past both caps. Cannot
+		-- runaway -- each buy spends gold and the 15s rate limit above still holds.
+		local charges = bottleCharges(bot)
+		local criticalStuck = hp < 0.30
+			and (charges == nil or charges <= 0)
+			and gold >= itemCost("item_flask")
+			and not bot:HasModifier("modifier_flask_healing")
+		if not criticalStuck then
+			if (bot.aib_recBuyCount or 0) >= 2 then
+				Style.Blocked(bot, "recovery-buy", "budget_cap", string.format("hp=%.0f gold=%d", hp*100, gold), 8.0)
+				return false
+			end
+			if wantsBottleFromStyle(bot) and hp >= 0.22 then
+				Style.DiagRL(bot, "bottle-gold-protect", 8)
+				return false
+			end
+			if consumableSpendBlocked(bot, hp, gold, "item_flask") then
+				return false
+			end
 		end
 		bot.aib_recBuyLast = DotaTime()
 		bot.aib_recBuyCount = (bot.aib_recBuyCount or 0) + 1
 		bot.aib_recBuySpent = (bot.aib_recBuySpent or 0) + itemCost("item_flask")
-		recoveryPlan(bot, "buy_flask", "critical", string.format("hp=%.0f gold=%d count=%d", hp*100, gold, bot.aib_recBuyCount or 0), 2.0)
+		recoveryPlan(bot, "buy_flask", criticalStuck and "critical_stuck" or "critical", string.format("hp=%.0f gold=%d count=%d", hp*100, gold, bot.aib_recBuyCount or 0), 2.0)
 		bot:ActionImmediate_PurchaseItem("item_flask")
-		Style.Diag(bot, "recovery-buy")
+		Style.Diag(bot, criticalStuck and "recovery-buy-critical" or "recovery-buy")
 		return true
 	end
 
