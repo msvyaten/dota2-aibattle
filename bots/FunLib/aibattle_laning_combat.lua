@@ -216,8 +216,20 @@ function M.HarassAndChase(ctx)
 	if heroPrio == "never" then return false end
 	local range = attackRange(ctx)
 	local atkHero = bot:GetNearbyHeroes(range + 50, true, BOT_MODE_NONE)
+	-- Uphill awareness: a ranged hero attacking uphill misses 25%. Climbing the ramp
+	-- to level ground is a bad dive for SF, so instead of standing and feeding whiffs
+	-- (how Radiant lost a duel it should have won, 8883124473) yield the tick to lane
+	-- work / farming until the enemy comes down. Melee (range<=300) never misses
+	-- uphill, so it keeps attacking.
+	local function uphillWhiff(enemy)
+		return range > 300 and ctx.uphillMiss(enemy) and ctx.enemyTowerDanger() == nil
+	end
 	if atkHero and #atkHero > 0 and atkHero[1]:IsAlive() then
 		if heroPrio == "always" then
+			if uphillWhiff(atkHero[1]) then
+				ctx.blocked("hero-prio-always", "uphill", "", 3.0)
+				return false
+			end
 			if not (ctx.csAllowed and ctx.needMove) then
 				bot:Action_AttackUnit(atkHero[1], false)
 				ctx.diag("hero-prio-always")
@@ -227,7 +239,8 @@ function M.HarassAndChase(ctx)
 			local inRange = GetUnitToUnitDistance(bot, atkHero[1]) <= range
 			local harassCD = 0.5 + (1.0 - (ctx.dials.harass_desire or 0.5)) * 2.0
 			local harassReady = bot.aib_harassLast == nil or DotaTime() - bot.aib_harassLast >= harassCD
-			if inRange and ctx.enemyTowerDanger() == nil and not ctx.deathSurvive and harassReady then
+			if inRange and ctx.enemyTowerDanger() == nil and not ctx.deathSurvive and harassReady
+				and not uphillWhiff(atkHero[1]) then
 				bot.aib_harassLast = DotaTime()
 				bot:Action_AttackUnit(atkHero[1], false)
 				ctx.diag("harass-atk")
