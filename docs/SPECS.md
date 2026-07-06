@@ -6,7 +6,26 @@
 
 ---
 
-## 1. Motor v2 (П2) — полная миграция осцилляционных движителей
+## 1. Motor — корректированный план (v2 recovery-claims = NO-OP)
+
+**⚠️ ПОПРАВКА 06.07 (эмпирика 6 матчей + чтение гейтов):** миграция recovery-движителей под
+Claim (v2) — **NO-OP для jitter**. Позиционеры глушат себя на лоу-хп СВОИМИ гейтами ДО
+motor-чека: `lane-line-fallback` (mode_laning_generic:692 `suppressed-lowhp`) и `UphillReposition`
+(combat.lua:188 `lowHpHold`) бэйлятся раньше, чем проверяют `Motor.Active`. А recovery-клеймы
+существуют только на лоу-хп → регимы НЕ пересекаются, yield не триггерится (`lane-line-suppressed-motor=0`
+все матчи). Реальная осц-пара — `uphill-reposition ↔ lane-line-fallback`, ОБЕ healthy-регим,
+и НИ ОДНА не Claim'ит (только yield) → нечему уступать.
+
+**РЕАЛЬНЫЙ ФИКС (одной задачей, после матча 7):**
+1. Дать Claim САМОЙ паре: `UphillReposition` и `lane-line-fallback` при движении делают
+   `Motor.Claim(..., prio 15-20, ttl ~1.2)` — тогда уступают ДРУГ ДРУГУ (committed-destination
+   для настоящей пары).
+2. Заодно убрать мёртвые v2 recovery-claim'ы (`emerg-retreat`/`fwd-lowhp-pull` в recovery.lua,
+   `prewave-duel` require+claims в duel.lua) и вернуть prio critical 110→100, low-hp 90→80 —
+   это чистка no-op, делать В ТОМ ЖЕ коммите (не отдельным revert-churn'ом на проверенном файле).
+Критерий выхода: `lane-line-suppressed-motor > 0` + healthy-регим jitter вниз, 2 матча.
+
+**Ниже — устаревший план v2 (для истории, НЕ реализовывать):**
 
 **Проблема.** ~55 вызовов `Action_MoveToLocation`, каждый со своим кулдауном → N регуляторов
 на одном актуаторе → jitter (хронический FAIL scorecard, порог ≤60). Motor v1
@@ -90,16 +109,14 @@ band-модель, что Motor): urgent 150+ / recovery 100-130 (через Rec
 
 ## 5. Мёртвые значения схемы — РЕШЕНО (внести прицепом к первому заходу в backend)
 
-`healing_style="passive"` и всё правило `ability_usage` — no-op'ы (движок ветвится лишь на
-`healing_style=="active"/"never"`; `ability_usage` в поведении не читается, харасс на диале
-`ability_aggro`). Не баг, но шум в API. **Решение (Opus high, 06.07 — не передумывать заново):**
+ТОЛЬКО `healing_style="passive"` — no-op (движок ветвится лишь на `=="active"` [survive.lua]
+и `=="never"` [item usage]; passive == default). **Решение (06.07):**
 
-- **`healing_style="passive"` → УБРАТЬ** из `RULE_VALUES` (generate_playstyle.py) и
-  `HEALING_STYLE_VALUES` (aibattle_style.lua). Третьего режима хила нет — это дубль `default`.
-- **`ability_usage` → ДЕПРЕЦИРОВАТЬ правило целиком** (убрать из обоих whitelist'ов + из
-  system_prompt.txt). Ось «агрессивность спеллов» уже полностью на непрерывном диале
-  `ability_aggro`; дискретное правило поверх — дублирование того же регулятора, НЕ давать
-  `basic` ветку. Строки `ability_usage=...` в canonical_* чистить оппортунистически (они и
-  так игнорируются).
-- **Когда.** НЕ отдельной задачей и НЕ перед висящим матчем (трогает runtime-whitelist ради
-  no-op'ов — низкий leverage). Внести при первом же реальном заходе в backend/схему.
+- **`healing_style="passive"` → УБРАТЬ** ✅ СДЕЛАНО из `RULE_VALUES` (generate_playstyle.py) и
+  `HEALING_STYLE_VALUES` (aibattle_style.lua). Третьего режима хила нет — дубль `default`.
+
+**⚠️ ПОПРАВКА 06.07 (прошлый аудит был НЕВЕРЕН):** `ability_usage` — **НЕ no-op, НЕ депрецировать**.
+`aibattle_style.lua:882` (`M.AbilityHarass`): `if rules.ability_usage ~= "aggressive" then return false`
+— правило гейтит ВСЮ раз-харасс-систему. `basic` уже маппится в `default` (style.lua:342), поэтому
+промпт (`aggressive|default`) корректен. Диал `ability_aggro` — это ИНТЕНСИВНОСТЬ внутри
+aggressive, не замена правила. Оставить как есть.
