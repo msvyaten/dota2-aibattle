@@ -1,7 +1,8 @@
 # Спеки незакрытых работ (дизайн готов, имплементация ждёт)
 
-> Все — поведенческие, требуют своих матчей и чистой атрибуции. Порядок: Motor v2 → П3 → П1.
-> rune_control — match-free сетап. Контекст: HANDOFF_PACKAGE §4. Составил Claude (Opus high), 06.07.
+> Все — поведенческие, требуют своих матчей и чистой атрибуции.
+> **Порядок (пересмотрен 06.07, Fable-high): П1-A → П3 → П1-B → П1-C. Motor v2 (§1) ОТМЕНЁН — поглощён П1-A (см. §3.6).**
+> rune_control — match-free сетап. Контекст: HANDOFF_PACKAGE §4. Составил Claude (Opus high), 06.07; §3 доведён до мандата Fable-high 06.07.
 > Процесс: один фикс — одна лог-сигнатура; приёмка только по scorecard.py; вышел за критерий — СТОП.
 
 ---
@@ -74,22 +75,167 @@ mode_laning_generic:700) уступают.
 
 ---
 
-## 3. П1 — арбитр как единственный владелец тика (хендофф техкоманде)
+## 3. П1 — арбитр как единственный владелец тика (МАНДАТ, Fable-high 06.07)
 
-**Проблема.** Top-desire арбитр — стадия 6 из 13. Осцилляции = пары хэндлеров по разные
-стороны его границы (`uphill-reposition↔lane-line-fallback`, `critical-lock↔low-hp-back`).
-Motor/П3 лечат конкретные пары; П1 убирает класс.
+**Статус: мандат.** Эскиз доведён по коду HEAD c8bd23c: `mode_laning_generic.lua` (1263),
+`aibattle_laning_arbiter.lua`, `aibattle_laning_policy.lua`, `aibattle_engine.lua`,
+`aibattle_motor.lua` прочитаны целиком, все якоря сверены.
 
-**Дизайн.** Втянуть стадии 1-5 и 8-13 в арбитр как кандидатов с фикс-полосами (та же
-band-модель, что Motor): urgent 150+ / recovery 100-130 (через Recovery.Owner) / desire
-60-120 (как сейчас) / position 10-30 / idle 0-10. Один проход: собрать кандидатов с prio +
-`canAct()` (контракт П4 уже есть), исполнить одного. Границы «до/после арбитра» исчезают.
+### 3.1 Проблема — один корень, четыре класса симптомов
 
-**Предусловия.** Motor v2 + П3 приняты (band-модель обкатана, recovery уже один вход);
-П4 canAct на месте (есть).
-**Критерий выхода.** ≥95% тиков ровно один tick-owner; осцилляционных пар нет 2 матча.
-**Размер.** Средний: инфра (arbiter/policy/Motor/tick-owner телеметрия) есть — работа в
-перерегистрации стадий как кандидатов. Мигрировать полосами, матч между, не всё разом.
+Top-desire арбитр владеет только СЕРЕДИНОЙ тика (`mode_laning_generic.lua:967`).
+До него — 7 guard-блоков (953-966), после — ~16 блоков «кто первый вернул true»
+(968-1173). Из этой архитектуры СЛЕДУЮТ все хронические классы:
+
+1. **Осц-пары через границу арбитра**: `uphill-reposition`(1033) ↔ `lane-line-fallback`(1171),
+   `critical-lock` ↔ `low-hp-back`. Хэндлеры не видят друг друга — дерутся на чередующихся тиках.
+2. **Suppress-спагетти**: fwd-position несёт 12 suppress-условий (1097-1111),
+   lane-line-fallback — 9 гардов (692-727). Каждый гард — ручное знание «кто ещё может
+   хотеть тик»; связи растут как O(N²) от числа хэндлеров.
+3. **Windup-cancel** (soft-полоса, 8884555745 t=218): мувер одной стадии отменяет замах
+   атаки другой — понятием «идёт свинг» не владеет никто.
+4. **Четыре реализации commit-паттерна**: winner-hysteresis +18/1.5s (arbiter.lua:48-61),
+   `Motor.Claim`, `aib_siegeCommitUntil`, rune-commit окно — плюс ~15 per-handler
+   кулдаунов `aib_*Last`. Один и тот же «committed owner», написанный четырежды.
+
+Motor/П3 лечат конкретные пары; П1 убирает класс целиком и усушает оркестратор.
+
+### 3.2 Модель: election + commitment
+
+Один проход на тик:
+
+```
+Candidate = { name, band, score(), canAct(), class, action() }
+  band  ∈ {urgent, recovery, desire, lanework, position, idle} — фикс-полосы
+  class ∈ {attack, move, hold, cast} — для windup-гейта (3.5)
+Факты тика (расширенный policyArgs из AIB_RunTopDesireArbiter:785-836) собираются
+ОДИН раз; все score/canAct читают их — кандидаты не дублируют сканы.
+Сортировка по score → первый, чей action() == true, владеет тиком.
+action() == false → blocked=empty_action → следующий (контракт П4, уже работает).
+```
+
+**Полосы (константы в policy.lua, существующие desire-скоры НЕ трогаем):**
+
+| Полоса | Диапазон | Кто |
+|---|---|---|
+| urgent | 150-200 | survive, emergency-low, kill-lock, heal-interrupt, critical-lock, prewave |
+| lh-urgent | 140 | last-hit-urgent (существует, mode_laning:853) |
+| desire | 60-135 | safety/power-rune/fight/recover/siege — скоры policy.lua как есть |
+| lanework | 35-58 | safe-cs, hero-over-creep, cs-inrange, idle-heal, harass, creep-work, ability-harass |
+| position | 15-30 | uphill-reposition, fwd-position, lane-line-fallback |
+| idle | 1-10 | visual-hold, visual-afk, anti-idle |
+
+**Намеренное пересечение** (единственное): no-action-капы desire
+(`safetyNoAction=44`, `fightNoAction=40`, policy.lua:49,63) лежат НИЖЕ lanework —
+симптомный desire без действия больше не крадёт тик у живого ласт-хита.
+Это закрывает остаток «0-CS при агро-конфигах» ПО ПОСТРОЕНИЮ.
+
+### 3.3 Commitment — замена четырёх дублей
+
+- **Внутриполосный гистерезис** (есть): +18/1.5s победителю, БАНД-КАППЕД — бонус не
+  поднимает score выше потолка полосы. Преемпция между полосами всегда чистая.
+- **Commit TTL** (фаза C): победитель может объявить `commit=ttl` — арбитр переизбирает
+  его автоматически до истечения ttl или появления кандидата ВЫШЕ ПОЛОСОЙ (не скором).
+  Заменяет Motor.Claim / siegeCommitUntil / rune-commit / committed-hold.
+- **Attack-авто-commit**: победитель class=attack коммитится до конца свинга.
+
+### 3.4 Band-refractory — замена временнЫх suppress-гардов (фаза C)
+
+Часть suppress-условий — не «кто-то хочет тик сейчас», а «кто-то владел недавно»
+(recentRecovery 2.5s, recentCreepRelief 1.8s, recentTopEmpty 3.0s, recentVisualHold,
+recentWatchdog). Их заменяет ОДНО правило арбитра: position/idle-кандидаты не участвуют
+в выборах N секунд после владения recovery/safety-полосы:
+`Refractory = { position_after_recovery=2.5, position_after_damage=1.8, position_after_empty_desire=3.0 }`.
+Тайм-стемпы `aib_recMoveLast`/`aib_creepReliefLast`/`aib_topArbiterEmptyLast` перестают
+читаться хэндлерами — их читает только арбитр.
+
+### 3.5 Windup-гейт (фаза C) — закрывает soft-банд windup-cancel
+
+Победитель class=move НИЖЕ urgent-полосы не исполняется, пока идёт активный замах:
+`DotaTime() - bot:GetLastAttackTime() < attackPoint` (и цель жива) → тик отдаётся
+предыдущему владельцу (hold). Recover/safety при 38-40% HP больше не отменяют
+добивающий свинг ретрит-мувом — «замахнулся-не ударил-ушёл» умирает архитектурно.
+
+### 3.6 Реестр миграции (все якоря — mode_laning_generic.lua, HEAD c8bd23c)
+
+**Голова тика (фаза B) → urgent-кандидаты:**
+
+| Блок | Якорь | score | Примечание |
+|---|---|---|---|
+| AIBSurvive true-emergency | :953 | 195 | canAct: hp<trueEmergencyHp |
+| emergency-low recovery | :954 | 190 | через Recovery.Owner после П3 |
+| kill-lock (urgent) | :957 | 170 | intent из Trade.KillLock |
+| heal-interrupt | :959 | 165 | |
+| early-low (Hp.danger) | :963 | 130 (recovery-полоса) | П3 |
+| critical-lock | :964 | 160 | П3 |
+| prewave-duel / standoff | :965-966 | 152/151 | canAct: пред-крипово окно |
+
+Вне арбитра ОСТАЮТСЯ: `AIB_HandleRespawn` (:1190 — защита TP-канала, абсолют),
+pregame/dive/death-window стадии (:1177-1179 — редкие tempo-гарды, с lane-хэндлерами
+не осциллируют; втягивать = perfectionism trap).
+
+**Desire-арбитр (:967)** — без изменений: last-hit 140, safety, power-rune, fight,
+recover, siege. Скоринг policy.lua не трогаем.
+
+**Хвост тика (фаза A) → lanework/position/idle-кандидаты (скоры кодируют ТЕКУЩИЙ порядок):**
+
+| Блок | Якорь | band/score | Судьба |
+|---|---|---|---|
+| safe low-hp CS | :968-979 | lanework 56 | позже сольётся с П3 soft-полосой (hold+CS) |
+| HeroOverCreep | :993 | lanework 52 | |
+| cs-inrange | :996-1001 | lanework 50 | |
+| AIBSurvive idle-heal | :1003 | lanework 45 | |
+| EmergencyRetreat | :1007 | — | умирает как отдельная точка → П3 Recovery.Owner |
+| ForwardLowHpPullback | :1013 | — | → П3 |
+| EmergencyKillPriority | :1023 | desire 122 | кандидат «execute»; в фазе C свести с KillLock |
+| LowHpHold/ActiveLowHp | :1027-1029 | — | → П3 |
+| UphillReposition | :1033 | position 28 | ★ пара с lane-line умирает здесь |
+| HarassAndChase | :1042 | lanework 42 | |
+| HandleCreepWork | :1044-1062 | lanework 40 | ОДИН кандидат, внутренности не трогать |
+| AbilityHarass | :1081 | lanework 38 | |
+| fwd-position | :1086-1165 | position 22 | 12 suppress-условий → фаза C (refractory) |
+| VisualHold / VisualAFK | :1169-1170 | idle 8/6 | |
+| LaneLineFallback | :689-783, вызов :1171 | position 18 | 9 гардов → canAct (фаза A), снос в C |
+| AntiIdleGlobal | :1173 | idle 2 | |
+
+**⚠️ Скрытые меж-стадийные зависимости** (главный риск фазы A): ранние блоки пишут в
+runtimeCtx то, что читают поздние — `csAllowed/needMove` (:1040-1041, пишутся перед
+HarassAndChase), `lowHpHold` (:1028), `deathSurvive` (:1018). При обёртке в кандидатов
+эти значения ОБЯЗАНЫ переехать в билдер фактов тика (вычисляются до выборов), иначе
+поведение зависит от порядка score() и молча ломается.
+
+### 3.7 Фазы миграции (каждая = один коммит, матч между, git-revert как откат)
+
+**Фаза A — хвост тика (механическая, средняя).** Блоки :968-1173 → кандидаты; гарды
+остаются ВНУТРИ canAct/action (поведение эквивалентно, порядок = скоры). Единственное
+намеренное изменение — no-action-капы vs lanework (3.2). Меж-стадийные данные → факты
+тика. Сигнатура: `tick-owner` получает `band=` в detail. Критерий фазы: ≥95% тиков
+один владелец; LH/jitter/empty_action не хуже базлайна (scorecard, 1 матч).
+
+**Фаза B — голова тика (малая).** :953-966 → urgent-кандидаты по таблице 3.6.
+Критерий: осц-пара `critical-lock↔low-hp-back` отсутствует; выживаемость без регресса.
+
+**Фаза C — снос дублей (выигрыш).** (1) 12+9 suppress-условий → band-refractory (3.4);
+(2) commit-унификация (3.3), Motor v1 retire — владение тиком = владение мотором;
+(3) windup-гейт (3.5); (4) свести EmergencyKillPriority с KillLock.
+Критерий: оркестратор ужимается ощутимо (цель ~-300 строк); windup-cancel сигнатуры нет.
+
+### 3.8 Связи с другими спеками
+
+- **Motor v2 (§1) — НЕ ДЕЛАТЬ.** Пара uphill↔lane-line решается фазой A по построению
+  (оба — position-кандидаты, один победитель + гистерезис). Motor v1 живёт до фазы C,
+  потом retire. Чистку мёртвых v2-claim'ов (§1 п.2) — прицепом к фазе C.
+- **П3 (§2) — совместим, упрощается.** Фаза A его НЕ ждёт (оборачивает recovery-вызовы
+  как есть). После П3 Recovery.Owner становится единственным recovery-кандидатом
+  (полоса 100-130), а строки EmergencyRetreat/ForwardLowHpPullback/ActiveLowHp из
+  таблицы 3.6 схлопываются в него.
+- **П4 canAct** — уже в policy (safetyNoAction/fightNoAction); контракт распространяется
+  на все полосы без изменений.
+
+### 3.9 Критерий выхода П1 целиком
+
+≥95% тиков ровно один tick-owner; осц-пар в tick-owner-сэмплах нет 2 матча подряд;
+jitter ≤60 обе стороны; empty_action ≤80; errors=0; LH и bottle без регресса (scorecard).
 
 ---
 
