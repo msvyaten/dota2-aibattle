@@ -19,9 +19,13 @@ function M.EnemyTowerDanger(bot)
 	return nil
 end
 
-function M.IsTowerActuallyThreatening(bot, tower)
+function M.IsTowerActuallyThreatening(bot, tower, drawsAggro)
 	if tower == nil or not tower:IsAlive() then return false end
 	if GetUnitToUnitDistance(bot, tower) > tower:GetAttackRange() + 80 then return false end
+	-- drawsAggro=true: the bot is about to attack an enemy hero in tower range, which
+	-- makes the tower retarget from creeps to the bot (Dota aggro rule). A tower
+	-- currently on an allied creep is NOT safe for that action -- range alone = threat.
+	if drawsAggro then return true end
 	local target = tower:GetAttackTarget()
 	if target ~= nil and target ~= bot and target:GetTeam() == bot:GetTeam() then
 		return false

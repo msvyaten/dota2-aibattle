@@ -70,7 +70,10 @@ function M.KillLock(ctx)
 	if win.hp < 0.30 and win.dist > range + 60 and not win.mutualLow then
 		return Engine.Blocked("kill-lock", 120, "self_critical", string.format("dist=%.0f hp=%.0f", win.dist, win.hp*100))
 	end
-	if towerThreat(ctx) then
+	-- Attacking a hero in tower range draws the tower onto the bot, so a tower
+	-- currently on creeps is NOT safe for a committed kill-lock (this is how the bot
+	-- kept walking into a tower switch and dying). Use the aggro-aware range check.
+	if AIBUtils.IsTowerActuallyThreatening(bot, towerDanger(ctx), true) then
 		return Engine.Blocked("kill-lock", 90, "tower", string.format("dist=%.0f hp=%.0f", win.dist, win.hp*100))
 	end
 	if AIBUtils.UphillMiss(bot, enemy) then
