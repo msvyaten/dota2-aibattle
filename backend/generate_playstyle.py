@@ -19,7 +19,7 @@ RULE_VALUES = {
     "pregame_behavior":    ("safe_tower", "aggressive_mid", "jungle_pressure"),
     "dive_policy":         ("never", "finish_only", "when_grouped", "when_ahead", "always"),
     "low_hp_behavior":     ("tp_fountain", "run_to_tower", "fight_back", "regen_lane", "walk_fountain"),
-    "healing_style":       ("active", "default", "passive", "never"),
+    "healing_style":       ("active", "default", "never"),
     "ability_usage":       ("aggressive", "default", "basic"),
     "ability_timing":      ("on_cooldown", "save_for_execute", "harass_only"),
     "creep_wave_priority": ("push", "last_hit_only", "freeze"),

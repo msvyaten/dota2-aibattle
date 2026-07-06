@@ -103,7 +103,7 @@ local DEFAULT_PREGAME = nil  -- nil = OHA default (no override)
 -- active  = use heal items / pullback / regen when low HP (was: improvements.defensive_heal=true).
 -- default / passive = OHA default healing only (passive kept for backward compat).
 -- never   = suppress all healing: blocks our system AND OHA item usage (tango/flask/bottle/etc).
-local HEALING_STYLE_VALUES = { active = true, default = true, passive = true, never = true }
+local HEALING_STYLE_VALUES = { active = true, default = true, never = true }
 local DEFAULT_HEALING_STYLE = "default"
 
 -- ability_usage: controls whether our AbilityHarass system fires.
