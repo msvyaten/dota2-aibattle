@@ -6,6 +6,7 @@ local J = require(GetScriptDirectory()..'/FunLib/jmz_func')
 local Style = require(GetScriptDirectory()..'/FunLib/aibattle_style')
 local AIBEngine = require(GetScriptDirectory()..'/FunLib/aibattle_engine')
 local Motor = require(GetScriptDirectory()..'/FunLib/aibattle_motor')
+local AIBUtils = require(GetScriptDirectory()..'/FunLib/aibattle_utils')
 
 local function attackRange(ctx)
 	return ctx.attackRange or ctx.bot:GetAttackRange()
@@ -219,6 +220,15 @@ function M.HarassAndChase(ctx)
 	if heroPrio == "never" then return false end
 	local range = attackRange(ctx)
 	local atkHero = bot:GetNearbyHeroes(range + 50, true, BOT_MODE_NONE)
+	-- Concede-when-losing floor: don't INITIATE harass/chase right after a death or when
+	-- clearly behind, even for hero_priority=always. Kill-lock (finishing a killable
+	-- enemy) and recovery run elsewhere and are unaffected -- this only stops feeding an
+	-- unfavorable lane. Overrides "always" on purpose: no LLM config should re-engage the
+	-- hero that just killed it (8885447129 farmer fed 4x in laning t=61-122).
+	if atkHero and #atkHero > 0 and AIBUtils.ShouldConcedeLane(bot, atkHero[1]) then
+		ctx.blocked("harass", "concede_lane", "", 4.0)
+		return false
+	end
 	-- Uphill awareness: a ranged hero attacking uphill misses 25%. Climbing the ramp
 	-- to level ground is a bad dive for SF, so instead of standing and feeding whiffs
 	-- (how Radiant lost a duel it should have won, 8883124473) yield the tick to lane

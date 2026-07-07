@@ -114,4 +114,35 @@ function M.UphillMiss(bot, target)
 	return botHeight ~= nil and targetHeight ~= nil and targetHeight > botHeight
 end
 
+-- Engine robustness for aggressive pregame play. aggressive_mid is a valid LLM choice
+-- (a strong laner SHOULD contest the river), but the engine must not let it FEED an
+-- unfavorable matchup regardless of which config selected it -- the product promise is
+-- "any LLM config plays watchably". Returns true (+reason) when the bot should concede
+-- the aggressive lane and let laning-core farm safe instead of trading:
+--   post_death  -- for 15s after any death: do NOT re-engage the hero that just killed
+--                  us the tick we walk back (8885447129: died t=102, re-engaged, died
+--                  again t=107 -- the farmer fed 4x in 2 min this way).
+--   losing_lane -- when >= 2 deaths behind the enemy: 0-3 in a lane means farm, not fight.
+-- Death timing is tracked on the bot handle (per-bot, no module state).
+function M.ShouldConcedeLane(bot, enemy)
+	if bot == nil then return false end
+	local okD, myDeaths = pcall(function() return GetHeroDeaths(bot:GetPlayerID()) end)
+	if not okD or type(myDeaths) ~= "number" then return false end
+	if bot.aib_concedeDeaths == nil then bot.aib_concedeDeaths = myDeaths end
+	if myDeaths > bot.aib_concedeDeaths then
+		bot.aib_concedeDeaths = myDeaths
+		bot.aib_concedeDeathAt = DotaTime()
+	end
+	if bot.aib_concedeDeathAt ~= nil and DotaTime() - bot.aib_concedeDeathAt < 15.0 then
+		return true, "post_death"
+	end
+	if enemy ~= nil and enemy.GetPlayerID ~= nil then
+		local okE, eDeaths = pcall(function() return GetHeroDeaths(enemy:GetPlayerID()) end)
+		if okE and type(eDeaths) == "number" and myDeaths >= eDeaths + 2 then
+			return true, "losing_lane"
+		end
+	end
+	return false
+end
+
 return M

@@ -819,7 +819,11 @@ local function AIB_RunTopDesireArbiter(dials, rules, runtimeCtx, intentCtx)
 	-- win the tick when every fight action would refuse (out of attack range while
 	-- the approach paths are gated by uphill/low-hp). In-range trade, low-hp kite and
 	-- downhill chase with hp/execute justification always count as actionable.
-	local fightCanAct = enemy ~= nil and (
+	-- Concede-when-losing floor (engine robustness): a fed/behind bot stops INITIATING
+	-- fights so safety/farm win the tick. Kill-lock (urgent stage) still finishes a
+	-- killable enemy; this only caps the fight DESIRE. See AIBUtils.ShouldConcedeLane.
+	local concedeLane = enemy ~= nil and AIBUtils.ShouldConcedeLane(bot, enemy)
+	local fightCanAct = enemy ~= nil and not concedeLane and (
 		(enemyDist or 99999) <= range + 80
 		or hp < 0.32
 		or (not AIB_UphillMiss(enemy)

@@ -16,6 +16,16 @@ local function duelState(ctx, enemy, dist, phase, hpFloor, approachExtra)
 	local keyPrefix = (phase == "pregame") and "pg-duel" or "prewave-duel"
 	ctx.state("prewave-duel", string.format("ttl=2 phase=%s dist=%.0f hp=%.0f", phase, dist, hp * 100), 2.0)
 
+	-- Concede-when-losing (engine robustness for aggressive_mid): don't re-enter the duel
+	-- right after a death, and don't keep trading when clearly behind. Feeds the same
+	-- laning-core-holds-the-safe-line path as the uphill disengage below.
+	local concede, concedeReason = AIBUtils.ShouldConcedeLane(bot, enemy)
+	if concede then
+		ctx.blocked("prewave-duel", "concede_" .. tostring(concedeReason),
+			string.format("phase=%s dist=%.0f hp=%.0f", phase, dist, hp * 100), 4.0)
+		return false
+	end
+
 	-- Post-horn: after 2 uphill retreats, stop feeding the retreat/re-approach loop.
 	-- Yield to laning-core so the bot settles at the (downhill) creep line and last-hits
 	-- instead of being stepped back 300u every second by the unwinnable uphill duel.
