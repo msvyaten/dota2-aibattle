@@ -17,14 +17,14 @@ motor-чека: `lane-line-fallback` (mode_laning_generic:692 `suppressed-lowhp`
 все матчи). Реальная осц-пара — `uphill-reposition ↔ lane-line-fallback`, ОБЕ healthy-регим,
 и НИ ОДНА не Claim'ит (только yield) → нечему уступать.
 
-**РЕАЛЬНЫЙ ФИКС (одной задачей, после матча 7):**
-1. Дать Claim САМОЙ паре: `UphillReposition` и `lane-line-fallback` при движении делают
-   `Motor.Claim(..., prio 15-20, ttl ~1.2)` — тогда уступают ДРУГ ДРУГУ (committed-destination
-   для настоящей пары).
-2. Заодно убрать мёртвые v2 recovery-claim'ы (`emerg-retreat`/`fwd-lowhp-pull` в recovery.lua,
-   `prewave-duel` require+claims в duel.lua) и вернуть prio critical 110→100, low-hp 90→80 —
-   это чистка no-op, делать В ТОМ ЖЕ коммите (не отдельным revert-churn'ом на проверенном файле).
-Критерий выхода: `lane-line-suppressed-motor > 0` + healthy-регим jitter вниз, 2 матча.
+**СТАТУС 07.07:**
+1. ✅ **СДЕЛАНО (07bf053) и ВАЛИДИРОВАНО (8885447129):** пара Claim'ит — `UphillReposition`
+   = `Motor.Claim("uphill-repo", 20, 1.5)`, `lane-line-fallback` = `Claim("lane-line", 20, 1.5)`,
+   каждый уступает при чужом активном клейме. Результат: `lane-line-fallback` 195→88,
+   `lane-line-suppressed-motor` фаерит, jitter_sum −40%. Остаточная медленная осц (6с-каденция
+   uphill) — policy-конфликт «где стоять», добивают П3/П1-A.
+2. ⏳ Чистка мёртвых v2 recovery-claim'ов + возврат prio (110→100, 90→80) — прицепом к П1-C
+   (см. §3.8), НЕ отдельным коммитом.
 
 **Ниже — устаревший план v2 (для истории, НЕ реализовывать):**
 
@@ -54,24 +54,155 @@ mode_laning_generic:700) уступают.
 
 ---
 
-## 2. П3 — единый владелец low-HP (ПОСЛЕ Motor v2)
+## 2. П3 — единый владелец low-HP (МАНДАТ, Fable-high 07.07)
 
-**Проблема.** Low-HP размазан по 7 функциям (`ThinkIfAllowed`:32, `CriticalLock`:63,
-`ActiveLowHp`:119, `EmergencyRetreat`:199, `ForwardLowHpPullback`:219, `LowHpHoldState`:240
-в recovery.lua + хил в survive.lua). И safety-, и recover-кандидаты зовут один
-`ActiveLowHp(retreatOnly=true)` → косметический выбор арбитра → петли `fight→safety→fight`.
-Пороги-россыпь: 0.45 / 0.34 / 0.30 / 0.25 / 0.32-0.35 / softRecovery / 0.40+0.15*rc.
+**Статус: мандат.** Эскиз доведён по коду HEAD 07bf053: recovery.lua, survive.lua (целиком),
+constants, все вызовы в mode_laning_generic сверены. Валид-данные: 8884639175 (freeze),
+8885365845 (flee-фикс контекст), 8885447129 (flee/poscommit валидированы, low-hp-back = остаток).
 
-**Дизайн.** Один вход `Recovery.Owner(ctx)`, детерминированный по HP-полосе:
-- critical <0.25 → committed retreat через `Motor.Claim("recover",110)`, единый путь;
-- soft 0.25-0.45 → hold за якорем (Claim 90) + безопасный CS если крип рядом;
-- caution 0.45-0.55 → lane work осторожно, не committed, уступает desire.
-`EmergencyRetreat`/`ForwardLowHpPullback` роутить через него. Safety-кандидат делегирует
-`Recovery.Owner`, не дублирует recover → петля исчезает. Пороги — единые константы.
+### 2.1 Проблема — инвентарь фрагментации (11 движущих точек, ~15 порогов)
 
-**Границы.** НЕ переписывать survive.lua-хил. НЕ до приёмки Motor v2.
-**Критерий выхода.** stationary >10s при живом враге ≤2/матч (2 матча); jitter из П2 держится;
-петли fight↔safety исчезают.
+**Движение на low-HP исполняют 11 НЕЗАВИСИМЫХ владельцев** (якоря = HEAD 07bf053):
+
+| # | Владелец | Якорь | Движение | CD |
+|---|---|---|---|---|
+| 1 | `ThinkIfAllowed` (роутер ×3 порога) | recovery.lua:32 | → surviveThink/ActiveLowHp | — |
+| 2 | `CriticalLock` (+flee 67ae609) | recovery.lua:63 | committed dest 4s, hold, flee | 0.8-1.0 |
+| 3 | `ActiveLowHp` | recovery.lua:119 | safe-step / **back** / watch-step / committed-hold | 0.8-3.0 |
+| 4 | `EmergencyRetreat` | recovery.lua:219 | back + parting AbilityHarass | 1.5 |
+| 5 | `ForwardLowHpPullback` | recovery.lua:240 | back с вражеской половины | 1.2 |
+| 6 | `LowHpHoldState` | recovery.lua:262 | probe (⚠️ diag-сайд-эффект `low-hp-limit`) | — |
+| 7 | `fountainRecovery` | survive.lua:173 | фонтан-трип state machine | 1.0 |
+| 8 | heal-pullback (`defensiveHeal`) | survive.lua:386 | back при dmg (не-regen_lane) | 3.0 |
+| 9 | `regenLane` | survive.lua:403 | → xpRecoveryLoc при враге <900 | 1.5 |
+| 10 | post-fight step-back (`recovery`) | survive.lua:495 | → xpRecoveryLoc после боя | 5.0 |
+| 11 | fallback-цепь (`recovery`) | survive.lua:520 | buy(+escape 9bb91a2)/TP/walk/руна/xp-hold | 15/5/1.5 |
+
+Плюс **оба десира сходятся в одну точку**: safety-кандидат (mode_laning:871) и
+recover-кандидат (:911) оба кончаются `ActiveLowHp(softRecovery, retreatOnly)` → выбор
+арбитра косметический → петли `fight→safety→fight`.
+
+**Пороги-россыпь (все НЕ именованы единообразно):** 0.55(softRecovery/laneLowHp) ·
+0.45(activeRecovery/low_hp_hold/FwdPull) · 0.45+0.20rc(postFightBack) · 0.40(damageLockout/
+heal-pullback/flask) · 0.35(danger/earlyLowHp/low-hp-creep) · 0.34(criticalLockClear) ·
+0.32(low-hp-fight) · 0.30(critical/buy-escape/runeYield) · 0.28(safeLastHitMin/xpRecovery-switch) ·
+0.25(EmergencyRetreat) · 0.22(emergencyHp) · 0.20+0.20rc+0.08d(fallback) · 0.14(trueEmergency).
+
+**Следствия (все валидированы матчами):** freeze «стоял и умер» (8884639175/8885365845 —
+полечен flee-фиксом ТОЧЕЧНО, семантика осталась размазанной); `low-hp-back=47-51` = главный
+остаток jitter (8885447129); windup-cancel «замахнулся-не ударил-ушёл» (8884555745 t=218);
+«не ищет руну/не тратит золото, стоя на 20%» (жалоба юзера, смотрибельность).
+
+### 2.2 Дизайн: Recovery.Owner — полоса × угроза × эпизод
+
+Один вход `Recovery.Owner(ctx)` в recovery.lua. Решение = функция ДВУХ осей + эпизод-стейт:
+
+**Ось 1 — HP-полоса** (единые константы `Bands`, гистерезис на границах ±0.03):
+
+| Полоса | HP | Поведение |
+|---|---|---|
+| CRITICAL | <0.25 (выход ≥0.32) | committed retreat, НИКАКОЙ lane work. `Motor.Claim("recover",110)` |
+| SOFT | 0.25-0.45 | hold за якорем + разрешённые действия (см. ниже). Claim 90 только на репозиции |
+| CAUTION | 0.45-0.55 | lane work с оглядкой; Owner НЕ двигает, отдаёт advisory-флаг (экс-lowHpHold) |
+
+**Ось 2 — угроза** (урок flee-фикса: полоса без угрозы ≠ полоса под дайвом):
+`threatened = WasRecentlyDamagedByAnyHero(2.5) OR живой враг ≤900`.
+- CRITICAL×threatened → **прогрессивный flee** к фонтану (генерализация 67ae609: шаги 700,
+  переоценка на достижении); CRITICAL×safe → hold+реген у якоря / фонтан-трип если ресурсы
+  исчерпаны (порядок эскалации: items → buy(+escape) → руна если достижима → TP/walk фонтан).
+- SOFT×threatened → отход за якорь (ОДНА committed-точка); SOFT×safe → hold + safe-CS +
+  реген + rune-seek если достижима (закрывает «руна лежала, он стоял»).
+
+**Эпизод-модель (ключ к честному jitter):** вместо 6 per-handler кулдаунов — ОДИН эпизод:
+`{band, dest, until, mode}`. Правила:
+1. **Один якорь на эпизод** (инвариант under-tower фикса): все под-движения эпизода целят
+   ОДНУ точку; смена dest только по (a) ttl 4s, (b) смене полосы/угрозы (edge, не уровень).
+2. Re-issue move к ТОЙ ЖЕ точке — тихий (без diag), ≤1/с.
+3. **Diag пишется на СМЕНУ эпизода, не на каждый move**: `intent=recovery-owner band=X
+   mode=flee|hold|walk|cs|item reason=... dest=...`. → счётчик меряет ЭПИЗОДЫ (реальные
+   решения), а не спам команд — jitter-прокси становится честным по построению (сейчас
+   low-hp-back=47 это 47 re-issue ОДНОГО отступления, метрика завышает; см. анализ порогов).
+
+**Windup-гейт (закрывает 8884555745):** Owner НЕ выдаёт move, пока идёт замах атаки
+(добивающий свинг в SOFT: `DotaTime()-GetLastAttackTime() < attackPoint` и цель жива) —
+свинг завершается, потом отход. Локальная версия П1 §3.5 для recovery-движений.
+
+**SOFT safe-CS** = поглощение блока mode_laning:968-979 (те же гейты: крип умирает с удара,
+в рендже, hp≥safeLastHitMin, не под активной вышкой, без damageLockout) — становится
+действием Owner'а, а не отдельной стадией.
+
+### 2.3 Кто куда девается
+
+**Поглощаются (функции удаляются):** EmergencyRetreat→CRITICAL (parting-shot сохраняется),
+ForwardLowHpPullback→SOFT×threatened (вражеская половина = автоугроза), ActiveLowHp→
+растворяется (fight/creep-ветки→SOFT-действия; back/safe-step/watch-step/committed-hold→
+эпизод-ядро), CriticalLock→CRITICAL-ядро (flee-логика сохраняется КАК ЕСТЬ), regenLane→
+SOFT×threatened, heal-pullback→SOFT, post-fight step-back→SOFT/CAUTION×safe, fallback-цепь→
+CRITICAL-эскалация (порядок и buy-escape сохраняются).
+
+**Остаются:** survive.lua item-хил (`defensiveHeal` пп.1-9, `recovery` items) — граница
+«items отдельно от движения» держится; `fountainRecovery` — терминальная машина, но вход
+в неё ТОЛЬКО по решению Owner (CRITICAL×safe, ресурсы исчерпаны); `CreepHitReact`/
+`DamageUnstuck` — остаются в safety (damage-react, не low-HP).
+
+**Кандидаты арбитра:** recover-action = `Recovery.Owner(ctx)` напрямую; safety-action
+теряет `ActiveLowHp`-ногу (только CreepHitReact/DamageUnstuck) → петля fight↔safety
+умирает по построению (retreat производит ТОЛЬКО Owner).
+
+**Вызовы в mode_laning:** :963 (early-low) + :964 (CriticalLock) → один `Owner.Urgent(ctx)`
+(CRITICAL-полоса) до арбитра; :1007/:1013/:1027-1029 — УДАЛЯЮТСЯ; :968-979 → SOFT-действие.
+:953-954 (trueEmergency 0.14/emergencyHp 0.22) — внутрь CRITICAL как под-градация.
+
+**Стейт-вары под снос:** `aib_lowHpActiveLast`, `aib_lowHpHoldLast`, `aib_emergLast`,
+`aib_fwdPullLast`, `aib_regenMoveLast`, `aib_pullbackLast`, `aib_criticalRecover*` →
+один `aib_recoveryEpisode = {band, dest, until, mode, at}`.
+
+### 2.4 Жёсткие инварианты (в кластере живут РЕШЁННЫЕ баги — не регрессировать)
+
+1. **Единая точка отступления** (under-tower твитч, решён): не возвращать «разные точки
+   к фонтану»; watch-step/nudge НЕ воскрешать.
+2. **Committed-hold через арбитр-гистерезис** (не через Motor) за якорем — сохранить.
+3. **flee-dived** (67ae609, валидирован freeze 67→1): threatened-ветка CRITICAL обязана
+   вести себя идентично текущей.
+4. **buy-escape** (9bb91a2, валидирован): порядок «items → buy сверх кэпов при critical-stuck»
+   сохраняется в CRITICAL-эскалации.
+5. **Probe без сайд-эффектов** (ловушка §3.6): band/threat-классификатор НЕ пишет diag;
+   `low-hp-limit` диаг умирает вместе с LowHpHoldState (его advisory-роль → CAUTION-флаг).
+6. **regen_lane семантика** (оба live-конфига): SOFT держит бота В ЛИНИИ (xpRecoveryLoc),
+   эскалация на фонтан только из CRITICAL. `low_hp_behavior` = стратегия Owner'а:
+   tp/walk_fountain понижают порог фонтан-эскалации, regen_lane повышает.
+
+### 2.5 Миграция (фаза = коммит + матч, по образцу П1)
+
+**П3-A — скелет (behavior-preserving):** Owner как классификатор полоса×угроза + эпизод-стейт;
+CriticalLock/EmergencyRetreat/FwdLowHpPullback роутятся через него (семантика 1:1, dual-emit
+старых диагов рядом с новыми `recovery-owner`). Выход: freeze=0 держится, flee фаерит,
+stationary ≤2, старые/новые диаги согласуются.
+
+**П3-B — растворение дублей:** safety-нога ActiveLowHp отрезается; ActiveLowHp/regenLane/
+heal-pullback/step-back → эпизод-ядро; per-move диаги умирают (счёт = эпизоды). В ТОМ ЖЕ
+коммите обновить `tools/postmatch.py`+`scorecard.py`: JITTER_KEYS дополняются
+`recovery-owner-episodes` (старые ключи уходят в 0 — оставить для старых логов). Выход:
+`low-hp-back/safe-step/watch-step` = 0; `recovery-owner` эпизодов ≤ ~15/матч; петля
+fight↔safety отсутствует (нет чередования `state-desire-fight/safety` на соседних тиках);
+jitter_sum падает скачком (прокси честный).
+
+**П3-C — семантика:** windup-гейт + SOFT safe-CS поглощает :968 + rune-seek в SOFT×safe +
+фонтан-эскалация из CRITICAL×safe по исчерпанию ресурсов. Выход: windup-cancel сигнатуры
+нет; глазная приёмка юзера: на low-HP бот ЛИБО дерётся/добивает, ЛИБО идёт в одну сторону,
+ЛИБО стоит с целью (реген/руна) — никаких «стоит и грустит».
+
+### 2.6 Связь с П1 и порядком работ
+
+Порядок **П1-A → П3 → П1-B/C** (§3.8) сохраняется, НО П3-A/B не зависят от П1-A — можно
+параллелить, если П1-A задержится (Owner — внутренняя перестройка recovery, П1-A — обёртка
+хвоста тика; пересечение только в удалении :1007/:1013/:1027, координировать в П3-B).
+После П1-B Owner = единственный кандидат recovery-полосы (100-130). Windup-гейт П3-C —
+частный случай П1 §3.5; П1-C генерализует его на все move-классы.
+
+**Критерий выхода П3 целиком:** stationary>10s при живом враге ≤2/матч (2 матча подряд);
+freeze=0 держится; петель fight↔safety нет; windup-cancel нет; jitter_sum: low-hp-вклад
+→ эпизоды (≤15/матч); глазная приёмка юзера по смотрибельности low-HP.
 
 ---
 
