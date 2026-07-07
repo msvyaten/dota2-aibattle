@@ -697,7 +697,12 @@ local function AIB_LaneLineFallback(dials)
 		Style.DiagRL(bot, "lane-line-suppressed-heal", 5)
 		return false
 	end
-	if AIBMotor.Active(bot) ~= nil then
+	-- Yield to whoever currently owns the motor -- recovery movers, or the OTHER
+	-- position puller (uphill-reposition). Excluding our own name lets us keep our
+	-- committed lane walk without self-suppressing. This is what stops the
+	-- forward(lane-line)<->back(uphill) tug-of-war from flipping every tick.
+	local _motorOwner = AIBMotor.Active(bot)
+	if _motorOwner ~= nil and _motorOwner ~= "lane-line" then
 		Style.DiagRL(bot, "lane-line-suppressed-motor", 5)
 		return false
 	end
@@ -775,6 +780,9 @@ local function AIB_LaneLineFallback(dials)
 		dest = Vector(a.x + (b.x - a.x) * fwd, a.y + (b.y - a.y) * fwd, a.z)
 		if GetUnitToLocationDistance(bot, dest) <= 220 then return false end
 	end
+	-- Commit this lane walk for 1.5s so uphill-reposition yields and the bot stops
+	-- flip-flopping forward<->back between the two positioners every tick.
+	AIBMotor.Claim(bot, "lane-line", 20, 1.5)
 	bot:Action_MoveToLocation(dest + RandomVector(45))
 	AIB_Diag("lane-line-fallback")
 	Style.TickOwner(bot, "lane-line-fallback",

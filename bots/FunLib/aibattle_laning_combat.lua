@@ -202,6 +202,9 @@ function M.UphillReposition(ctx)
 			or ctx.forwardSurvivingTowerLoc()
 		if highPos and GetUnitToLocationDistance(bot, highPos) > 300 then
 			bot.aib_uphillRepoLast = DotaTime()
+			-- Claim the motor so the opposite puller (lane-line-fallback) yields for 1.5s
+			-- instead of dragging the bot forward next tick = the forward<->back twitch.
+			Motor.Claim(bot, "uphill-repo", 20, 1.5)
 			bot:Action_MoveToLocation(highPos + RandomVector(50))
 			ctx.diag("uphill-reposition")
 			return true
