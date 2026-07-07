@@ -96,7 +96,32 @@ function M.CriticalLock(ctx)
 		bot.aib_criticalRecoverUntil = now + 4.0
 	end
 	if dest == nil then return false end
+
+	-- Reached the safe anchor but STILL being dived here? The anchor is not safe and
+	-- holding = death (8885365845 t=291-342: Dire froze at its T1 anchor while dived,
+	-- broke + bottle-empty, and died standing). Being out of gold/bottle is no reason
+	-- to stand: push the destination deeper toward the fountain so the "hold" becomes a
+	-- committed retreat to real safety. The 2s dest window keeps it twitch-free; when the
+	-- flee point is reached and still threatened, it re-flees another step (progressive).
+	local fleeing = false
 	if GetUnitToLocationDistance(bot, dest) < 220 then
+		local threatened = bot:WasRecentlyDamagedByAnyHero(2.5)
+		if not threatened then
+			local foes = bot:GetNearbyHeroes(900, true, BOT_MODE_NONE)
+			threatened = foes ~= nil and #foes > 0 and foes[1]:IsAlive()
+		end
+		if threatened then
+			local flee = ctx.towardFountain(bot:GetLocation(), 700)
+			if flee ~= nil then
+				dest = flee
+				bot.aib_criticalRecoverDest = flee
+				bot.aib_criticalRecoverUntil = now + 2.0
+				fleeing = true
+			end
+		end
+	end
+
+	if not fleeing and GetUnitToLocationDistance(bot, dest) < 220 then
 		if bot.aib_criticalRecoverLast == nil or now - bot.aib_criticalRecoverLast >= 1.0 then
 			bot.aib_criticalRecoverLast = now
 			Style.Intent(bot, "critical-recovery", string.format("hp=%.0f dist=%.0f ttl=%.0f reason=hold", hp * 100, GetUnitToLocationDistance(bot, dest), bot.aib_criticalRecoverUntil - now), 2.0)
@@ -107,9 +132,9 @@ function M.CriticalLock(ctx)
 	if bot.aib_criticalRecoverLast == nil or now - bot.aib_criticalRecoverLast >= 0.8 then
 		bot.aib_criticalRecoverLast = now
 		Motor.Claim(bot, "critical-recover", 110, 1.2)
-		Style.Intent(bot, "critical-recovery", string.format("hp=%.0f dist=%.0f ttl=%.0f", hp * 100, GetUnitToLocationDistance(bot, dest), bot.aib_criticalRecoverUntil - now), 2.0)
+		Style.Intent(bot, "critical-recovery", string.format("hp=%.0f dist=%.0f reason=%s", hp * 100, GetUnitToLocationDistance(bot, dest), fleeing and "flee_dived" or "lock"), 2.0)
 		bot:Action_MoveToLocation(dest)
-		ctx.diag("critical-recover-lock")
+		ctx.diag(fleeing and "critical-recover-flee" or "critical-recover-lock")
 	end
 	return true
 end
