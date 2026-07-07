@@ -1,6 +1,11 @@
 # AIBattle Architecture
 
-Last updated: 2026-06-26.
+Last updated: 2026-07-06.
+
+> This is the **conventions / philosophy** doc (how to add behavior, telemetry rules,
+> decision order). For the **file inventory** (what lives where + line counts + a
+> "where do I change X" guide), see [`CODE_MAP.md`](CODE_MAP.md). For open work with
+> design, see [`SPECS.md`](SPECS.md).
 
 ## Product Shape
 
@@ -14,14 +19,19 @@ The long-term goal is not to pile on fallbacks. The goal is a small decision eng
 
 ## Ownership
 
-Codex owns runtime code, architecture, deploy tooling, diagnostics, and behavior fixes.
+Runtime code / architecture / deploy tooling / diagnostics is **formally Codex's** zone.
+In practice, when Codex is unavailable Claude fixes runtime directly with the user's
+approval (precedents: UseGlyph crash, arbiter hysteresis, the recovery buy-escape).
 
-Claude currently owns strategy/config changes. Do not stage or commit these files unless the user explicitly asks:
+Configs (`bots/Customize/canonical_*.lua`) are **Claude's zone** — committable, but only
+**with an explicit command** (they are strategy, not code).
 
-- `bots/Customize/canonical_ganker.lua`
-- `bots/Customize/canonical_pusher.lua`
-- `bots/Customize/playstyle_radiant.lua`
-- `bots/Customize/playstyle_dire.lua`
+**Never stage/commit without an explicit command** (live matchup state, not source of truth):
+
+- `bots/Customize/playstyle_radiant.lua` — live binding: which canonical runs on Radiant.
+- `bots/Customize/playstyle_dire.lua` — live binding: which canonical runs on Dire.
+
+Full config/archetype list and roles: see [`CODE_MAP.md`](CODE_MAP.md) §4.
 
 ## Rules, Dials, Constants
 
