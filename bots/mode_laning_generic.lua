@@ -969,7 +969,7 @@ local function ThinkLaningCore(dials, rules)
 	if AIBEngine.Resolve(urgentIntents, intentCtx) then return true end
 
 	if AIBLaneRecovery.ThinkIfAllowed(runtimeCtx, AIBLanePolicy.Hp.danger, "early-low") then return true end
-	if AIBLaneRecovery.CriticalLock(runtimeCtx) then return true end
+	if AIBLaneRecovery.Owner(runtimeCtx) then return true end
 	if AIB_PreWaveDuelStep(rules) then return true end
 	if AIBLaneTempo.PreCreepStandoff(runtimeCtx) then return true end
 	if AIB_RunTopDesireArbiter(dials, rules, runtimeCtx, intentCtx) then return true end

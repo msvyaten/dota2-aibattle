@@ -139,6 +139,58 @@ function M.CriticalLock(ctx)
 	return true
 end
 
+-- P3-A skeleton (single low-HP owner), slice 1 -- BEHAVIOR-PRESERVING.
+-- Establishes the Recovery.Owner entry point + episode telemetry that later P3 slices
+-- grow into. This slice ONLY classifies band/threat, records an episode, and delegates
+-- to the existing CriticalLock logic unchanged -- no thresholds gate behavior yet, so
+-- nothing changes on the field. Later slices migrate EmergencyRetreat / ForwardLowHpPullback
+-- / ActiveLowHp / regenLane into the band actions here (SPECS section 2).
+-- Bands are TELEMETRY-ONLY for now (delegation keeps CriticalLock's own hp<0.34 gate);
+-- do NOT read them as behavior thresholds until the migration slice that reconciles them.
+local RecoveryBands = { critical = 0.25, soft = 0.45, caution = 0.55 }
+
+local function classifyBand(hp)
+	if hp < RecoveryBands.critical then return "critical" end
+	if hp < RecoveryBands.soft then return "soft" end
+	if hp < RecoveryBands.caution then return "caution" end
+	return "healthy"
+end
+
+local function recoveryThreatened(bot)
+	if bot:WasRecentlyDamagedByAnyHero(2.5) then return true end
+	local foes = bot:GetNearbyHeroes(900, true, BOT_MODE_NONE)
+	return foes ~= nil and #foes > 0 and foes[1]:IsAlive()
+end
+
+-- One episode record per coherent recovery stretch; emit a diag only on TRANSITION
+-- (band / threat / mode change), never per tick, so the counter measures decisions not
+-- move re-issues. This is the honest jitter proxy P3 replaces low-hp-back etc. with.
+local function noteRecoveryEpisode(bot, band, threat, mode)
+	local ep = bot.aib_recoveryEpisode
+	if ep == nil or ep.band ~= band or ep.threat ~= threat or ep.mode ~= mode then
+		bot.aib_recoveryEpisode = { band = band, threat = threat, mode = mode, at = DotaTime() }
+		Style.Intent(bot, "recovery-owner",
+			string.format("band=%s threat=%s mode=%s hp=%.0f", band, tostring(threat), mode, J.GetHP(bot) * 100), 2.0)
+	end
+end
+
+function M.Owner(ctx)
+	local bot = ctx.bot
+	local band = classifyBand(J.GetHP(bot))
+	if band == "healthy" then
+		bot.aib_recoveryEpisode = nil
+		return false
+	end
+	-- Slice 1: the CRITICAL committed-retreat/flee logic is the only migrated owner.
+	-- CriticalLock self-gates (hp<0.34) so calling it across critical/soft/caution is
+	-- identical to the pre-refactor direct call at mode_laning:972.
+	local handled = M.CriticalLock(ctx)
+	if handled then
+		noteRecoveryEpisode(bot, band, recoveryThreatened(bot), "critical-lock")
+	end
+	return handled
+end
+
 -- retreatOnly=true skips the fight/CS branches and goes straight to positional retreat.
 -- Used by ThinkIfAllowed's no-items fallback so the recover desire produces movement, not combat.
 function M.ActiveLowHp(ctx, hpThreshOverride, retreatOnly)
