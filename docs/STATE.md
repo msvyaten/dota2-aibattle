@@ -2,28 +2,22 @@
 
 Last updated: 2026-07-08.
 
-This is the short source of truth before starting a match. Long design notes live in
-`docs/SPECS.md`, `docs/HANDOFF_PACKAGE.md`, and `docs/BACKLOG.md`.
+Static source of truth before starting a match: stage, next allowed task, what not to
+touch, and P3 baselines. Long design notes live in `docs/SPECS.md`,
+`docs/HANDOFF_PACKAGE.md`, and `docs/BACKLOG.md`.
 
-## Current Snapshot
+**Volatile state is not duplicated here** (it drifts). For the live snapshot — HEAD,
+upstream, live marker, live/HEAD match, resolved Radiant/Dire presets, dirty tree —
+run the tool:
 
-- Branch: `phase-2-team-dials`
-- Exact repo HEAD: run `python tools\pre_match_state.py`.
-- Pre-P3 baseline commit before this prep package: `c1cd4e4`.
-- GitHub status before this prep package: `origin/phase-2-team-dials` was at the same commit.
-- Live marker observed before this update: `SWAP+lhsecure2+rangedspace+p3a2+hpbehind-inrange+concede`
-- Live/HEAD status: not identical by marker. Before a match, either deploy `HEAD` or explicitly record the custom live marker.
+```powershell
+python tools\pre_match_state.py
+```
 
-## Dirty Configs
-
-Claude-owned local config/playstyle changes are present:
-
-- `bots/Customize/canonical_brawler.lua`: `retreat_caution` changed from `0.35` to `0.50`.
-- `bots/Customize/canonical_farmer.lua`: comment documents the `0.65 -> 0.55` retreat-caution experiment.
-- `bots/Customize/playstyle_radiant.lua`: binds Radiant to `canonical_farmer`.
-- `bots/Customize/playstyle_dire.lua`: binds Dire to `canonical_brawler`.
-
-Do not commit these config/playstyle files unless the user explicitly asks.
+If `live_matches_head=false`, deploy `HEAD` or explicitly record that the match uses a
+custom live marker. If the tree is dirty, commit configs **only on explicit user
+request** (playstyle/canonical are a living matchup) or record them as a local
+experiment.
 
 ## Current Stage
 
@@ -37,28 +31,28 @@ Completed:
 
 Next structural task:
 
-- P3-B: dissolve `ActiveLowHp` / regen-lane / heal-pullback / step-back into `Recovery.Owner` episode actions, and update `postmatch.py` / `scorecard.py` in the same commit so low-HP jitter is counted by episodes.
+- P3-B: dissolve `ActiveLowHp` / regen-lane / heal-pullback / step-back into
+  `Recovery.Owner` episode actions, and update `postmatch.py` / `scorecard.py` in the
+  same commit so low-HP jitter is counted by episodes.
 
 Do not start P1 arbiter migration before P3 unless explicitly redirected.
 
 ## P3 Baseline
 
-Reference matches already available:
+Baselines are static snapshots — pinned on the **current fix stack** (code `c1cd4e4`) so
+P3's delta is attributable and not conflated with intervening fixes. Both are short,
+P3-dominant matches (jitter driven by `low-hp-back`), which is exactly the signal P3
+targets.
 
-| Match | Result | Runtime | Empty Action | Jitter/Min | Bottle Empty |
-| --- | --- | --- | --- | --- | --- |
-| `8885447129` | Dire won, R=farmer D=brawler | R=0/D=0 errors | R=53 D=37 | R=24.9 D=22.9 | R=28% D=68% |
-| `8886710243` | Radiant won, R=farmer D=brawler | R=0/D=0 errors | R=57 D=47 | R=25.8 D=21.6 | R=80% D=61% |
+| Match | Len | Matchup / Result | Runtime | Empty Action | Jitter/Min | Bottle Empty |
+| --- | --- | --- | --- | --- | --- | --- |
+| `8886935149` | 5.9m | R=brawler D=farmer · Dire won | R=0/D=0 | R=63 D=63 | R=26.8 D=19.7 | R=80% D=80% |
+| `8886970304` | 6.6m | R=farmer D=brawler · Dire won | R=0/D=0 | R=79 D=55 | R=27.4 D=13.1 | R=76% D=52% |
 
-P3 should improve low-HP jitter without regressing runtime errors, LH, or empty_action.
-The dominant baseline jitter keys are `low-hp-back` and `lane-line-fallback`.
+Dominant jitter key both matches: `low-hp-back` (123/69 in 8886970304; 76/64 in
+8886935149), `lane-line-fallback` secondary. Watch item: `critical-recover-hold`
+spiked to R=14 D=35 in 8886970304 — legit safe-regen (D won, nobody died standing),
+but judge watchability by eye.
 
-## Pre-Match Command
-
-Run this before any new test match:
-
-```powershell
-python tools\pre_match_state.py
-```
-
-If `live_matches_head=false`, deploy or explicitly label the match as a custom live-marker run.
+P3 should cut low-HP jitter (`low-hp-back` episodes) without regressing runtime errors,
+LH, empty_action, or bottle.
