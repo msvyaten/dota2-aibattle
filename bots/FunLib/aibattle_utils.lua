@@ -145,4 +145,17 @@ function M.ShouldConcedeLane(bot, enemy)
 	return false
 end
 
+-- True when the bot is losing this trade on HP (>=15% behind the enemy) so it should not
+-- INITIATE/continue it. A killable enemy (ehp <= execute) or an action power rune flips
+-- the trade -> not disadvantaged. Shared by the fight-desire canAct and HarassAndChase so
+-- an over-aggressive brawler (hero_priority=always) stops feeding a healthier safe laner
+-- in range (8886772891: R=brawler over-traded in range and died to the D=farmer).
+function M.HpDisadvantaged(bot, enemy, executeThreshold, hasActionRune)
+	if bot == nil or enemy == nil then return false end
+	if hasActionRune then return false end
+	local ehp = J.GetHP(enemy)
+	if ehp <= (executeThreshold or 0) then return false end
+	return (ehp - J.GetHP(bot)) >= 0.15
+end
+
 return M

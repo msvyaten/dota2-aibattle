@@ -243,6 +243,15 @@ function M.HarassAndChase(ctx)
 				ctx.blocked("hero-prio-always", "uphill", "", 3.0)
 				return false
 			end
+			-- Even 'always' must not keep trading in range a fight it's LOSING on HP:
+			-- an over-aggressive brawler fed the safe farmer exactly this way
+			-- (8886772891: R=brawler over-traded in range and died). A killable enemy
+			-- or an action power rune still fights (HpDisadvantaged returns false).
+			if AIBUtils.HpDisadvantaged(bot, atkHero[1], ctx.dials.execute_threshold,
+				AIBEngine.IsActionPowerRune(AIBEngine.PowerRuneState(bot))) then
+				ctx.blocked("hero-prio-always", "hp_behind", "", 3.0)
+				return false
+			end
 			if not (ctx.csAllowed and ctx.needMove) then
 				bot:Action_AttackUnit(atkHero[1], false)
 				ctx.diag("hero-prio-always")

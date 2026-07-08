@@ -836,8 +836,7 @@ local function AIB_RunTopDesireArbiter(dials, rules, runtimeCtx, intentCtx)
 	-- trade/defence, desperate kite (hp<0.32), a power rune, and a killable enemy all
 	-- still fight. This is the third lever -- neither retreat_caution nor concede covers
 	-- an even-but-losing trade.
-	local hpBehind = enemy ~= nil and (enemyHp - hp) >= 0.15
-		and not actionPowerRune and enemyHp > (dials.execute_threshold or 0)
+	local hpBehind = enemy ~= nil and AIBUtils.HpDisadvantaged(bot, enemy, dials.execute_threshold, actionPowerRune)
 	if hpBehind and (enemyDist or 99999) > range + 80 then
 		Style.DiagRL(bot, "fight-hp-behind", 3)
 	end
