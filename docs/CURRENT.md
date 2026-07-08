@@ -1,5 +1,8 @@
 # AIBattle Current State
 
+> Superseded for day-to-day work by `docs/STATE.md` as of 2026-07-08.
+> This file is kept as historical working memory from the Gate 0 refactor period.
+
 Last updated by Codex on 2026-06-30 after Gate 0 attempt `8874134176`.
 Current live bot build: `f4e59a4`.
 Current repo HEAD: `f4e59a4` plus Claude-owned uncommitted config changes.

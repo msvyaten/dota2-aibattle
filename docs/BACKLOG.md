@@ -1,7 +1,7 @@
 # BACKLOG — приоритезированный план работ
 
 > Единый «что дальше» вид. Детальный дизайн больших пунктов — в `SPECS.md` (§2 П3, §3 П1).
-> Обновлено 07.07 (HEAD 243dd04). Порядок пересмотрен по данным сессии (см. «Почему П3 вперёд»).
+> Обновлено 08.07 (HEAD c1cd4e4). P3-A slice 2 уже в git; следующий структурный шаг — P3-B.
 
 ## Почему П3 вперёд П1-A (пересмотр порядка)
 
@@ -21,8 +21,8 @@
 ### П3 — единый владелец low-HP · SPECS §2 · Opus по мандату · матч между срезами
 - [x] **П3-A срез 1** (543e2a0): `Recovery.Owner` точка входа, классификатор band×threat +
       эпизод-стейт, делегат в CriticalLock 1:1. Behavior-preserving.
-- [ ] **П3-A срез 2**: роутинг `EmergencyRetreat`(:1007) / `ForwardLowHpPullback`(:1013) через
-      Owner, dual-emit. Behavior-preserving. Выход: старые диаги согласуются, freeze=0 держится.
+- [x] **П3-A срез 2** (6da86e5): роутинг `EmergencyRetreat`(:1007) / `ForwardLowHpPullback`(:1013) через
+      Owner, dual-emit. Behavior-preserving.
 - [ ] **П3-B — растворение**: `ActiveLowHp`/`regenLane`/heal-pullback/step-back → band-действия
       эпизод-ядра; per-move диаги (`low-hp-back`/`safe-step`/`watch-step`) → эпизоды; safety-нога
       ActiveLowHp отрезается (петля fight↔safety умирает). **В ТОМ ЖЕ коммите** обновить
