@@ -310,6 +310,9 @@ function M.EmergencyRetreat(ctx)
 		end
 	end
 	Motor.Claim(bot, "emerg-retreat", 110, 1.6)
+	-- P3-A slice 2: register this recovery mover on the Owner episode model (dual-emit,
+	-- behavior unchanged). Later P3-B moves the decision itself into the band owner.
+	noteRecoveryEpisode(bot, "critical", recoveryThreatened(bot), "emerg-retreat")
 	bot:Action_MoveToLocation(back)
 	return true
 end
@@ -331,6 +334,8 @@ function M.ForwardLowHpPullback(ctx)
 		bot.aib_fwdPullLast = DotaTime()
 		Motor.Claim(bot, "fwd-lowhp-pull", 90, 1.3)
 		ctx.diag("fwd-lowhp-pull")
+		-- P3-A slice 2: register on the Owner episode model (dual-emit, behavior unchanged).
+		noteRecoveryEpisode(bot, classifyBand(hpNow), recoveryThreatened(bot), "fwd-pullback")
 		bot:Action_MoveToLocation(back)
 	end
 	return true
