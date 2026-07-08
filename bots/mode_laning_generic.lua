@@ -822,11 +822,29 @@ local function AIB_RunTopDesireArbiter(dials, rules, runtimeCtx, intentCtx)
 	-- Concede-when-losing floor (engine robustness): a fed/behind bot stops INITIATING
 	-- fights so safety/farm win the tick. Kill-lock (urgent stage) still finishes a
 	-- killable enemy; this only caps the fight DESIRE. See AIBUtils.ShouldConcedeLane.
-	local concedeLane = enemy ~= nil and AIBUtils.ShouldConcedeLane(bot, enemy)
+	-- The fightCanAct path is the main concede route, so log it here (the harass path
+	-- barely fires post-death since the enemy is rarely in harass range while we walk
+	-- back -- 8886710243 showed only 2 harass concedes and no measurable fight-side).
+	local concedeLane, concedeReason = false, nil
+	if enemy ~= nil then concedeLane, concedeReason = AIBUtils.ShouldConcedeLane(bot, enemy) end
+	if concedeLane then
+		Style.Blocked(bot, "fight", "concede_" .. tostring(concedeReason), string.format("hp=%.0f", hp * 100), 3.0)
+	end
+	-- HP-disadvantage trade gate: don't SEEK a trade the bot is already losing on HP.
+	-- Deaths kept landing at 45-49% HP from committing to fights vs a healthier enemy
+	-- (8886710243 R died t=128 hp49%). Only blocks the out-of-range SEEK; in-range
+	-- trade/defence, desperate kite (hp<0.32), a power rune, and a killable enemy all
+	-- still fight. This is the third lever -- neither retreat_caution nor concede covers
+	-- an even-but-losing trade.
+	local hpBehind = enemy ~= nil and (enemyHp - hp) >= 0.15
+		and not actionPowerRune and enemyHp > (dials.execute_threshold or 0)
+	if hpBehind and (enemyDist or 99999) > range + 80 then
+		Style.DiagRL(bot, "fight-hp-behind", 3)
+	end
 	local fightCanAct = enemy ~= nil and not concedeLane and (
 		(enemyDist or 99999) <= range + 80
 		or hp < 0.32
-		or (not AIB_UphillMiss(enemy)
+		or (not AIB_UphillMiss(enemy) and not hpBehind
 			and (hp >= 0.45 or enemyHp <= (dials.execute_threshold or 0))))
 	local policyArgs = {
 		safetyCanAct = safetyCanAct,
