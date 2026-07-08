@@ -173,6 +173,32 @@ function M.CreepHitReact(ctx)
 	-- own the tick without touching the order.
 	local alreadySwinging = bot:GetCurrentActionType() == BOT_ACTION_TYPE_ATTACK
 
+	-- Securable last-hit beats stepping: creep damage must NOT walk the bot off a creep
+	-- that dies to one hit right now (user watched 2 creeps lost under the tower to a
+	-- flinch-step, 8885499372 2:40/3:42). Runs BEFORE the trade/step branches so it wins
+	-- at ANY react HP; Action_AttackUnit closes the last ~80u for the instant hit and the
+	-- aggro wave relents once the creep dies. Uses the same quelling-adjusted damage as
+	-- the real last-hit so it fires as often (raw-damage-only version fired 0x, 8886850251).
+	if hp >= 0.30 and ctx.enemyTowerDanger() == nil then
+		local lhDmg = bot:GetAttackDamage()
+		local qSlot = bot:FindItemSlot("item_quelling_blade")
+		if qSlot ~= nil and qSlot >= 0 and bot:GetItemSlotType(qSlot) == ITEM_SLOT_TYPE_MAIN then
+			lhDmg = lhDmg + (range > 310 and 4 or 8)
+		end
+		local lhCreep, lhSoon = AIBCreeps.GetBestLastHitCreep(bot, ctx.enemyCreeps, lhDmg)
+		if lhCreep ~= nil and lhSoon ~= true
+			and GetUnitToUnitDistance(bot, lhCreep) <= range + 80 then
+			bot.aib_creepReactLast = now
+			Style.Intent(bot, "creep-hit-react", string.format("dist=%.0f hp=%.0f reason=secure_lh", GetUnitToUnitDistance(bot, lhCreep), hp * 100), 1.5)
+			if not alreadySwinging then
+				bot:SetTarget(lhCreep)
+				bot:Action_AttackUnit(lhCreep, true)
+			end
+			ctx.diag("creep-hit-react-lh")
+			return true
+		end
+	end
+
 	local repeatedDamage = (bot.aib_creepReactCount or 0) >= 3
 	local safeToTrade = hp >= 0.55 and dist <= range + 80 and ctx.enemyTowerDanger() == nil
 	if safeToTrade then
@@ -195,26 +221,6 @@ function M.CreepHitReact(ctx)
 		end
 		ctx.diag("creep-hit-react-force-atk")
 		return true
-	end
-
-	-- Securable last-hit beats stepping: creep damage must not walk the bot away from a
-	-- creep that dies to ONE hit right now (user watched 2 creeps lost under the tower
-	-- to a flinch-step, 8885499372 2:40/3:42). The attack is instant, and the aggro wave
-	-- relents once the creep dies. Raw GetAttackDamage (no quelling bonus) keeps the
-	-- check conservative -- if unsure, fall through to the normal step branches.
-	if hp >= 0.30 and ctx.enemyTowerDanger() == nil then
-		local lhCreep, lhSoon = AIBCreeps.GetBestLastHitCreep(bot, ctx.enemyCreeps, bot:GetAttackDamage())
-		if lhCreep ~= nil and lhSoon ~= true
-			and GetUnitToUnitDistance(bot, lhCreep) <= range + 40 then
-			bot.aib_creepReactLast = now
-			Style.Intent(bot, "creep-hit-react", string.format("dist=%.0f hp=%.0f reason=secure_lh", GetUnitToUnitDistance(bot, lhCreep), hp * 100), 1.5)
-			if not alreadySwinging then
-				bot:SetTarget(lhCreep)
-				bot:Action_AttackUnit(lhCreep, true)
-			end
-			ctx.diag("creep-hit-react-lh")
-			return true
-		end
 	end
 
 	if hp >= 0.38 and dist <= range + 160 and ctx.enemyTowerDanger() == nil then
