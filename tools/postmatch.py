@@ -40,6 +40,18 @@ def report(match_id):
         return ok
     text = path.read_text(encoding="utf-8", errors="ignore")
 
+    # Winner + config labels. Winner comes from the engine's "Winning team =" line
+    # (same source as match_stats). Config guessed from the announce harass dial --
+    # deaths must NOT be inferred from dg=-9x gold drops: those conflate ~100g
+    # purchases with respawn losses (found 07.07 doing side-vs-config forensics).
+    m = re.search(r"Winning team =\s*(\d)", text)
+    win = {"0": "Radiant", "2": "Radiant", "1": "Dire", "3": "Dire"}.get(m.group(1), "?") if m else "?"
+    def cfg(side):
+        h = re.search(r"AIB\[%s\] harass=([0-9.]+)" % side, text)
+        return {"0.90": "brawler", "0.55": "farmer", "0.85": "pusher"}.get(h.group(1), h.group(1)) if h else "?"
+    print("----- outcome -----")
+    print("  winner=%s | R=%s D=%s" % (win, cfg("R"), cfg("D")))
+
     print("----- watch: buy-escape + freeze (fix 9bb91a2) -----")
     for side in ("R", "D"):
         buycrit = diag_max(text, side, "recovery-buy-critical")
