@@ -192,7 +192,56 @@ jitter_sum падает скачком (прокси честный).
 нет; глазная приёмка юзера: на low-HP бот ЛИБО дерётся/добивает, ЛИБО идёт в одну сторону,
 ЛИБО стоит с целью (реген/руна) — никаких «стоит и грустит».
 
-### 2.6 Связь с П1 и порядком работ
+### 2.6 П3-B — line-by-line план катовера (Fable-high 07.07, по HEAD 6da86e5)
+
+**Статус пред-условий:** срез 1 (Owner+эпизоды, 543e2a0) и срез 2 (emerg/fwd-pull регистрируются,
+6da86e5) в LIVE. Это план ЕДИНСТВЕННОГО опасного коммита П3. Один коммит + git-revert откат.
+
+**Архитектурное решение (где исполняется soft):** Owner-движение НЕ бежит пре-арбитром —
+пре-арбитр (`Owner.Urgent`, :963-972) обрабатывает ТОЛЬКО critical-полосу; soft-действия
+исполняются ЧЕРЕЗ desire-кандидатов recover/safety (иначе soft-отступление крадёт тик у
+lane work — ровно то, от чего П4-капы). Пост-арбитрные low-HP вызовы умирают.
+
+**Катовер по точкам:**
+1. **safety-кандидат** (mode_laning :898-901): убрать ActiveLowHp-ногу → остаются
+   CreepHitReact/DamageUnstuck. ⚠️ ОБЯЗАТЕЛЬНО одновременно убрать `lowHpRetreatReady`
+   из `safetyCanAct` (:811) — иначе safety-десир выигрывает тики, на которых не может
+   действовать → empty_action спайк.
+2. **recover-кандидат** (:939): action = `Recovery.Owner(ctx)` напрямую (вместо ThinkIfAllowed).
+3. **EmergencyRetreat** (recovery.lua:296): УДАЛИТЬ + вызов :1036. Покрытие: hp<0.25 =
+   critical-полоса пре-арбитра; parting-shot (AbilityHarass по врагу ≤800) переносится
+   внутрь critical-входа Owner.
+4. **ForwardLowHpPullback** (recovery.lua:317): УДАЛИТЬ + вызов :1042. Покрытие: вражеская
+   половина ⇒ threatened=true форсирован; hp<0.45=activeRecovery ⇒ recover-десир активен.
+5. **ActiveLowHp** (recovery.lua:~190-290): растворить в Owner.softAction():
+   - bottle-ветка — УДАЛИТЬ (дубль survive item-слоя, bottleIfUseful);
+   - low-hp-fight (враг в рендже, hp≥0.32) и low-hp-creep (hp≥0.35 / 0.28+creep-dmg) —
+     перенести КАК ЕСТЬ (семантика safe-CS уточняется в П3-C, не тут);
+   - safe-step / back / watch-step / committed-hold → эпизод-ядро: ОДНА committed-точка
+     (SafeRetreatTowerLoc), hold за якорем с danger-чеком (логика :158-180 сохраняется
+     1:1 — инвариант under-tower), re-issue к той же точке тихий ≤1/с.
+6. **regenLane** (survive.lua:403): УДАЛИТЬ. Условие (regen_lane & hp<0.45 & враг≤900) ≡
+   SOFT×threatened → recover-десир → Owner.
+7. **heal-pullback** (survive.lua:386): УДАЛИТЬ (то же покрытие).
+8. **LowHpHoldState** (recovery.lua:~340): заменить чистым `Owner.Context(ctx)` →
+   (band, threatened, lowHpHold) БЕЗ диагов (`low-hp-limit` умирает). ⚠️ Потребители
+   `aib_lowHpHold`/`ctx.lowHpHold`: fwd-suppress (mode_laning) и UphillReposition
+   (combat:188) — формула lowHpHold (hp<rules.low_hp_hold=0.45 & свой T1<900) сохраняется
+   ВНУТРИ Context 1:1.
+9. **Стейт-чистка:** aib_lowHpActiveLast/aib_lowHpHoldLast/aib_emergLast/aib_fwdPullLast/
+   aib_regenMoveLast/aib_pullbackLast → один `aib_recoveryEpisode`.
+10. **НЕ трогать в П3-B** (scope): post-fight step-back (survive:495, enemy-gone реген —
+    в П3-C), fountainRecovery, fallback-цепь (buy/TP/walk/rune/xp-hold — уже внутри
+    surviveThink), item-слой целиком.
+11. **Tools В ТОМ ЖЕ КОММИТЕ:** postmatch.py — добавить счёт `recovery-owner` эпизодов;
+    scorecard.py — старые JITTER_KEYS оставить (старые логи), добавить информационную
+    метрику эпизодов БЕЗ порога (порог ставим после 2 матчей данных).
+
+**Приёмка П3-B (1 матч):** `low-hp-back/safe-step/watch-step` = 0; эпизодов ≤~15;
+чередования `state-desire-fight/safety` на соседних тиках нет; freeze=0; stationary≤2;
+LH не хуже; empty_action ≤80 (следить — п.1 меняет safetyCanAct).
+
+### 2.7 Связь с П1 и порядком работ
 
 Порядок **П1-A → П3 → П1-B/C** (§3.8) сохраняется, НО П3-A/B не зависят от П1-A — можно
 параллелить, если П1-A задержится (Owner — внутренняя перестройка recovery, П1-A — обёртка
