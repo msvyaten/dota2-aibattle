@@ -33,6 +33,24 @@ def last_time(text, side):
     return vals[-1] if vals else "?"
 
 
+def recovery_owner_counts(text, side):
+    lines = re.findall(r"AIB\[%s\][^']*intent=recovery-owner[^']*" % side, text)
+    counts = {
+        "total": len(lines),
+        "critical": 0,
+        "soft": 0,
+        "caution": 0,
+        "threat": 0,
+    }
+    for line in lines:
+        for band in ("critical", "soft", "caution"):
+            if "band=%s" % band in line:
+                counts[band] += 1
+        if "threat=true" in line:
+            counts["threat"] += 1
+    return counts
+
+
 def report(match_id):
     ok = sc.scorecard(match_id)
     path = sc.DOTA_LOG_DIR / ("console.%s.log" % match_id)
@@ -52,14 +70,14 @@ def report(match_id):
     print("----- outcome -----")
     print("  winner=%s | R=%s D=%s" % (win, cfg("R"), cfg("D")))
 
-    print("----- watch: buy-escape + freeze (fix 9bb91a2) -----")
+    print("----- watch: secure-LH + P3 owner episodes -----")
     for side in ("R", "D"):
-        buycrit = diag_max(text, side, "recovery-buy-critical")
-        stuck = occ(text, side, "reason=critical_stuck")
-        budcap = occ(text, side, "reason=budget_cap")
-        hold = diag_max(text, side, "critical-recover-hold")
-        print("  [%s] recovery-buy-critical=%d critical_stuck=%d | budget_cap_blocks=%d | freeze critical-recover-hold=%d"
-              % (side, buycrit, stuck, budcap, hold))
+        secure_lh = diag_max(text, side, "creep-hit-react-lh")
+        secure_lh_intents = occ(text, side, "reason=secure_lh")
+        owner = recovery_owner_counts(text, side)
+        print("  [%s] creep-hit-react-lh=%d secure_lh_intents=%d | recovery-owner total=%d critical=%d soft=%d caution=%d threat=%d"
+              % (side, secure_lh, secure_lh_intents, owner["total"], owner["critical"],
+                 owner["soft"], owner["caution"], owner["threat"]))
 
     print("----- jitter breakdown (which key dominates the sum) -----")
     for side in ("R", "D"):
