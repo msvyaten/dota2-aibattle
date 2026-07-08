@@ -16,10 +16,20 @@ JITTER_KEYS = ("low-hp-nudge", "low-hp-back", "lane-line-fallback", "uphill-repo
 THRESH = {
     "runtime_errors": 0,
     "aib_err": 0,
-    "empty_action": 80,     # per side
-    "jitter_sum": 60,       # per side, sum of JITTER_KEYS maxima
-    "bottle_empty_pct": 50, # per side
+    "empty_action": 80,       # per side
+    "jitter_per_min": 12,     # per side, JITTER_KEYS sum normalized by game minutes
+    "bottle_empty_pct": 50,   # per side
 }
+
+
+def game_minutes(text):
+    """Game length in minutes from the last DotaTime seen in a location report.
+    jitter is raw event counts, so it scales with duration -- a 10-min game logs
+    ~2.5x a 4-min game for identical behavior. Normalizing per minute makes the
+    metric comparable across games (found 07.07: a long game 'regressed' purely
+    on duration)."""
+    ts = [int(m) for m in re.findall(r"AIB\[[RD]\] t=(\d+)s", text)]
+    return max(ts) / 60.0 if ts and max(ts) > 0 else None
 
 
 def side_counter_max(text, side, key):
@@ -46,14 +56,20 @@ def scorecard(match_id):
             ok = False
         print("  %-28s %-6s value=%s limit=%s" % (name, "PASS" if passed else "FAIL", value, limit))
 
-    print("===== scorecard %s =====" % match_id)
+    mins = game_minutes(text)
+    print("===== scorecard %s  (%s) =====" % (match_id, ("%.1f min" % mins) if mins else "duration ?"))
     check("runtime_errors", text.count("Script Runtime Error"), THRESH["runtime_errors"])
     check("aib_err", text.count("AIB ERR"), THRESH["aib_err"])
     for side in ("R", "D"):
         empty = len(re.findall(r"AIB\[%s\][^']*empty_action" % side, text))
         check("empty_action[%s]" % side, empty, THRESH["empty_action"])
         jitter = sum(side_counter_max(text, side, k) for k in JITTER_KEYS)
-        check("jitter_sum[%s]" % side, jitter, THRESH["jitter_sum"])
+        if mins:
+            per_min = round(jitter / mins, 1)
+            check("jitter/min[%s]" % side, per_min, THRESH["jitter_per_min"])
+            print("  %-28s (raw jitter_sum=%d over %.1f min)" % ("", jitter, mins))
+        else:
+            print("  %-28s %-6s (no duration; raw jitter_sum=%d)" % ("jitter/min[%s]" % side, "N/A", jitter))
         samples = re.findall(r"AIB\[%s\][^']*bottle=(-?\d+)" % side, text)
         # bottle=-1 means no bottle owned; count only owned-bottle samples
         owned = [s for s in samples if s != "-1"]
