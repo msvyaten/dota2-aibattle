@@ -6,6 +6,7 @@ local J = require(GetScriptDirectory()..'/FunLib/jmz_func')
 local Style = require(GetScriptDirectory()..'/FunLib/aibattle_style')
 local Const = require(GetScriptDirectory()..'/FunLib/aibattle_constants')
 local AIBUtils = require(GetScriptDirectory()..'/FunLib/aibattle_utils')
+local AIBCreeps = require(GetScriptDirectory()..'/FunLib/aibattle_laning_creeps')
 
 local function dist2D(a, b)
 	if a == nil or b == nil then return math.huge end
@@ -194,6 +195,26 @@ function M.CreepHitReact(ctx)
 		end
 		ctx.diag("creep-hit-react-force-atk")
 		return true
+	end
+
+	-- Securable last-hit beats stepping: creep damage must not walk the bot away from a
+	-- creep that dies to ONE hit right now (user watched 2 creeps lost under the tower
+	-- to a flinch-step, 8885499372 2:40/3:42). The attack is instant, and the aggro wave
+	-- relents once the creep dies. Raw GetAttackDamage (no quelling bonus) keeps the
+	-- check conservative -- if unsure, fall through to the normal step branches.
+	if hp >= 0.30 and ctx.enemyTowerDanger() == nil then
+		local lhCreep, lhSoon = AIBCreeps.GetBestLastHitCreep(bot, ctx.enemyCreeps, bot:GetAttackDamage())
+		if lhCreep ~= nil and lhSoon ~= true
+			and GetUnitToUnitDistance(bot, lhCreep) <= range + 40 then
+			bot.aib_creepReactLast = now
+			Style.Intent(bot, "creep-hit-react", string.format("dist=%.0f hp=%.0f reason=secure_lh", GetUnitToUnitDistance(bot, lhCreep), hp * 100), 1.5)
+			if not alreadySwinging then
+				bot:SetTarget(lhCreep)
+				bot:Action_AttackUnit(lhCreep, true)
+			end
+			ctx.diag("creep-hit-react-lh")
+			return true
+		end
 	end
 
 	if hp >= 0.38 and dist <= range + 160 and ctx.enemyTowerDanger() == nil then
