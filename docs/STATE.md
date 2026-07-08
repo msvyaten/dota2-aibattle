@@ -37,6 +37,41 @@ Next structural task:
 
 Do not start P1 arbiter migration before P3 unless explicitly redirected.
 
+## Cycle Plan — Roles (agreed 2026-07-08)
+
+One tact = one code owner. Do not edit the same Lua files in parallel.
+
+**Opus (Claude) — owns P3-B implementation.** Strictly per SPECS §2.6 (11 cutover
+points, soft-through-desire, `safetyCanAct` trap). 2–3 slices, max ~6 changes per
+match: first the per-move-diag → episode cutover **plus `postmatch.py`/`scorecard.py`
+in the same commit**, then cut ActiveLowHp's safety leg. One slice — one log
+signature — one match between slices. `pre_match_state.py` before every match.
+
+**Codex — review + tooling (in parallel, not the same Lua files):**
+
+1. Checklist-review of Opus's P3-B diffs against the SPECS §2 mandate: all 11
+   cutover points covered, fight↔safety loop dead, episode diag not re-issued
+   per tick.
+2. **First concrete item (small, do now):** update the `postmatch.py` watch section —
+   it still watches buy-escape (9bb91a2); it should watch `creep-hit-react-lh`
+   (secure-LH v2, still unvalidated) and, once P3-B lands, the new episode
+   signatures.
+3. Do NOT fix bottle/rune-seek point-wise — systemic chain, P3+P1 cure it.
+
+**Fable high — acceptance only, one pass after the first P3-B match:** re-run the
+updated postmatch on baseline logs `8886935149`/`8886970304` (old jitter proxy vs
+episodes on the same data — honesty check); accept by low-hp-back episodes ↓ without
+regressing errors/LH/empty_action/bottle; watchability judged by eye. Arbitration if
+a cutover spot isn't covered by §2.6.
+
+**After P3-B acceptance:** P3-C (windup gate + safe-CS + rune-seek), then P1-A —
+Fable reviews the §3.6–3.7 candidate registry for the eager-diag trap *before*
+implementation starts.
+
+**Routine (Opus fast / Sonnet):** swaps, deploy (cp + sha stamp), git batches on
+command, per-match postmatch runs. Watchlist items (P4 empty_action, mutual gambles)
+stay parked unless explicitly ordered.
+
 ## P3 Baseline
 
 Baselines are static snapshots — pinned on the **current fix stack** (code `c1cd4e4`) so
