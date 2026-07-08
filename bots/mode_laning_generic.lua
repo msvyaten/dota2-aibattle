@@ -1061,6 +1061,13 @@ local function ThinkLaningCore(dials, rules)
 	-- Target = own T1 location (guaranteed high ground). 350u-ahead offset overshoots the ramp.
 	if AIBLaneCombat.UphillReposition(runtimeCtx) then return true end
 
+	-- Ranged creep-line spacing: a securable in-range last-hit is already grabbed above
+	-- (cs-inrange) and low-HP/uphill are handled, so before harass/creep-work a ranged
+	-- hero holds at the FAR edge of the creep line instead of standing inside the enemy
+	-- melee pack (user: "ranged bots stand in the creeps and farm though they're ranged").
+	-- Yields once at the safe edge (own dist/rate guards) -> settles at range, not paces.
+	if AIBLaneSafety.RangedMeleePackSpacing(runtimeCtx) then return true end
+
 	-- 2) Harass hero (uphill already handled above; bot is on own ramp or has no terrain disadvantage).
 	--    hero_priority=never skips entirely (pure creep focus).
 	--    hero_priority=always bypasses farm_focus roll and hp-disadvantage gate.

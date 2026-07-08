@@ -109,7 +109,9 @@ function M.RangedMeleePackSpacing(ctx)
 	local range = attackRange(ctx)
 	if now <= 0 or range <= 350 then return false end
 	if bot.aib_meleeSpaceLast ~= nil and now - bot.aib_meleeSpaceLast < 1.4 then return false end
-	local cen, count = ctx.meleeCreepCentroid(ctx.enemyCreeps, 300)
+	-- Detect the melee pack a bit further out (was 300) so a ranged hero holds the edge
+	-- before it is standing deep inside the creeps, not only once already surrounded.
+	local cen, count = ctx.meleeCreepCentroid(ctx.enemyCreeps, 380)
 	if cen == nil or count < 2 then return false end
 	local ownT1 = GetTower(GetTeam(), TOWER_MID_1)
 	local away = ownT1 ~= nil and ownT1:GetLocation() or bot:GetLocation()
