@@ -808,13 +808,16 @@ local function AIB_RunTopDesireArbiter(dials, rules, runtimeCtx, intentCtx)
 	local creepReactReady = recentCreepDamage and attackableCreep
 		and (bot.aib_creepReactLast == nil or nowSafety - bot.aib_creepReactLast >= 0.75)
 		and (bot.aib_creepReliefLast == nil or nowSafety - bot.aib_creepReliefLast >= 1.2)
-	local lowHpRetreatReady = (recentHeroDamage or hp < AIBLanePolicy.Hp.activeRecovery)
-		and hp < AIBLanePolicy.Hp.softRecovery
 	local unstuckArmed = bot.aib_damageAnchorTime ~= nil
 		and nowSafety - bot.aib_damageAnchorTime >= 3.5
 		and ((bot.aib_damageAnchorHp or 100) - hp * 100) >= 5.0
 		and (bot.aib_damageUnstuckLast == nil or nowSafety - bot.aib_damageUnstuckLast >= 3.0)
-	local safetyCanAct = creepReactReady or lowHpRetreatReady or unstuckArmed
+	-- P3-B.1: low-HP retreat left the safety desire (its ActiveLowHp leg is removed below).
+	-- The recover desire and the early-low pre-arbiter gate own low-HP retreat now. Dropping
+	-- lowHpRetreatReady keeps safety from winning ticks whose only action no longer lives here
+	-- (would spike empty_action). early-low is kept this slice so hp<0.35 still retreats
+	-- pre-arbiter; safety only competes at 0.35-0.45 where safetyNoAction caps it.
+	local safetyCanAct = creepReactReady or unstuckArmed
 	-- Same canAct contract for the fight desire: an enemy merely being SEEN must not
 	-- win the tick when every fight action would refuse (out of attack range while
 	-- the approach paths are gated by uphill/low-hp). In-range trade, low-hp kite and
@@ -897,8 +900,9 @@ local function AIB_RunTopDesireArbiter(dials, rules, runtimeCtx, intentCtx)
 			function()
 				if AIBLaneSafety.CreepHitReact(runtimeCtx) then return true end
 				if AIBLaneSafety.DamageUnstuck(runtimeCtx) then return true end
-				if (recentHeroDamage or hp < AIBLanePolicy.Hp.activeRecovery)
-					and AIBLaneRecovery.ActiveLowHp(runtimeCtx, AIBLanePolicy.Hp.softRecovery, true) then return true end
+				-- P3-B.1: low-HP retreat leg removed. The recover desire (and the early-low
+				-- pre-arbiter gate) own low-HP retreat now; keeping it here made safety<->fight
+				-- alternate on the same ActiveLowHp move (cosmetic arbiter choice = twitch).
 				return false
 			end)
 	end

@@ -229,7 +229,10 @@ function M.ActiveLowHp(ctx, hpThreshOverride, retreatOnly)
 		bot.aib_lowHpActiveLast = DotaTime()
 		Motor.Claim(bot, "low-hp", 90, 1.2)
 		bot:Action_MoveToLocation(farBack)
-		ctx.diag("low-hp-safe-step")
+		-- P3-B.1: per-move diag replaced by episode transition (honest jitter proxy). The
+		-- move throttle above still rate-limits the ACTION; noteRecoveryEpisode emits a diag
+		-- only when band/threat/mode changes, so the counter measures decisions not re-issues.
+		noteRecoveryEpisode(bot, classifyBand(hp), recoveryThreatened(bot), "safe-step")
 		return true
 	end
 	if back ~= nil and alreadyBehindBack then
@@ -247,8 +250,8 @@ function M.ActiveLowHp(ctx, hpThreshOverride, retreatOnly)
 			Motor.Claim(bot, "low-hp-hold", 90, 1.2)
 			if bot.aib_lowHpHoldLast == nil or DotaTime() - bot.aib_lowHpHoldLast >= 1.0 then
 				bot.aib_lowHpHoldLast = DotaTime()
-				Style.Intent(bot, "low-hp-hold", string.format("hp=%.0f behind_anchor=1", J.GetHP(bot) * 100), 1.5)
-				ctx.diag("low-hp-committed-hold")
+				-- P3-B.1: committed-hold diag -> episode (mode=hold). See safe-step note.
+				noteRecoveryEpisode(bot, classifyBand(hp), recoveryThreatened(bot), "hold")
 			end
 			return true
 		end
@@ -264,7 +267,9 @@ function M.ActiveLowHp(ctx, hpThreshOverride, retreatOnly)
 		if bot.aib_lowHpActiveLast == nil or DotaTime() - bot.aib_lowHpActiveLast >= 0.8 then
 			bot.aib_lowHpActiveLast = DotaTime()
 			bot:Action_MoveToLocation(back)
-			ctx.diag("low-hp-back")
+			-- P3-B.1: low-hp-back diag -> episode (mode=back). Dominant baseline jitter key
+			-- (123/69 in 8886970304); now counts episodes, not per-tick re-issues.
+			noteRecoveryEpisode(bot, classifyBand(hp), recoveryThreatened(bot), "back")
 		end
 		return true
 	end
@@ -286,7 +291,8 @@ function M.ActiveLowHp(ctx, hpThreshOverride, retreatOnly)
 			-- toward fountain+random when already near the anchor shoved the bot off the
 			-- spot it just reached, restarting the anchor<->fountain zigzag every tick.
 			bot:Action_MoveToLocation(back)
-			ctx.diag("low-hp-watch-step")
+			-- P3-B.1: watch-step diag -> episode (mode=watch-step). See back note.
+			noteRecoveryEpisode(bot, classifyBand(hp), recoveryThreatened(bot), "watch-step")
 			return true
 		end
 	end
