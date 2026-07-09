@@ -7,6 +7,7 @@ local Style = require(GetScriptDirectory()..'/FunLib/aibattle_style')
 local AIBEngine = require(GetScriptDirectory()..'/FunLib/aibattle_engine')
 local AIBUtils = require(GetScriptDirectory()..'/FunLib/aibattle_utils')
 local Motor = require(GetScriptDirectory()..'/FunLib/aibattle_motor')
+local AIBConst = require(GetScriptDirectory()..'/FunLib/aibattle_constants')
 
 local function attackRange(ctx)
 	return ctx.attackRange or ctx.bot:GetAttackRange()
@@ -218,6 +219,21 @@ function M.ActiveLowHp(ctx, hpThreshOverride, retreatOnly)
 				break
 			end
 		end
+	end
+	-- P3-C down-payment (SPECS 2.2 rune-seek in SOFT x safe): while a bottle-rune pickup is
+	-- committed (same 30s window as the forwardness-suppress, mode_laning:1135) and we're not
+	-- critical and not threatened, yield the positional retreat so the persisting pickup move
+	-- completes. Without this, mode=back overrode the pickup on interleaved ticks (8888664145
+	-- D: dist stuck at 91, rune aged 8->12 -> gone -> bottle stayed empty). CRITICAL and
+	-- threatened never yield -- survival always wins over a rune.
+	if hp >= RecoveryBands.critical and not recoveryThreatened(bot)
+		and bot.aib_bottleRuneStarted ~= nil
+		and DotaTime() - bot.aib_bottleRuneStarted < AIBConst.Rune.commitSeconds then
+		if bot.aib_recRuneYieldLast == nil or DotaTime() - bot.aib_recRuneYieldLast >= 1.0 then
+			bot.aib_recRuneYieldLast = DotaTime()
+			Style.Blocked(bot, "recovery-owner", "rune_commit", string.format("hp=%.0f", hp * 100), 2.0)
+		end
+		return false
 	end
 	local back = AIBUtils.SafeRetreatTowerLoc(bot)
 	local alreadyBehindBack = back ~= nil and AIBUtils.IsCloserToFountain(bot, back)
