@@ -442,9 +442,18 @@ KillLock) и спуск Uphill в position-полосу = осознанные �
 внутри HandleCreepWork (:1097). При обёртке кандидатом оборачивается ТОЛЬКО вызов :1073;
 колбэк остаётся внутренностью creep-work action() — иначе двойное владение тиком.
 
-**Базлайн фазы A:** матч `8888664145` (e0bc99f, 6.3 мин, полный) — свежий пост-П3-B.1;
-захватить `grep -c tick-owner` + `low-hp-limit` из него при старте фазы A. Rune-guard
-(взнос П3-C) добавит ленивый Blocked в ActiveLowHp — на реестр не влияет.
+**Базлайн фазы A:** первый принятый матч на HEAD `3957992` (rune-guard) — точный пред-P1
+код; захватить `grep -c tick-owner` + `low-hp-limit` из него при старте фазы A.
+(Ранее назначенный 8888664145 остаётся резервом.)
+
+**ДОПОЛНЕНИЕ К НАМЕРЕННОМУ ИЗМЕНЕНИЮ ФАЗЫ A (Fable 09.07): siege canAct-кап.** P4-контракт
+покрыл safety/fight (`safetyNoAction`/`fightNoAction`), siege — дыра (гейт только
+hasSiegeCandidate). Матч 8888743934: siege побеждает с гистерезисом, удар гейтится (нет
+волны/healing) → 8× empty-win + edge-step↔lane-line пейс у вышки (t=372-378). Фаза A
+обязана добавить `siegeNoAction` (≈42, ниже lanework) + чистый probe (wantsSiege & hpFloor
+& alliedTank|always & not healing-block & wave/dist — только чтения, ловушка §3.6) — без
+этого объединённые выборы фазы A некапнутым siege крадут тики у CS хуже текущего.
+Сигнатура: `reason=window_no_action` в state-desire-siege.
 
 ### 3.7 Фазы миграции (каждая = один коммит, матч между, git-revert как откат)
 

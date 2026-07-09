@@ -88,6 +88,15 @@ implementation starts.
   jitter key; gated on Fable's §3.6–3.7 registry re-pin — anchors are stale) →
   P3-B.2 (architecture completion, metric already banked) → P3-C rest. Prewave
   Farmer/Brawler stays parked (config-level, on explicit order only).
+- **09.07 late (Fable):** registry re-pin DONE (SPECS §3.6.1). Rune guard deployed+pushed
+  (`3957992`). Match 8888743934 forensics: siege desire has NO canAct cap (P4 hole) —
+  siege empty-wins pace at the tower; the cap is folded INTO P1-A phase A as part of its
+  intended change (SPECS §3.6.1 addendum) — do NOT ship it as a separate fix. Prewave
+  verdict: `canonical_farmer` runs `pregame_behavior="aggressive_mid"` — config bug, the
+  farmer must decline early duels; engine already gates duel by config + hpFloor.
+  Creep-aggro disengage in the duel module = small backlog guard after P1-A.
+  Pipeline: farmer config edit → match on 3957992 (validates rune-guard + config, captures
+  phase-A baseline greps) → Opus implements phase A per §3.6.1 → match → Fable acceptance.
 
 **Routine (Opus fast / Sonnet):** swaps, deploy (cp + sha stamp), git batches on
 command, per-match postmatch runs. Watchlist items (P4 empty_action, mutual gambles)
