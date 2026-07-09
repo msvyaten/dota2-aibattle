@@ -459,6 +459,22 @@ KillLock) и спуск Uphill в position-полосу = осознанные �
   иначе кап. Сигнатура: `reason=hp_gate_no_action`.
 Без капов объединённые выборы фазы A некапнутыми десирами крадут тики у CS хуже текущего.
 
+**SCORE-LADDER ФАЗЫ A (Opus 09.07, готово к имплементации — order-preserving к текущему
+порядку хвоста; band-таблица §3.2 = ЦЕЛЬ, подъёмы/спуски = фаза C):**
+last-hit 140 · desire(safety/power-rune/fight/recover/siege) 66-135 как есть · safe-cs 56 ·
+HeroOverCreep 52 · cs-inrange 50 · idle-heal 46 · EmergencyRetreat 45 · FwdPullback 44 ·
+**capы: recoverNoAction 44 / safetyNoAction 44 / siegeNoAction 42 / fightNoAction 40**
+(ниже CS 50-56, выше harass) · EmergencyKillPriority 43.5 · UphillReposition 43 ·
+RangedMeleePackSpacing(только standalone-блок :1073) 41 · HarassAndChase 40 ·
+HandleCreepWork 38 · AbilityHarass 36 · fwd-position 22 · **VisualHold 20** (сохраняет
+порядок кода visual→laneline) · LaneLineFallback 18 · VisualAFK 8 · AntiIdleGlobal 2.
+3 решения (Opus): (1) интерливинг capов/order-preserving в 40-44 разведён (43.5/43 vs
+42/44); (2) VisualHold=20 не 8 (в коде идёт ПЕРЕД lane-line); (3) EmergencyRetreat/
+FwdPullback обёрнуты order-preserving (умрут в P3-B.2, пока полнота).
+Facts-builder (чистые, до элекции): csAllowed/csDistNow/needMove, deathSurvive,
+lowHpHold(через Recovery.Context — low-hp-limit НЕ eager), hitCreep/csSoon, target_loc.
+Ленивые (внутри action): LowHpHoldState-диаг, noteRecoveryEpisode, все Action_*.
+
 ### 3.7 Фазы миграции (каждая = один коммит, матч между, git-revert как откат)
 
 **Фаза A — хвост тика (механическая, средняя).** Блоки :968-1173 → кандидаты; гарды
