@@ -67,6 +67,28 @@ a cutover spot isn't covered by §2.6.
 Fable reviews the §3.6–3.7 candidate registry for the eager-diag trap *before*
 implementation starts.
 
+## Findings 2026-07-09 (Fable) — P3-B.1 accepted, order revised
+
+- **P3-B.1 (`e0bc99f`) ACCEPTED.** Two matches (8888053119, 8888664145): old retreat
+  diags = 0, episodes ≤14/side, empty_action safe, LH ≈ baseline. Honesty check: the
+  old proxy counted 76–123 `low-hp-back` re-issues where the episode counter records
+  ≤14 decisions — ~9× inflation removed by construction.
+- **Rune diagnosis CORRECTION (do NOT patch runes.lua):** in 8888664145 D's bottle-rune
+  window, staging→pickup worked (`pickup_attempt` logged). The rune was lost because
+  `ActiveLowHp mode=back` (SOFT band, threat=false) overrode the committed pickup move
+  on alternating ticks (dist stuck at 91, rune aged out → `gone`). This is a committed-
+  transaction violation in the recovery layer, not a rune-engine bug.
+- **Next fix (Opus): rune-commit yield guard** in `ActiveLowHp` — while a bottle-rune
+  commit window is active (`aib_bottleRuneStarted`, same signal as fwd-suppress) and
+  band is soft/caution and not threatened, positional branches yield so the persisting
+  pickup move completes. Signature: `blocked=recovery-owner reason=rune_commit`.
+  CRITICAL/threatened never yield. This is the §2.2 "rune-seek if reachable" point —
+  a P3-C down-payment, not an ad-hoc patch.
+- **Revised order:** rune guard → P1-A (lane-line-fallback 84/89 is now the dominant
+  jitter key; gated on Fable's §3.6–3.7 registry re-pin — anchors are stale) →
+  P3-B.2 (architecture completion, metric already banked) → P3-C rest. Prewave
+  Farmer/Brawler stays parked (config-level, on explicit order only).
+
 **Routine (Opus fast / Sonnet):** swaps, deploy (cp + sha stamp), git batches on
 command, per-match postmatch runs. Watchlist items (P4 empty_action, mutual gambles)
 stay parked unless explicitly ordered.
