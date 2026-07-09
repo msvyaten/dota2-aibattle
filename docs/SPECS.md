@@ -446,14 +446,18 @@ KillLock) и спуск Uphill в position-полосу = осознанные �
 код; захватить `grep -c tick-owner` + `low-hp-limit` из него при старте фазы A.
 (Ранее назначенный 8888664145 остаётся резервом.)
 
-**ДОПОЛНЕНИЕ К НАМЕРЕННОМУ ИЗМЕНЕНИЮ ФАЗЫ A (Fable 09.07): siege canAct-кап.** P4-контракт
-покрыл safety/fight (`safetyNoAction`/`fightNoAction`), siege — дыра (гейт только
-hasSiegeCandidate). Матч 8888743934: siege побеждает с гистерезисом, удар гейтится (нет
-волны/healing) → 8× empty-win + edge-step↔lane-line пейс у вышки (t=372-378). Фаза A
-обязана добавить `siegeNoAction` (≈42, ниже lanework) + чистый probe (wantsSiege & hpFloor
-& alliedTank|always & not healing-block & wave/dist — только чтения, ловушка §3.6) — без
-этого объединённые выборы фазы A некапнутым siege крадут тики у CS хуже текущего.
-Сигнатура: `reason=window_no_action` в state-desire-siege.
+**ДОПОЛНЕНИЕ К НАМЕРЕННОМУ ИЗМЕНЕНИЮ ФАЗЫ A (Fable 09.07): canAct-капы для ВСЕХ десиров
+(siege + recover).** P4-контракт покрыл safety/fight, siege и recover — дыры.
+- **siege** (матч 8888743934): побеждает с гистерезисом, удар гейтится (нет волны/healing)
+  → 8× empty-win + edge-step↔lane-line пейс у вышки. `siegeNoAction` ≈42 + чистый probe
+  (wantsSiege & hpFloor & alliedTank|always & not healing-block & wave/dist — только
+  чтения, ловушка §3.6). Сигнатура: `reason=window_no_action`.
+- **recover** (матч 8888784979 t=118-123): D на 40-55% за якорем ПОСЛЕ файта — recover:92
+  выигрывает с гистерезисом и возвращает empty 2×+ (твитч под вышкой). Существующий
+  `recoverUseless`-гейт (:934) требует «не было урона» — пост-файт кейс мимо. `recoverNoAction`
+  ≈44 + probe: есть ресурсы (AIB_HasRecoveryResources) ИЛИ не за якорем ИЛИ threatened —
+  иначе кап. Сигнатура: `reason=hp_gate_no_action`.
+Без капов объединённые выборы фазы A некапнутыми десирами крадут тики у CS хуже текущего.
 
 ### 3.7 Фазы миграции (каждая = один коммит, матч между, git-revert как откат)
 
