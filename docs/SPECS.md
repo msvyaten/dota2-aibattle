@@ -403,6 +403,49 @@ HarassAndChase), `lowHpHold` (:1028), `deathSurvive` (:1018). При обёрт�
 чисел. Первый матч сессии = двойного назначения: валидация canonical_farmer + захват
 базлайн-сигнатур для фазы A (scorecard + один `grep -c tick-owner`/`low-hp-limit`).
 
+### 3.6.1 Ре-пин реестра (Fable-high 09.07, код HEAD e0bc99f, файл 1263→1302 строк)
+
+Якоря §3.6 сверены заново после concede/hpBehind/ranged-spacing/secure-LH/П3-B.1.
+
+**Голова тика:** true-emergency :986 · emergency-low :987 · kill-lock :990 ·
+heal-interrupt :992 · early-low :996 · Recovery.Owner (critical-lock, П3-A) :997 ·
+prewave :998 · standoff :999 · desire-арбитр :1000. HandleRespawn :187 (вне арбитра).
+
+**Хвост тика:** safe low-hp CS :1001-1012 · HeroOverCreep :1026 · cs-inrange :1025-1034 ·
+idle-heal :1036 · EmergencyRetreat :1040 (→П3-B.2) · FwdPullback :1046 (→П3-B.2) ·
+deathSurvive :1050-1051 · EmergencyKillPriority :1056 · LowHpHold/ActiveLowHp :1060-1062
+(→П3) · UphillReposition :1066 · **RangedMeleePackSpacing :1073 — НОВЫЙ, в §3.6
+отсутствует** · HarassAndChase :1082 · HandleCreepWork :1084 · AbilityHarass :1121 ·
+fwd-position :1125-1205 · VisualHoldHeartbeat :1209 · VisualAFK :1210 ·
+LaneLineFallback def :689 вызов :1211 · AntiIdleGlobal :1213.
+Меж-стадийные записи: csAllowed/needMove :1022-1024 → runtimeCtx :1080-1081 (+ аргументы
+HandleCreepWork :1092-1094) · deathSurvive :1050-1051 · lowHpHold :1061.
+
+**Чистота (ловушка §3.6) — перепроверено:** `GetBestLastHitCreep` (creeps.lua:9-30)
+чист ✓; csAllowed/needMove/deathSurvive чисты ✓; `LowHpHoldState` ПО-ПРЕЖНЕМУ пишет
+`low-hp-limit` (recovery.lua:351) — только ленивый ⚠️; НОВОЕ: `noteRecoveryEpisode`
+(recovery.lua:168) пишет Intent + эпизод-стейт — весь ActiveLowHp остаётся ленивым в
+action() ⚠️; `recoveryThreatened`/`classifyBand` чисты ✓.
+
+**⚠️ НАХОДКА 1 — скоры §3.6 НЕ монотонны текущему порядку хвоста (ломает эквивалентность
+фазы A).** Два инверта: (a) `EmergencyKillPriority` = desire 122, но в коде бежит ПОСЛЕ
+lanework-блоков (:1056 после safe-cs/cs-inrange/idle-heal) — со скором 122 он начнёт
+преемптить CS, которого сейчас уступает; (b) `UphillReposition` (position 28) бежит ДО
+HarassAndChase (lanework 42) — полосная модель инвертирует их, и харасс отберёт тики,
+где сейчас бот сначала выходит с лоуграунда (реинтродукция lowground-трейдов).
+**Решение для фазы A:** скоры СТРОГО монотонны текущему порядку (EmergencyKill ≈ 44,
+Uphill ≈ 43 — временно lanework-диапазон); подъём EmergencyKill к 122 (слияние с
+KillLock) и спуск Uphill в position-полосу = осознанные поведенческие изменения фазы C,
+каждое со своим матчем. Полосная таблица §3.2 — целевое состояние, не фаза A.
+
+**⚠️ НАХОДКА 2 — RangedMeleePackSpacing двуликий:** самостоятельный блок :1073 И колбэк
+внутри HandleCreepWork (:1097). При обёртке кандидатом оборачивается ТОЛЬКО вызов :1073;
+колбэк остаётся внутренностью creep-work action() — иначе двойное владение тиком.
+
+**Базлайн фазы A:** матч `8888664145` (e0bc99f, 6.3 мин, полный) — свежий пост-П3-B.1;
+захватить `grep -c tick-owner` + `low-hp-limit` из него при старте фазы A. Rune-guard
+(взнос П3-C) добавит ленивый Blocked в ActiveLowHp — на реестр не влияет.
+
 ### 3.7 Фазы миграции (каждая = один коммит, матч между, git-revert как откат)
 
 **Фаза A — хвост тика (механическая, средняя).** Блоки :968-1173 → кандидаты; гарды
