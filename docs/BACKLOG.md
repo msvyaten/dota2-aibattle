@@ -23,22 +23,31 @@
       эпизод-стейт, делегат в CriticalLock 1:1. Behavior-preserving.
 - [x] **П3-A срез 2** (6da86e5): роутинг `EmergencyRetreat`(:1007) / `ForwardLowHpPullback`(:1013) через
       Owner, dual-emit. Behavior-preserving.
-- [ ] **П3-B — растворение**: `ActiveLowHp`/`regenLane`/heal-pullback/step-back → band-действия
-      эпизод-ядра; per-move диаги (`low-hp-back`/`safe-step`/`watch-step`) → эпизоды; safety-нога
-      ActiveLowHp отрезается (петля fight↔safety умирает). **В ТОМ ЖЕ коммите** обновить
-      `postmatch.py`+`scorecard.py` (JITTER_KEYS += `recovery-owner-episodes`). Выход: low-hp-back→0,
-      эпизодов ≤15/матч, jitter_sum падает скачком (прокси честный).
-- [ ] **П3-C — семантика**: windup-гейт (убить 8884555745) + SOFT safe-CS (поглощает :968) +
-      rune-seek в SOFT×safe (чинит «руна лежала, он стоял») + фонтан-эскалация из CRITICAL×safe.
+- [x] **П3-B.1** (e0bc99f, ВАЛИД ✓✓ матчи 8888053119/8888664145): 4 retreat-диага ActiveLowHp
+      (`low-hp-back`/`safe-step`/`watch-step`/`committed-hold`) → эпизоды recovery-owner; safety-нога
+      ActiveLowHp + `lowHpRetreatReady` из safetyCanAct убраны (петля fight↔safety мертва). low-hp-back=0,
+      empty≤80, LH≈baseline, freeze=0. postmatch эпизод-счёт добавил Кодекс (d824d6c).
+- [ ] **П3-B.2** — destination-aware Owner: растворить `regenLane`/heal-pullback/`EmergencyRetreat`/
+      `ForwardLowHpPullback` (⚠️ оба live-конфига `regen_lane` — портировать `xpRecoveryLoc` в эпизод-ядро,
+      иначе точка регена уедет с in-lane на SafeRetreatTowerLoc = регресс фарма), `LowHpHoldState`→Context,
+      early-low→десир-сдвиг, 6 aib_*Last→aib_recoveryEpisode. Опасный, ПОСЛЕ П1-A (ребейз на новый хвост).
+- [x] **П3-C взнос: rune-commit yield guard** (3957992, задеплоен): ActiveLowHp не отступает от достижимой
+      руны в SOFT×safe (`reason=rune_commit`). Матч-валидация ждёт рун-окна.
+- [ ] **П3-C остаток — семантика**: windup-гейт (убить 8884555745) + SOFT safe-CS (поглощает :968) +
+      фонтан-эскалация из CRITICAL×safe.
       Выход (глазом): на low-HP бот ЛИБО дерётся/добивает, ЛИБО идёт в одну сторону, ЛИБО стоит
       с целью — никаких «стоит и грустит».
 - **Критерий выхода П3:** stationary>10s при живом враге ≤2/матч (2 матча); freeze=0; петель
   fight↔safety нет; windup-cancel нет; low-hp-вклад в jitter → эпизоды.
 
-### П1 — арбитр = единственный владелец тика · SPECS §3 · Opus по реестру · ПОСЛЕ П3
-- [ ] **П1-A**: хвост тика `mode_laning:968-1173` → кандидаты (реестр §3.6-3.7). Базлайн есть
-      (8885447129/8886710243). ⚠️ Ловушка §3.6: факты с диаг-сайд-эффектами (`LowHpHoldState`→
-      `low-hp-limit`) ленивы, не eager.
+### П1 — арбитр = единственный владелец тика · SPECS §3 · Opus по реестру · СЕЙЧАС ГЛАВНОЕ
+- [ ] **П1-A фаза A — ГОТОВО К ИМПЛЕМЕНТАЦИИ (Opus, свежая сессия)**: хвост тика
+      `mode_laning:1001-1213` → кандидаты. **Blueprint полный в SPECS §3.6.1** (реестр ре-пинен к
+      HEAD, score-ladder со всеми числами, facts-builder, 3 решения). Намеренное изменение: капы
+      `siegeNoAction`/`recoverNoAction` (+ существующие safety/fight) — оба десира пустуют-побеждают
+      (обс 8888743934/8888784979). Скоры order-preserving (band-таблица §3.2 = цель, подъёмы = фаза C).
+      ⚠️ Ловушка §3.6: `LowHpHoldState`→`low-hp-limit` и `noteRecoveryEpisode` ленивы. Базлайн захвачен:
+      **8888784979** (tick-owner R=151/D=165, low-hp-limit=4, код 3957992). Один коммит + git-revert.
 - [ ] **П1-B**: голова тика (:953-966) → urgent-кандидаты.
 - [ ] **П1-C**: band-refractory (12+9 suppress→1 правило) + commit-унификация (4 дубля→1) +
       windup-гейт генерализ + Motor v1 retire + чистка мёртвых v2-клеймов.
@@ -56,6 +65,17 @@
 - [ ] **Архетипы farmer↔brawler**: фармер недо-CS'ит (retreat_caution напряжение); подтвердить
       что фармер играет ОТЛИЧНО (econ→конверсия) без фида. Config, judgment. Валидировать на
       стомп-игре (тест `concede_losing_lane`, которого ровные игры не дали).
+- [ ] **★ secure-LH v2 МЁРТВ** (c1cd4e4): `creep-hit-react-lh=0` три матча подряд (8886970304/
+      8888664145/8888784979). Расширенная ветка (раньше+range80+quelling-dmg) не фаерит — Opus
+      расследовать УСЛОВИЯ входа (creeps.lua/safety.lua). Сигнатура-мониторинг в postmatch уже есть.
+- [ ] **Прегейм «бьют→отойди»** (default-режим): D отклоняет дуэль (farmer=default ✓), но НЕТ
+      дисенгейджа под огнём — R настреливает до <35% к t=10 (8888784979). Малый гард в
+      `aibattle_laning_duel.lua` (hp-drop под обстрелом → шаг назад). Бэклог после П1-A.
+- [ ] **Курьер-burst на бутылку**: боты умеют `COURIER_ACTION_BURST` (вендор `ability_item_usage:673/733`),
+      но гейтится условиями OHA. Форсить ускорение когда курьер везёт bottle к герою. Малый твик.
+- [ ] **Руна dead-window приоритет**: R стейджил 4:00-руну вместо фрифарма в окно смерти врага, возврат
+      влетел в реснувшегося (89→15%, 8888784979 t=225-259). Стейджинг руны понижать в приоритете, когда
+      враг мёртв и есть безопасный фарм. Тюн `stage_window`, бэклог.
 
 ---
 

@@ -1,6 +1,29 @@
 # AIBattle State
 
-Last updated: 2026-07-08.
+Last updated: 2026-07-09.
+
+## ▶ NEXT SESSION START HERE (fresh Opus context)
+
+**Task: implement P1-A phase A.** One commit, git-revert = rollback. Everything needed is
+already in the repo — do NOT re-derive:
+- **Blueprint = `SPECS.md` §3.6 / §3.6.1** (registry re-pinned to HEAD, full score ladder
+  with every number, facts-builder inventory, 3 decisions, siege+recover canAct caps).
+- **What:** wrap tail-of-tick blocks `mode_laning_generic.lua:1001-1213` into arbiter
+  candidates (`AIBLaneArbiter.Candidate`/`Run`, arbiter.lua). Move pure inter-stage reads to
+  a facts builder before the election; keep diag/action side-effects lazy inside `action()`.
+- **Only intended behavior change:** the no-action caps (siege/recover join safety/fight).
+  Scores order-preserving (band table §3.2 is the phase-C target, not phase A).
+- **Baseline for acceptance = match 8888784979** (tick-owner R=151/D=165, low-hp-limit=4,
+  code 3957992). Phase criterion: >=95% one tick-owner; jitter/LH/empty_action not worse.
+- After coding: diff review → deploy → match → **Fable** acceptance.
+- **Aside while in the code:** secure-LH v2 is dead (`creep-hit-react-lh=0` three matches) —
+  investigate its entry conditions (BACKLOG TIER 2).
+
+**Repo state at handoff:** branch `phase-2-team-dials` synced with origin (HEAD `af6c2c1`);
+LIVE = code `3957992` (rune-guard) + `canonical_farmer` pregame=default (uncommitted, living
+matchup); matchup R=brawler / D=farmer. Run `pre_match_state.py` to confirm.
+
+---
 
 Static source of truth before starting a match: stage, next allowed task, what not to
 touch, and P3 baselines. Long design notes live in `docs/SPECS.md`,
