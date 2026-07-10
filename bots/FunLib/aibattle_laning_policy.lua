@@ -67,12 +67,21 @@ M.Score = {
 	recoverDanger = 102,
 	recoverRunePenalty = -18,
 	recoverCreepDamagePenalty = -14,
+	-- Score cap when recover has low-HP SYMPTOMS but no feasible action: behind the safe
+	-- anchor, no recovery resources and no live threat, so the retreat move just twitches
+	-- under the tower (8888784979 t=118-123: recover:92 won post-fight, empty 2x+). Below
+	-- CS (50-56) so a securable last-hit takes the tick instead. See safetyNoAction.
+	recoverNoAction = 44,
 
 	siegeBase = 66,
 	siegePushScale = 20,
 	siegeEnemyDeadBonus = 22,
 	siegeDoubleDamageBonus = 18,
 	siegeLowHpPenalty = -18,
+	-- Score cap when the siege desire wins but every siege action is gated (no wave
+	-- cover / healing tank / hp floor), so it empty-wins and paces at the tower edge
+	-- (8888743934: 8x empty-win + edge-step<->lane-line pace). Below CS. See safetyNoAction.
+	siegeNoAction = 42,
 }
 
 M.SiegeConfig = {
@@ -141,16 +150,19 @@ function M.Safety(args)
 		add(parts, "creep_dmg", M.Score.safetyCreepDamageBonus)
 	end
 	local reason = "recent_damage"
+	local capped = false
 	-- canAct contract (P4): damage symptoms alone must not outbid a live fight when
 	-- every safety action is currently infeasible/throttled. Empty safety wins were
 	-- 8-14 per match (8882870342 t=0-18: safety:116 won 8x, 11 empty_action).
 	if args.safetyCanAct == false and hp >= M.Hp.danger then
 		score = math.min(score, M.Score.safetyNoAction)
 		reason = "symptom_no_action"
+		capped = true
 	end
 	return {
 		score = score,
 		reason = reason,
+		capped = capped,
 		detail = detail(base, parts, string.format("hp=%.0f creep=%s hero=%s", hp * 100, tostring(recentCreepDamage), tostring(recentHeroDamage))),
 	}
 end
@@ -210,14 +222,17 @@ function M.Fight(args)
 		add(parts, "rune", M.Score.fightRuneBonus)
 	end
 	local reason = "enemy_seen"
+	local capped = false
 	-- canAct contract (P4), fight side: seen-but-unreachable must not own the tick.
 	if args.fightCanAct == false then
 		score = math.min(score, M.Score.fightNoAction)
 		reason = "seen_unreachable"
+		capped = true
 	end
 	return {
 		score = score,
 		reason = reason,
+		capped = capped,
 		detail = detail(base, parts, string.format("dist=%.0f hp=%.0f ehp=%.0f", enemyDist, hp * 100, enemyHp * 100)),
 	}
 end
@@ -244,9 +259,22 @@ function M.Recover(args)
 		score = score + M.Score.recoverCreepDamagePenalty
 		add(parts, "creep_dmg", M.Score.recoverCreepDamagePenalty)
 	end
+	local reason = "hp_gate"
+	local capped = false
+	-- canAct contract (P4), recover side: cap a symptom-only recover so it loses to CS.
+	-- Only in the danger band (>=0.35) -- a critical/danger retreat must still win. The
+	-- recoverUseless veto (mode_laning) removes the no-damage case; this cap adds the
+	-- post-fight case where recentDamage keeps that veto from firing but the bot is still
+	-- behind its anchor with nothing to do. See SPECS 3.6.1.
+	if args.recoverCanAct == false and hp >= M.Hp.danger then
+		score = math.min(score, M.Score.recoverNoAction)
+		reason = "hp_gate_no_action"
+		capped = true
+	end
 	return {
 		score = score,
-		reason = "hp_gate",
+		reason = reason,
+		capped = capped,
 		detail = detail(base, parts, string.format("hp=%.0f", hp * 100)),
 	}
 end
@@ -269,9 +297,19 @@ function M.Siege(args)
 		score = score + M.Score.siegeLowHpPenalty
 		add(parts, "low_hp", M.Score.siegeLowHpPenalty)
 	end
+	local reason = "tower_window"
+	local capped = false
+	-- canAct contract (P4), siege side: cap a siege desire whose action is fully gated so
+	-- it stops empty-winning and pacing at the tower. See safetyNoAction / SPECS 3.6.1.
+	if args.siegeCanAct == false then
+		score = math.min(score, M.Score.siegeNoAction)
+		reason = "window_no_action"
+		capped = true
+	end
 	return {
 		score = score,
-		reason = "tower_window",
+		reason = reason,
+		capped = capped,
 		detail = detail(base, parts, string.format("hp=%.0f", hp * 100)),
 	}
 end

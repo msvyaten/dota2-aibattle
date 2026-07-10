@@ -363,14 +363,17 @@ function M.ForwardLowHpPullback(ctx)
 	return true
 end
 
-function M.LowHpHoldState(ctx)
+-- Pure classifier: (hold, danger). Emits NO diag -- the low-hp-limit signature is emitted
+-- only by M.LowHpHoldState below, kept lazy in the tail arbiter so its per-match count
+-- matches baseline (SPECS 3.6.1 telemetry-equivalence trap). The election facts-builder
+-- calls this probe to decide the ActiveLowHp candidate without inflating low-hp-limit.
+function M.LowHpHoldProbe(ctx)
 	if ctx.debugSkeleton then return false, false end
 	local bot = ctx.bot
 	local holdThresh = ctx.rules.low_hp_hold or 0.45
 	if holdThresh <= 0 or J.GetHP(bot) >= holdThresh then return false, false end
 	local ownT1 = GetTower(GetTeam(), TOWER_MID_1)
 	if ownT1 == nil or GetUnitToUnitDistance(bot, ownT1) >= 900 then return false, false end
-	Style.DiagRL(bot, "low-hp-limit", 3)
 	local danger = bot:WasRecentlyDamagedByCreep(2.0) or bot:WasRecentlyDamagedByAnyHero(2.0)
 	if not danger then
 		local nearHeroes = bot:GetNearbyHeroes(math.max(attackRange(ctx) + 180, 850), true, BOT_MODE_NONE)
@@ -384,6 +387,12 @@ function M.LowHpHoldState(ctx)
 		end
 	end
 	return true, danger
+end
+
+function M.LowHpHoldState(ctx)
+	local hold, danger = M.LowHpHoldProbe(ctx)
+	if hold then Style.DiagRL(ctx.bot, "low-hp-limit", 3) end
+	return hold, danger
 end
 
 return M

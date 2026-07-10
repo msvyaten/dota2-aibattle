@@ -189,11 +189,11 @@ def check_aibattle_runtime_modules():
 def check_top_desire_policy_boundary():
     print("[check] top desire policy boundary", flush=True)
     text = (ROOT / "bots" / "mode_laning_generic.lua").read_text(encoding="utf-8", errors="ignore")
-    marker = "local function AIB_RunTopDesireArbiter"
+    marker = "local function AIB_BuildDesireCandidates"
     start = text.find(marker)
     end = text.find("-- Main laning policy.", start)
     if start == -1 or end == -1:
-        print("[fail] cannot locate AIB_RunTopDesireArbiter boundary", flush=True)
+        print("[fail] cannot locate AIB_BuildDesireCandidates boundary", flush=True)
         return False
     body = text[start:end]
     forbidden = ["local score", "score =", "score +", "score -"]

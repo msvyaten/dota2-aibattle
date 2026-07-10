@@ -170,4 +170,63 @@ function M.Think(ctx)
 	return true
 end
 
+-- Pure feasibility probe (canAct contract, P4): true only when M.Think would ACT this
+-- tick. Mirrors Think's return-false gates WITHOUT any side effect (no blocked/state/diag
+-- /action), so a fully-gated siege desire (no wave cover / healing tank / hp floor) stops
+-- winning the tick and pacing at the tower (8888743934). Keep in lock-step with Think's
+-- gate chain above; only the return-false conditions matter here.
+function M.CanAct(ctx)
+	local bot = ctx.bot
+	local dials = ctx.dials or {}
+	local rules = ctx.rules or {}
+	local attackRange = ctx.attackRange or bot:GetAttackRange()
+
+	local twr = ctx.enemyTowerDanger()
+	if twr == nil then
+		local midT1 = GetTower(GetOpposingTeam(), TOWER_MID_1)
+		if midT1 ~= nil and midT1:IsAlive()
+			and ctx.alliedCreepsAtTower(midT1, midT1:GetAttackRange() + 220) >= 2 then
+			twr = midT1
+		end
+	end
+	if twr == nil then return false end
+
+	local towerAggr = rules.tower_aggression or "default"
+	if towerAggr == "never" then return false end
+	if ctx.towerThreatening(twr) and towerAggr ~= "always" then return false end
+
+	local cwp = rules.creep_wave_priority or "last_hit_only"
+	local enemy, enemyDist = ctx.nearestEnemyHero(2200)
+	local enemyFarOrWeak = enemy == nil or enemyDist > 1300 or J.GetHP(enemy) < 0.28
+	local waveCount = ctx.alliedCreepsAtTower(twr, twr:GetAttackRange() + 180)
+	local waveAtTower = waveCount >= 1
+	local advantageSiege = ctx.enemyDeadRecently() or (waveAtTower and enemyFarOrWeak)
+	local wantsSiege = towerAggr == "always" or cwp == "push" or advantageSiege or (dials.push_desire or 0.5) >= 0.65
+	local siegeHpFloor = ctx.enemyDeadRecently() and 0.22 or 0.35
+	if towerAggr == "always" then siegeHpFloor = ctx.enemyDeadRecently() and 0.20 or 0.28 end
+	if not wantsSiege or J.GetHP(bot) < siegeHpFloor then return false end
+
+	local twrDist = GetUnitToUnitDistance(bot, twr)
+	local alliedTank = false
+	local target = twr:GetAttackTarget()
+	if target ~= nil and target:GetTeam() == GetTeam() then alliedTank = true end
+	if not alliedTank then
+		for _, creep in pairs(ctx.allyCreeps or {}) do
+			if J.IsValid(creep) and GetUnitToUnitDistance(creep, twr) <= twr:GetAttackRange() + 120 then
+				alliedTank = true; break
+			end
+		end
+	end
+	if not alliedTank and towerAggr ~= "always" then
+		-- only the enemy-dead no-tank STEP acts; the plain no-tank case returns empty
+		return ctx.enemyDeadRecently() and twrDist > attackRange + 60
+	end
+	if not alliedTank then return true end -- always without tank still hits/steps
+
+	local inTowerAttackRange = twrDist <= attackRange + 60
+	local safeHealingHit = inTowerAttackRange and J.GetHP(bot) >= (ctx.enemyDeadRecently() and 0.30 or 0.38)
+	if ctx.healingChannelActive() and not ctx.enemyDeadRecently() and not safeHealingHit then return false end
+	return true -- past every gate: Think acts (hit / step / commit)
+end
+
 return M
