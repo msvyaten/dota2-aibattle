@@ -967,6 +967,13 @@ local function AIB_BuildDesireCandidates(dials, rules, runtimeCtx, intentCtx)
 		if recoverUseless then
 			Style.Blocked(bot, "recover-candidate", "no_resources_behind_safe",
 				string.format("hp=%.0f score=%.0f", hp * 100, recoverPolicy.score or 0), 3.0)
+		elseif recoverPolicy.capped then
+			-- A capped recover means "no feasible action" -- don't enter the election at
+			-- all. At cap=44 it still outbid creep-work(38) on quiet ticks and empty-won
+			-- first, then fell through: 191 no-op first-wins in 8903988046 (the dominant
+			-- empty_action source). Veto keeps the hp_gate_no_action signature via this log.
+			Style.Blocked(bot, "recover-candidate", "no_action_capped",
+				string.format("hp=%.0f score=%.0f", hp * 100, recoverPolicy.score or 0), 3.0)
 		else
 			candidates[#candidates + 1] = AIBTopArbiter.Candidate("recover", recoverPolicy.score, recoverPolicy.reason,
 				recoverPolicy.detail,

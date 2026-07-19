@@ -603,8 +603,16 @@ local function countNonSelfAllies(bot, radius)
 end
 function M.MayDive(bot)
     local policy = M.Get().rules.dive_policy or DEFAULT_DIVE
-    if policy == "always" then return true end
     if policy == "never" then return false end
+    -- Engine survival floor (beats every policy incl. "always" -- same principle as
+    -- concede: engine robustness over config aggression). 1v1: a second death ends the
+    -- game, so once we've died never dive below the second-death band; and below 30%
+    -- the tower finishes the diver on any life. 8903988046: D chased a finish-dive,
+    -- the enemy tower took >1/3 of his HP (87->30), second death lost the game.
+    local hpDive = bot:GetHealth() / bot:GetMaxHealth()
+    if hpDive < 0.30 then return false end
+    if GetHeroDeaths(bot:GetPlayerID()) >= 1 and hpDive < 0.40 then return false end
+    if policy == "always" then return true end
     -- finishing a low-HP enemy in range: allowed for finish_only and above
     local he = bot:GetNearbyHeroes(900, true, BOT_MODE_NONE)
     if he then

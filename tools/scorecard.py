@@ -16,7 +16,9 @@ JITTER_KEYS = ("low-hp-nudge", "low-hp-back", "lane-line-fallback", "uphill-repo
 THRESH = {
     "runtime_errors": 0,
     "aib_err": 0,
-    "empty_action": 80,       # per side
+    "empty_per_min": 13,      # per side; was absolute 80 calibrated on ~6-min games --
+                              # first long game (8903988046, 16.5 min) false-FAILed at
+                              # comparable per-min rates (same lesson as raw jitter)
     "jitter_per_min": 12,     # per side, JITTER_KEYS sum normalized by game minutes
     "bottle_empty_pct": 50,   # per side
 }
@@ -62,7 +64,11 @@ def scorecard(match_id):
     check("aib_err", text.count("AIB ERR"), THRESH["aib_err"])
     for side in ("R", "D"):
         empty = len(re.findall(r"AIB\[%s\][^']*empty_action" % side, text))
-        check("empty_action[%s]" % side, empty, THRESH["empty_action"])
+        if mins:
+            check("empty/min[%s]" % side, round(empty / mins, 1), THRESH["empty_per_min"])
+            print("  %-28s (raw empty_action=%d over %.1f min)" % ("", empty, mins))
+        else:
+            print("  %-28s %-6s (no duration; raw empty_action=%d)" % ("empty/min[%s]" % side, "N/A", empty))
         jitter = sum(side_counter_max(text, side, k) for k in JITTER_KEYS)
         if mins:
             per_min = round(jitter / mins, 1)
