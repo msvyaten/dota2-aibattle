@@ -76,9 +76,9 @@ signature — one match between slices. `pre_match_state.py` before every match.
 1. Checklist-review of Opus's P3-B diffs against the SPECS §2 mandate: all 11
    cutover points covered, fight↔safety loop dead, episode diag not re-issued
    per tick.
-2. **DONE by Codex:** `postmatch.py` watch section now reports `creep-hit-react-lh`
-   (secure-LH v2, still unvalidated) and `recovery-owner` episode signatures for
-   P3-B acceptance.
+2. **DONE:** `postmatch.py` watch section reports `recovery-owner` episode
+   signatures for P3-B acceptance (plus recover-cap/dive-floor triage signatures;
+   secure-LH v2 retired 19.07 -- structurally shadowed by last-hit-urgent 140).
 3. Do NOT fix bottle/rune-seek point-wise — systemic chain, P3+P1 cure it.
 
 **Fable high — acceptance only, one pass after the first P3-B match:** re-run the

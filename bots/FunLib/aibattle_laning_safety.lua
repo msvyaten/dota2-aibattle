@@ -173,31 +173,14 @@ function M.CreepHitReact(ctx)
 	-- own the tick without touching the order.
 	local alreadySwinging = bot:GetCurrentActionType() == BOT_ACTION_TYPE_ATTACK
 
-	-- Securable last-hit beats stepping: creep damage must NOT walk the bot off a creep
-	-- that dies to one hit right now (user watched 2 creeps lost under the tower to a
-	-- flinch-step, 8885499372 2:40/3:42). Runs BEFORE the trade/step branches so it wins
-	-- at ANY react HP; Action_AttackUnit closes the last ~80u for the instant hit and the
-	-- aggro wave relents once the creep dies. Uses the same quelling-adjusted damage as
-	-- the real last-hit so it fires as often (raw-damage-only version fired 0x, 8886850251).
-	if hp >= 0.30 and ctx.enemyTowerDanger() == nil then
-		local lhDmg = bot:GetAttackDamage()
-		local qSlot = bot:FindItemSlot("item_quelling_blade")
-		if qSlot ~= nil and qSlot >= 0 and bot:GetItemSlotType(qSlot) == ITEM_SLOT_TYPE_MAIN then
-			lhDmg = lhDmg + (range > 310 and 4 or 8)
-		end
-		local lhCreep, lhSoon = AIBCreeps.GetBestLastHitCreep(bot, ctx.enemyCreeps, lhDmg)
-		if lhCreep ~= nil and lhSoon ~= true
-			and GetUnitToUnitDistance(bot, lhCreep) <= range + 80 then
-			bot.aib_creepReactLast = now
-			Style.Intent(bot, "creep-hit-react", string.format("dist=%.0f hp=%.0f reason=secure_lh", GetUnitToUnitDistance(bot, lhCreep), hp * 100), 1.5)
-			if not alreadySwinging then
-				bot:SetTarget(lhCreep)
-				bot:Action_AttackUnit(lhCreep, true)
-			end
-			ctx.diag("creep-hit-react-lh")
-			return true
-		end
-	end
+	-- secure-LH v2 RETIRED (19.07, Fable investigation): a securable exact last-hit
+	-- ("creep dies to this hit now") is owned at the arbiter level by the last-hit-urgent
+	-- candidate (score 140), which preempts this safety-desire handler (score <=134) on
+	-- exactly the ticks it would have fired. So CreepHitReact only runs when NO exact
+	-- last-hit exists -> the old secure_lh branch was structurally unreachable
+	-- (creep-hit-react-lh=0 for 4 matches straight). Its original under-tower case
+	-- (8885499372) was also gated off by enemyTowerDanger==nil. Purpose absorbed by
+	-- last-hit-urgent; the trade/edge/step branches below own the creep-damage reaction.
 
 	local repeatedDamage = (bot.aib_creepReactCount or 0) >= 3
 	local safeToTrade = hp >= 0.55 and dist <= range + 80 and ctx.enemyTowerDanger() == nil

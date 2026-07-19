@@ -70,13 +70,14 @@ def report(match_id):
     print("----- outcome -----")
     print("  winner=%s | R=%s D=%s" % (win, cfg("R"), cfg("D")))
 
-    print("----- watch: secure-LH + P3 owner episodes -----")
+    print("----- watch: recover cap + dive floor + P3 owner episodes -----")
     for side in ("R", "D"):
-        secure_lh = diag_max(text, side, "creep-hit-react-lh")
-        secure_lh_intents = occ(text, side, "reason=secure_lh")
+        cap_veto = occ(text, side, "reason=no_action_capped")
+        cap_hit = occ(text, side, "reason=hp_gate_no_action")
+        no_dive = diag_max(text, side, "no-dive")
         owner = recovery_owner_counts(text, side)
-        print("  [%s] creep-hit-react-lh=%d secure_lh_intents=%d | recovery-owner total=%d critical=%d soft=%d caution=%d threat=%d"
-              % (side, secure_lh, secure_lh_intents, owner["total"], owner["critical"],
+        print("  [%s] recover_cap_veto=%d hp_gate_no_action=%d no-dive=%d | recovery-owner total=%d critical=%d soft=%d caution=%d threat=%d"
+              % (side, cap_veto, cap_hit, no_dive, owner["total"], owner["critical"],
                  owner["soft"], owner["caution"], owner["threat"]))
 
     print("----- jitter breakdown (which key dominates the sum) -----")
