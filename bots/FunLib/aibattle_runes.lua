@@ -406,6 +406,21 @@ function M.SeekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 			end
 			local sameStageWindow = bot.aib_bottleRuneStageWindow == nextSpawnAt
 			if sameStageWindow then
+				-- Dead-window abort: the spawn time has already passed and NO rune is available
+				-- (enemy took it / known empty -> nearestDist stays inf), yet the stage hold below
+				-- keeps the bot dancing at the empty spot until aib_bottleRuneStageUntil
+				-- (nextSpawnAt+7). 8903907295 W1 t=6:01-6:07: stage_hold eta=-4->-6, nearest=inf.
+				-- Release the stage and block re-staging this window so lane/recovery takes the tick.
+				if secsToSpawn < -1.5 and nearestDist == math.huge then
+					Style.Blocked(bot, diagKey, "stage_dead_window", string.format("eta=%.0f nearest=inf", secsToSpawn), 4.0)
+					bot.aib_bottleRuneStageWindow = nil
+					bot.aib_bottleRuneStageUntil = nil
+					bot.aib_bottleRuneStageTarget = nil
+					bot.aib_bottleRuneStageClosedWindow = nextSpawnAt
+					bot.aib_bottleRuneStageBlockedWindow = nextSpawnAt
+					bot.aib_bottleRuneStageBlockedUntil = now + 3.0
+					return false
+				end
 				if bot.aib_bottleRuneStageUntil ~= nil and now <= bot.aib_bottleRuneStageUntil
 					and bot.aib_bottleRuneStageTarget ~= nil then
 					local followDist = GetUnitToLocationDistance(bot, bot.aib_bottleRuneStageTarget)
@@ -483,8 +498,10 @@ function M.SeekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 			end
 			-- Travel-aware departure: leaving a 20s window for a 6s walk parks the bot
 			-- at the spot for 10+ idle seconds (8882969763: left at eta=17, dist=1708,
-			-- hp=99 - lost farm for nothing). Depart when travel time + 5s buffer says so.
-			stageWindow = math.min(stageWindow, stageDist / 300.0 + 5.0)
+			-- hp=99 - lost farm for nothing). Depart when travel time + buffer says so.
+			-- Buffer trimmed 5->2s (user 19.07: bots leave lane ~3s too early to check the
+			-- rune); still arrives ~2s before spawn, enough to stage.
+			stageWindow = math.min(stageWindow, stageDist / 300.0 + 2.0)
 			if stageRune ~= nil and stageLoc ~= nil and secsToSpawn >= 0 and secsToSpawn <= stageWindow and stageDist <= stageMaxDist then
 				if laneAware and stageDist > 700 and hp > 0.62 and hasLastHitWindow(bot) and secsToSpawn > 5 then
 					Style.Blocked(bot, diagKey, "last_hit_window", string.format("stage=1 rune=%.0f hp=%.0f eta=%.0f", stageDist, hp*100, secsToSpawn), 6.0)

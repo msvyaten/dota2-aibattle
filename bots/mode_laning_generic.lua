@@ -657,10 +657,14 @@ local function AIB_RunFightArbiter(intentCtx)
 	return AIBEngine.Resolve(intents, intentCtx)
 end
 
--- True when the bot has any consumable that recover could actually use.
+-- True when the bot has any consumable that recover could actually use to restore HP.
+-- item_enchanted_mango is deliberately EXCLUDED: it restores mana, not HP, so counting it
+-- made recoverCanAct=true while an HP-driven recover had no feasible action -> the desire
+-- won and returned empty, twitching under the tower (8903907295 W3 t=5:10-5:12, Codex P2).
+-- Deeper bottle-cooldown / tango-needs-tree mirroring stays backlog (AIBSurvive.CanRecoverNow).
 local function AIB_HasRecoveryResources()
 	for _, name in ipairs({ "item_tango", "item_tango_single", "item_flask",
-		"item_faerie_fire", "item_enchanted_mango" }) do
+		"item_faerie_fire" }) do
 		local slot = bot:FindItemSlot(name)
 		if slot >= 0 and bot:GetItemSlotType(slot) == ITEM_SLOT_TYPE_MAIN then
 			local it = bot:GetItemInSlot(slot)

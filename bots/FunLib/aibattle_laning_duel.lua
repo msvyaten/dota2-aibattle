@@ -127,10 +127,33 @@ function M.Prewave(ctx)
 	if now < 0 or now > 45 then return false end
 	local rules = ctx.rules or {}
 	if (rules.hero_priority or "default") == "never" then return false end
-	if (rules.pregame_behavior or "default") ~= "aggressive_mid" then return false end
-	local range = ctx.attackRange or ctx.bot:GetAttackRange()
+	local bot = ctx.bot
+	local range = ctx.attackRange or bot:GetAttackRange()
 	local enemy, dist = ctx.nearestEnemyHero(range + 360)
-	return duelState(ctx, enemy, dist, "post_horn", 0.35, 360)
+	if (rules.pregame_behavior or "default") == "aggressive_mid" then
+		return duelState(ctx, enemy, dist, "post_horn", 0.35, 360)
+	end
+	-- Passive prewave defend (non-aggressive_mid presets never enter the duel above): give
+	-- ground to an aggressive pre-creep poker BEFORE dropping low, instead of standing on the
+	-- contested line and walking into the lane phase at 36-42% HP (8903907295 W1: 14 one-sided
+	-- Radiant duels, Dire=farmer/default exited prewave at 36%). Fires only while actually being
+	-- hit by a close hero and below the soft floor; no CS is lost pre-creep, and laning-core
+	-- recovery still owns the deeper low-HP retreat. Self-limiting: stops once out of poke range.
+	if enemy ~= nil and enemy:IsAlive()
+		and dist <= range + 200
+		and J.GetHP(bot) < 0.60
+		and bot:WasRecentlyDamagedByAnyHero(1.0)
+		and ctx.enemyTowerDanger() == nil
+		and not Style.MayDive(bot) then
+		if bot.aib_prewaveDefendLast == nil or now - bot.aib_prewaveDefendLast >= 0.75 then
+			bot.aib_prewaveDefendLast = now
+			ctx.state("prewave-duel", string.format("ttl=2 phase=passive_defend dist=%.0f hp=%.0f", dist, J.GetHP(bot) * 100), 2.0)
+			ctx.diag("prewave-defend")
+			bot:Action_MoveToLocation(ctx.towardFountain(bot:GetLocation(), 260))
+			return true
+		end
+	end
+	return false
 end
 
 function M.Pregame(ctx)
