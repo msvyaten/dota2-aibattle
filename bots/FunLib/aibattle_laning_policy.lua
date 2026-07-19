@@ -13,6 +13,10 @@ M.Hp = {
 	damageLockout = 0.40,     -- recent hero damage below this HP blocks greedy lane actions
 	recoverDangerScore = 0.40,
 	secondDeathSurvive = 0.40,
+	-- Floor below which the recover no-action cap never applies. Real sub-danger retreat
+	-- is owned PRE-arbiter (early-low gate at hp<danger + critical-lock), so a no-action
+	-- recover desire is redundant at any hp; the floor is paranoia for emergency overlap.
+	recoverCapFloor = 0.25,
 }
 
 M.Scan = {
@@ -262,11 +266,13 @@ function M.Recover(args)
 	local reason = "hp_gate"
 	local capped = false
 	-- canAct contract (P4), recover side: cap a symptom-only recover so it loses to CS.
-	-- Only in the danger band (>=0.35) -- a critical/danger retreat must still win. The
-	-- recoverUseless veto (mode_laning) removes the no-damage case; this cap adds the
+	-- Floor lowered danger->recoverCapFloor (8903952032 W3: D afk'd 36s at hp=27-33 under
+	-- its tower, recover 118 empty-winning -- sub-danger retreat already ran PRE-arbiter
+	-- via early-low/critical-lock, so if THEY found nothing the desire has nothing either).
+	-- The recoverUseless veto (mode_laning) removes the no-damage case; this cap adds the
 	-- post-fight case where recentDamage keeps that veto from firing but the bot is still
 	-- behind its anchor with nothing to do. See SPECS 3.6.1.
-	if args.recoverCanAct == false and hp >= M.Hp.danger then
+	if args.recoverCanAct == false and hp >= M.Hp.recoverCapFloor then
 		score = math.min(score, M.Score.recoverNoAction)
 		reason = "hp_gate_no_action"
 		capped = true

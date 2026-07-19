@@ -859,12 +859,19 @@ local function AIB_BuildDesireCandidates(dials, rules, runtimeCtx, intentCtx)
 		or (not AIB_UphillMiss(enemy) and not hpBehind
 			and (hp >= 0.45 or enemyHp <= (dials.execute_threshold or 0))))
 	-- canAct probe for the recover desire (P4, SPECS 3.6.1). recover has a feasible action
-	-- when it has recovery resources to spend, OR it is not yet behind its safe anchor (a
-	-- retreat still makes progress), OR an enemy is actually near (legit kite). If none
-	-- hold, the retreat move just twitches under the tower -> policy caps recover below CS.
+	-- when it has recovery resources to spend, OR it is being actively hit (threat -> a
+	-- kite/step-back is real work), OR it is in the danger band and not yet behind its
+	-- safe anchor (the retreat still makes progress). Two leaks closed after 8903952032:
+	-- (a) "not behind anchor" alone let the bot's own pacing AROUND the anchor flip the
+	-- probe every tick (W5: recover hp=36-38 + hyst=18 -> score 120, 16 wins / 10 empty,
+	-- free farm skipped after a kill); above danger with no threat/items a cosmetic
+	-- step-back is not recovery. (b) "enemy visible within 900" counted a passive enemy
+	-- as an action while the bot idled at its anchor (W3). If none hold, policy caps
+	-- recover below CS and lane work takes the tick.
 	local recoverCanAct = AIB_HasRecoveryResources()
-		or not AIBUtils.IsCloserToFountain(bot, AIBUtils.SafeRetreatTowerLoc(bot))
-		or (enemy ~= nil and (enemyDist or 99999) <= AIBLanePolicy.Scan.enemyVisible)
+		or bot:WasRecentlyDamagedByAnyHero(2.0) or bot:WasRecentlyDamagedByCreep(2.0)
+		or (hp < AIBLanePolicy.Hp.danger
+			and not AIBUtils.IsCloserToFountain(bot, AIBUtils.SafeRetreatTowerLoc(bot)))
 	-- canAct probe for the siege desire: true only when the siege module would ACT this
 	-- tick (mirrors its gate chain without side effects).
 	local siegeCanAct = AIBLaneSiege.CanAct(AIB_LaningModuleCtx(dials, rules))
