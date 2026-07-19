@@ -283,6 +283,24 @@ empty≤80; AFK-окон W3/W5-класса нет глазом; reason=rune_com
 prewave :1016 · standoff :1017 · merged-election :1027+. Порядок фазы B: urgent-кандидаты
 по таблице §3.6, скоры монотонны этому порядку (тот же принцип, что фаза A).
 
+**Порядок имплементации П3-B.2 (один коммит, шаги в этой последовательности —
+каждый следующий опирается на предыдущий):**
+1. `Recovery.Owner.Context(ctx)` — чистый (band, threatened, lowHpHold); формула
+   LowHpHoldProbe переносится внутрь 1:1. Пока НИКТО не переключён.
+2. Порт xpRecoveryLoc → recovery.lua (или экспорт из survive) + дест-выбор по полосе
+   (soft=xpRecoveryLoc, caution/critical=SafeRetreatTowerLoc).
+3. `Owner.SoftAction(ctx)` — эпизод-ядро: rune-commit guard (дословно из ActiveLowHp:230)
+   → low-hp-fight/creep ветки как есть → committed-дест из шага 2 → hold за якорем
+   (under-tower инвариант 1:1). `Recovery.OwnerCanAct(ctx)` — чистое зеркало SoftAction.
+4. Переключение mode_laning: recover-кандидат.action → Owner-маршрут; recoverCanAct :871 →
+   OwnerCanAct; facts-builder :1053 → Context.
+5. Снос: tail-строки :1101/:1102 + кандидат :1105-1117; функции EmergencyRetreat :318 /
+   ForwardLowHpPullback :342 / ActiveLowHp :197 / LowHpHoldProbe+State :370+; regenLane
+   survive:403 + heal-pullback survive:384; стейт-чистка (§2.6 п.9).
+6. Tools тем же коммитом: scorecard — заметка low-hp-limit умирает; postmatch watch —
+   убедиться что episode-счёт уже покрывает новые mode= значения.
+Проверка после каждого шага: luaparser 5 файлов + check_all --skip-live.
+
 ### 2.7 Связь с П1 и порядком работ
 
 Порядок **П1-A → П3 → П1-B/C** (§3.8) сохраняется, НО П3-A/B не зависят от П1-A — можно
@@ -549,6 +567,29 @@ lowHpHold(через Recovery.Context — low-hp-limit НЕ eager), hitCreep/csS
 
 ≥95% тиков ровно один tick-owner; осц-пар в tick-owner-сэмплах нет 2 матча подряд;
 jitter ≤60 обе стороны; empty_action ≤80; errors=0; LH и bottle без регресса (scorecard).
+
+### 3.10 Lane-line эпизод-честность (дизайн, Fable 19.07 — имплементация в П1-C)
+
+**Проблема:** jitter-прокси считает КАЖДУЮ ре-выдачу `lane-line-fallback` (Diag :791,
+Motor.Claim 1.5s :789 → ре-выдача каждые ~1.5-2.6с легальной ходьбы). Матчи 8903907295/
+8903952032: 142/101 ре-выдач = FAIL стороны при мёртвой осц-паре (uphill 4-9). Та же
+инфляция, которую П3-B.1 снял для low-HP (~9×).
+
+**Дизайн (зеркало noteRecoveryEpisode):** эпизод = смена владения/децизии, не ре-выдача.
+- Вход в эпизод: lane-line действует И (нет активного эпизода ИЛИ разрыв с последнего
+  действия > 3.0с ИЛИ |dest - episodeDest| > 400u).
+- На входе: `Intent "lane-line-episode" detail="dist=%d fwd=%.2f"`; стейт
+  `aib_laneLineEpisode = {at, dest}`; ре-выдачи внутри эпизода тихие (Diag остаётся
+  для старых логов, rate-limit как есть).
+- **Миграция метрики в 2 шага (как §2.6 п.11):** шаг 1 — postmatch печатает эпизод-счёт
+  ИНФОРМАЦИОННО без порога (2 матча данных); шаг 2 — JITTER_KEYS (scorecard.py:14):
+  `lane-line-fallback` → `lane-line-episode` с порогом по данным. НЕ менять ключ и порог
+  одним коммитом со сносом suppress-гардов (фаза C) — иначе дельта неатрибутируема.
+- Якоря: def :693, Claim :789, Diag :791, tail-кандидат :1231, JITTER_KEYS scorecard.py:14.
+
+**Ожидание:** ре-выдачи 101-142 → эпизодов ~10-25/матч; FAIL стороны исчезает по
+построению; осцилляции (если вернутся) видны как ЧАСТЫЕ эпизоды с чередованием dest —
+метрика остаётся чувствительной к реальному твитчу.
 
 ---
 
