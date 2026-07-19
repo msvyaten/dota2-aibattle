@@ -241,6 +241,48 @@ lane work — ровно то, от чего П4-капы). Пост-арбит�
 чередования `state-desire-fight/safety` на соседних тиках нет; freeze=0; stationary≤2;
 LH не хуже; empty_action ≤80 (следить — п.1 меняет safetyCanAct).
 
+### 2.6.1 Ре-пин П3-B.2 после merged-election (Fable 19.07, код HEAD 140aaa5)
+
+План §2.6 писан по последовательному хвосту (6da86e5). После П3-B.1 (e0bc99f) и П1-A
+фазы A (a2bc9a9) точки катовера сменили форму. Сверено по живому коду:
+
+**Уже СДЕЛАНО, из плана вычеркнуть:** п.1 целиком (П3-B.1: safety-нога снята,
+lowHpRetreatReady удалён из safetyCanAct); п.11 наполовину (postmatch считает
+recovery-owner эпизоды).
+
+**Точки катовера — новая форма (все = tail-кандидаты, НЕ вызовы):**
+- **п.3/п.4:** EmergencyRetreat/FwdPullback = `tail()` кандидаты mode_laning **:1101/:1102**
+  (скоры 45/44) + функции recovery.lua **:318/:342**. Удаление = снять обе tail-строки +
+  функции. Скоры 45/44 освобождаются — дыры в ladder допустимы, НЕ перенумеровывать.
+- **п.5:** ActiveLowHp зовётся из кандидата `low-hp-hold` **:1105-1117** (43.2). Растворение
+  сносит весь кандидат. ⚠️ **rune-commit yield guard (recovery.lua:230, валидирован 3957992)
+  ОБЯЗАН пережить растворение** — перенести в Owner-soft-вход дословно.
+- **п.8:** LowHpHoldProbe УЖЕ существует (recovery.lua:370, чистый — фаза A сделала
+  половину точки). Катовер: Probe+LowHpHoldState → `Owner.Context`; потребители:
+  facts-builder **:1053** (runtimeCtx.lowHpHold + локальный aib_lowHpHold для fwd-suppress)
+  и UphillReposition (ctx.lowHpHold) — формула 1:1 внутри Context; `low-hp-limit` умирает
+  (заметка в scorecard).
+- **п.2 УСИЛЕН (урок 8903952032):** recover-кандидат.action → Owner-soft, И ОДНОВРЕМЕННО
+  `recoverCanAct` (mode_laning **:871**, 3-рукая эвристика) заменяется на новый чистый
+  **`Recovery.OwnerCanAct(ctx)`** — пробник обязан зеркалить реальные способности Owner.
+  Дрейф пробника = класс AFK/твитч (36с AFK, 140aaa5). Кап-семантика СОХРАНЯЕТСЯ:
+  hp_gate_no_action, recoverCapFloor=0.25, капнутый проигрывает safe-cs(56).
+- **п.6/п.7 + destination (находка 09.07):** ПЕРЕД удалением regenLane (survive:403) /
+  heal-pullback (survive:384) портировать **xpRecoveryLoc (survive:54)** в Owner:
+  дест эпизода = xpRecoveryLoc для soft-полосы, SafeRetreatTowerLoc для caution/critical.
+  Наивное удаление = регресс точки регена (фарм-потеря, против инв. §2.4-6).
+- **early-low пре-арбитр (:1014) ОСТАЁТСЯ в этом срезе** — обоснование кап-floor=0.25
+  опирается на него (суб-danger ретрит бежит пре-арбитром). Унификация — П3-C.
+
+**Приёмка П3-B.2 (1 матч), поверх §2.6:** hp_gate_no_action продолжает фаерить;
+empty≤80; AFK-окон W3/W5-класса нет глазом; reason=rune_commit жив; LH/фарм не хуже
+(проверка xpRecoveryLoc-порта).
+
+**Якоря головы для П1-B (ре-пин 19.07, HEAD 140aaa5):** true-emerg :1006 · emergency-low
+:1007 · urgent kill/interrupt :1008-1012 · early-low :1014 · Owner(critical) :1015 ·
+prewave :1016 · standoff :1017 · merged-election :1027+. Порядок фазы B: urgent-кандидаты
+по таблице §3.6, скоры монотонны этому порядку (тот же принцип, что фаза A).
+
 ### 2.7 Связь с П1 и порядком работ
 
 Порядок **П1-A → П3 → П1-B/C** (§3.8) сохраняется, НО П3-A/B не зависят от П1-A — можно

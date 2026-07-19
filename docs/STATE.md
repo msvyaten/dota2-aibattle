@@ -4,24 +4,25 @@ Last updated: 2026-07-09.
 
 ## ▶ NEXT SESSION START HERE (fresh Opus context)
 
-**Task: implement P1-A phase A.** One commit, git-revert = rollback. Everything needed is
-already in the repo — do NOT re-derive:
-- **Blueprint = `SPECS.md` §3.6 / §3.6.1** (registry re-pinned to HEAD, full score ladder
-  with every number, facts-builder inventory, 3 decisions, siege+recover canAct caps).
-- **What:** wrap tail-of-tick blocks `mode_laning_generic.lua:1001-1213` into arbiter
-  candidates (`AIBLaneArbiter.Candidate`/`Run`, arbiter.lua). Move pure inter-stage reads to
-  a facts builder before the election; keep diag/action side-effects lazy inside `action()`.
-- **Only intended behavior change:** the no-action caps (siege/recover join safety/fight).
-  Scores order-preserving (band table §3.2 is the phase-C target, not phase A).
-- **Baseline for acceptance = match 8888784979** (tick-owner R=151/D=165, low-hp-limit=4,
-  code 3957992). Phase criterion: >=95% one tick-owner; jitter/LH/empty_action not worse.
-- After coding: diff review → deploy → match → **Fable** acceptance.
-- **Aside while in the code:** secure-LH v2 is dead (`creep-hit-react-lh=0` three matches) —
-  investigate its entry conditions (BACKLOG TIER 2).
+**P1-A phase A is DONE and ACCEPTED** (a2bc9a9, match 8903907295: first-ever jitter PASS,
+uphill<->lane-line osc pair dead, siege cap fired). Post-acceptance triage landed:
+21d3145 (rune dead-window + prewave-defend + mango probe) and 140aaa5 (recover no-action
+leak: probe honesty + cap floor 0.25 — closed a 36s AFK class, match 8903952032).
 
-**Repo state at handoff:** branch `phase-2-team-dials` synced with origin (HEAD `af6c2c1`);
-LIVE = code `3957992` (rune-guard) + `canonical_farmer` pregame=default (uncommitted, living
-matchup); matchup R=brawler / D=farmer. Run `pre_match_state.py` to confirm.
+**Next task: P3-B.2** — dissolve ActiveLowHp / regenLane / heal-pullback into
+Recovery.Owner episode actions, destination-aware. One commit, git-revert = rollback.
+- **Blueprint = SPECS §2.6 + §2.6.1** (re-pinned 19.07 to HEAD 140aaa5: cutover targets
+  are now TAIL CANDIDATES :1101/:1102/:1105-1117, not sequential calls; point 1 already
+  done by P3-B.1; rune-commit guard must survive; recoverCanAct -> Recovery.OwnerCanAct;
+  port xpRecoveryLoc into Owner BEFORE deleting regenLane).
+- **Validate first:** one match on 140aaa5 accepting the recover-leak fix
+  (hp_gate_no_action > 0, empty_action[D] < 81, no W3/W5 AFK windows by eye).
+- After P3-B.2: P1-B (head-of-tick; anchors re-pinned in §2.6.1 tail note).
+
+**Repo state at handoff:** branch `phase-2-team-dials` synced with origin (HEAD
+`140aaa5` = LIVE); matchup R=brawler / D=farmer; Customize/* dirty = living matchup
+(farmer pregame=default). Run `pre_match_state.py` to confirm. Watch item: D played
+8903952032 with NO bottle all match (purchase anomaly, n=1).
 
 ---
 
