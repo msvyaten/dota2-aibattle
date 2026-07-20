@@ -591,6 +591,79 @@ Motor.Claim 1.5s :789 → ре-выдача каждые ~1.5-2.6с легаль
 построению; осцилляции (если вернутся) видны как ЧАСТЫЕ эпизоды с чередованием dest —
 метрика остаётся чувствительной к реальному твитчу.
 
+**СТАТУС: СДЕЛАНО ЦЕЛИКОМ (20.07).** Шаг 1 = f77b66b (эпизод-трекинг + postmatch);
+шаг 2 = 69eb76c (JITTER_KEYS: lane-line→episodes, порог 12→8/мин). Подтверждение на
+2 матчах: 186→21 / 207→24 / 160→21 / 32→6 (~9×). Ре-скор: все jitter PASS (2.1-3.1/мин);
+остаточный FAIL скоркарда = только bottle (north-star).
+
+### 3.11 П1-C — мандат имплементации (Fable 20.07, код HEAD 69eb76c/LIVE f77b66b)
+
+**Статус: мандат.** Фаза C из §3.7, разбитая на 4 среза. Каждый срез = один коммит +
+матч, git-revert = откат. Порядок выбран по юзер-боли: сначала anti-idle (доказанный
+корень «туда-сюда»), потом унификации. Базлайн: честная метрика §3.10 (эпизоды
+2.1-3.1/мин), anti-idle счётчики в postmatch (R creep=186-243/combat=75-285,
+D creep=99-217/combat=207-380 за 4 матча на f77b66b).
+
+**Срез C.1 — idle-band дисциплина (юзер-боль, standalone).** Anti-idle сегодня — набор
+ДО-арбитрных сторожей (style.lua: Combat :664 / Assist :678 / Creep :695 / Lane :713 /
+Push :723, Global :745), ставших последним кандидатом элекции (score 2) и исполняющих
+сотни действий за матч МИМО всех дисциплинарных гейтов:
+- `antiIdleCombat` ходит к врагу до 1600u (`MoveToUnit`) без hpBehind/concede/uphill/
+  tower-чеков — обходит P4-капы и concede-floor;
+- `antiIdleCreep` бьёт/догоняет ЛЮБОГО крипа в 1200u — пуш вейва против last_hit_only;
+- `antiIdlePush` бьёт вышку мимо siege-гейтов.
+Изменения (все в style.lua, кроме нового кандидата):
+1. **wave-watch hold** — НОВЫЙ idle-кандидат в mode_laning (score 10, band=idle; ниже
+   lane-line 18 — тот сперва ставит В позицию и на месте возвращает false, выше
+   visual-afk 8): владеет тиком СТОЯ, когда вражеские крипы в attackRange+250 и
+   добиваемого крипа нет (cs-кандидаты выше уступили по построению). Действие: stand
+   (без ордера), `Intent state-wave-watch` rate-limited 5s. «Стоять между ласт-хитами» =
+   корректное и смотрибельное поведение; закрывает нишу, из-за которой тик проваливался
+   до anti-idle.
+2. `antiIdleCombat`: атака ТОЛЬКО если враг уже в attackRange+100 и hp>=0.45 и не
+   uphillMiss; `MoveToUnit`-ногу УДАЛИТЬ (сближение — работа fight/harass с их гейтами).
+3. `antiIdleCreep`: при `creep_wave_priority=="last_hit_only"` — пропускать вражеских
+   крипов целиком; walk-нога ≤ attackRange+150 (никаких кросс-лейн походов к крипам).
+4. `antiIdlePush`: гейт `tower_aggression ~= "never"` и hp>=0.45.
+5. AntiIdleGlobal остаётся АБСОЛЮТНО последним (true idle: нет крипов вообще) — сторож
+   смотрибельности жив, но дисциплинирован.
+Приёмка C.1 (1 матч): `anti-idle-creep` ≈0 у last_hit_only-стороны; `anti-idle-combat`
+падает в разы; `state-wave-watch` фаерит; LH не хуже; глазом — бот стоит у волны между
+ласт-хитами, «туда-сюда» нет. Метрика jitter (эпизоды) не растёт.
+
+**Срез C.2 — commit TTL в арбитре (§3.3, унификация «4 дублей»).** `Candidate` получает
+`commit` (сек). Победа кандидата с commit → `bot.aib_electCommit={name, until, band}`;
+пока commit жив и в элекции нет кандидата СТРОГО ВЫШЕ ПОЛОСОЙ (band-порядок
+urgent>desire>lanework>position>idle; скор НЕ преемптит), арбитр переизбирает владельца
+напрямую (без гистерезиса). Мигрируют: `aib_siegeCommitUntil` (siege.lua :77-157, 9 сайтов
+→ commit 1.6-2.4 на desire-band), Motor.Claim lane-line (:789, → commit 1.5 position),
+Motor.Claim uphill (combat.lua, → commit 1.5 position). НЕ мигрирует: rune-commit
+(aib_bottleRuneStarted — транзакция ПОПЕРЁК кандидатов, остаётся). Motor v1 НЕ трогать
+до C.4. Сигнатура: `tick-owner ... commit=N` в detail. Приёмка: siege-пейс не вернулся
+(window_no_action не растёт), эпизоды lane-line не растут, осц-пар нет.
+
+**Срез C.3 — band-refractory (§3.4) + снос suppress-гардов.** Арбитр ведёт
+`bot.aib_bandOwnLast[band]=t`; position/idle-кандидаты НЕ участвуют в элекции пока
+`now - bandOwnLast[recovery|safety-класс] < 2.5` / `< 1.8 после урона` / `< 3.0 после
+empty-desire`. ЗАТЕМ из fwd-position (suppress-лист в action) удаляются временнЫе руки:
+recentRecovery/recentCreepRelief/recentVisualHold/recentWatchdog/recentTopEmpty (5 шт);
+семантические остаются (pressureEnemy, attackableCreep, pendingLastHit, lowHpHold,
+healing, runeCommit, tower; siegeCommit умирает в C.2). Аналогично lane-line-гарды
+(def :693). Приёмка: fwd/lane-line эпизоды не хуже; после recovery-эпизодов нет
+position-дёрганий (глаз + эпизод-каденция).
+
+**Срез C.4 — хвост фазы.** (1) windup-гейт §3.5: `class` в Candidate (attack/move/hold/
+cast); победитель class=move НИЖЕ urgent не исполняется пока идёт замах (`DotaTime()-
+GetLastAttackTime < attackPoint`, цель жива) — тик отдаётся hold; (2) EmergencyKillPriority
+(43.5) слить с KillLock (urgent) — ОСОЗНАННЫЙ подъём, свой матч; (3) Motor v1 retire
+(владение тиком = владение мотором) + чистка мёртвых v2-claim'ов (§1 п.2). Приёмка:
+windup-cancel сигнатуры нет; оркестратор -~300 строк; критерий §3.9 целиком.
+
+**Связь с П3-B.2 (§2.6.1):** независимы по файлам (C.1 = style.lua + 1 кандидат в
+mode_laning tail; П3-B.2 = recovery/survive + recover-кандидат). Параллелить МОЖНО при
+разных владельцах; один такт — один владелец на файл. C.2 (arbiter.lua) НЕ параллелить
+ни с чем, трогающим кандидатов.
+
 ---
 
 ## 4. rune_control — изоляция диала (match-free сетап, не код)

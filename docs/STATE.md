@@ -9,20 +9,30 @@ uphill<->lane-line osc pair dead, siege cap fired). Post-acceptance triage lande
 21d3145 (rune dead-window + prewave-defend + mango probe) and 140aaa5 (recover no-action
 leak: probe honesty + cap floor 0.25 — closed a 36s AFK class, match 8903952032).
 
-**Next task: P3-B.2** — dissolve ActiveLowHp / regenLane / heal-pullback into
-Recovery.Owner episode actions, destination-aware. One commit, git-revert = rollback.
-- **Blueprint = SPECS §2.6 + §2.6.1** (re-pinned 19.07 to HEAD 140aaa5: cutover targets
-  are now TAIL CANDIDATES :1101/:1102/:1105-1117, not sequential calls; point 1 already
-  done by P3-B.1; rune-commit guard must survive; recoverCanAct -> Recovery.OwnerCanAct;
-  port xpRecoveryLoc into Owner BEFORE deleting regenLane).
-- **Validate first:** one match on 140aaa5 accepting the recover-leak fix
-  (hp_gate_no_action > 0, empty_action[D] < 81, no W3/W5 AFK windows by eye).
-- After P3-B.2: P1-B (head-of-tick; anchors re-pinned in §2.6.1 tail note).
+**Two implementation-ready mandates — user picks the next tact (one code owner per file):**
+
+1. **P1-C slice C.1 — idle-band discipline (SPECS §3.11).** The proven root of the
+   user-visible "back and forth": anti-idle executes 200-380 actions/match bypassing
+   every discipline gate (walks 1600u to enemies, pushes waves against last_hit_only).
+   New wave-watch hold candidate + gated anti-idle branches. Files: style.lua +
+   mode_laning tail. Directly targets watchability.
+2. **P3-B.2 — Recovery.Owner completion (SPECS §2.6 + §2.6.1).** Architecture debt:
+   dissolve ActiveLowHp/regenLane/heal-pullback into destination-aware Owner episodes.
+   Files: recovery.lua / survive.lua / mode_laning recover-candidate. Does NOT fix a
+   live FAIL (low-hp-back=0 for weeks).
+
+They are file-independent and can be parallel tacts, but never the same file in one
+tact. C.2 (arbiter commit-TTL) must not run parallel with anything.
+
+**Metric status:** scorecard is honest as of 69eb76c (SPECS §3.10 DONE: jitter counts
+lane-line EPISODES, threshold 8/min; re-scored matches all-PASS on jitter). The only
+chronic scorecard FAIL left is bottle_empty_pct (aspirational north-star).
 
 **Repo state at handoff:** branch `phase-2-team-dials` synced with origin (HEAD
-`140aaa5` = LIVE); matchup R=brawler / D=farmer; Customize/* dirty = living matchup
-(farmer pregame=default). Run `pre_match_state.py` to confirm. Watch item: D played
-8903952032 with NO bottle all match (purchase anomaly, n=1).
+`69eb76c`; LIVE bot code = `f77b66b` — identical bot Lua, 69eb76c is tools-only, so
+live_matches_head=false is cosmetic). Matchup R=brawler / D=farmer; Customize/* dirty =
+living matchup. Run `pre_match_state.py` to confirm. The prewave saga (drift/aggression/
+poke-tank) is closed and validated; released-hold audit lives in BACKLOG.
 
 ---
 
