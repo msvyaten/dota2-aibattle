@@ -11,7 +11,15 @@ from pathlib import Path
 DOTA_LOG_DIR = Path(r"C:\Program Files (x86)\Steam\steamapps\common\dota 2 beta\game\dota")
 
 # diag counters whose per-match MAX approximates movement churn (jitter proxy)
-JITTER_KEYS = ("low-hp-nudge", "low-hp-back", "lane-line-fallback", "uphill-reposition")
+JITTER_KEYS = ("low-hp-nudge", "low-hp-back", "uphill-reposition")
+# SPECS 3.10 step 2 (20.07): lane-line-fallback left the raw JITTER_KEYS -- its running
+# counter counted every re-issue of the SAME legitimate walk (~9x inflation: two matches
+# on f77b66b measured lane-line raw 160-207 -> 6-24 real episodes). It is replaced by the
+# transition-only lane-line-episode Intent, counted by OCCURRENCE below. Threshold dropped
+# 12 -> 8/min to match the now-honest scale (observed 2.1-3.1/min; a genuine oscillation
+# flipping dest every ~2s would still read ~30/min). uphill-reposition stays raw for now
+# (low, ~0.5-1.8/min); episode-ify it too if it ever dominates.
+JITTER_EPISODE_KEYS = ("lane-line-episode",)
 
 THRESH = {
     "runtime_errors": 0,
@@ -19,7 +27,7 @@ THRESH = {
     "empty_per_min": 13,      # per side; was absolute 80 calibrated on ~6-min games --
                               # first long game (8903988046, 16.5 min) false-FAILed at
                               # comparable per-min rates (same lesson as raw jitter)
-    "jitter_per_min": 12,     # per side, JITTER_KEYS sum normalized by game minutes
+    "jitter_per_min": 8,      # per side; episode-honest scale (SPECS 3.10 step 2), was 12
     "bottle_empty_pct": 50,   # per side
 }
 
@@ -70,10 +78,12 @@ def scorecard(match_id):
         else:
             print("  %-28s %-6s (no duration; raw empty_action=%d)" % ("empty/min[%s]" % side, "N/A", empty))
         jitter = sum(side_counter_max(text, side, k) for k in JITTER_KEYS)
+        jitter += sum(len(re.findall(r"AIB\[%s\][^']*%s" % (side, re.escape(k)), text))
+                      for k in JITTER_EPISODE_KEYS)
         if mins:
             per_min = round(jitter / mins, 1)
             check("jitter/min[%s]" % side, per_min, THRESH["jitter_per_min"])
-            print("  %-28s (raw jitter_sum=%d over %.1f min)" % ("", jitter, mins))
+            print("  %-28s (jitter_sum=%d [episodes] over %.1f min)" % ("", jitter, mins))
         else:
             print("  %-28s %-6s (no duration; raw jitter_sum=%d)" % ("jitter/min[%s]" % side, "N/A", jitter))
         samples = re.findall(r"AIB\[%s\][^']*bottle=(-?\d+)" % side, text)
