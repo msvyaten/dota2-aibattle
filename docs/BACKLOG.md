@@ -80,9 +80,10 @@
       бутылка была → не хроника. НЕ чинить; вернуться только по прямой команде.
 - [ ] **★ Released-hold аудит (класс «позиционер отпускает тик на месте», юзер-вопрос 20.07):**
       подтверждённые кандидаты той же дыры, что PreCreepStandoff (закрыт 9f6b6cc):
-      (1) **RangedMeleePackSpacing** «yields once at the safe edge» → return false → approach
-      (Action_AttackUnit к крипу В ГЛУБИНЕ пачки) затаскивает рейнджевика обратно в крипов =
-      живой симптом «стоят в крипах» (8905049243, юзер-Q2); (2) fwd-position `fwd-at-position`
+      (1) **RangedMeleePackSpacing — ТОЧЕЧНО ЗАКРЫТ (0ccbb99, Opus 20.07):** at-edge теперь
+      ВЛАДЕЕТ тиком (hold), блокируя cs-walk creep-work(38); уступает только на in-range
+      last-hit (→cs-inrange 50) и на враг-героя в ренже (→harass 40). Сигнатура melee-pack-hold.
+      Ждёт глазную приёмку (рейндж держит край, LH не хуже); (2) fwd-position `fwd-at-position`
       → false → visual-hold/lane-line/anti-idle двигают; (3) lane-line на месте → false →
       anti-idle; (4) uphill-reposition после Claim-экспайри (остаточная 6с-каденция);
       (5) siege между commit-окнами у края вышки. СИСТЕМНОЕ лечение = П1-C (commit TTL §3.3 +
