@@ -246,10 +246,18 @@ function M.SeekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 	if bot.aib_bottleRuneTarget ~= nil
 		and bot.aib_bottleRuneStarted ~= nil
 		and now - bot.aib_bottleRuneStarted < Const.Rune.commitSeconds then
-		local criticalAbort = hp < 0.22 and bot:WasRecentlyDamagedByAnyHero(1.2)
-		if criticalAbort then
-			Style.Blocked(bot, diagKey, "critical_abort", string.format("hp=%.0f", hp*100), 4.0)
-			runeResult(bot, diagKey, "abort", string.format("reason=critical hp=%.0f", hp*100), 8.0)
+		-- Threat abort. The old gate (hp<0.22 AND damage within 1.2s) missed the rune
+		-- death-march: 8905049243 R committed at ~50%, kept re-issuing the walk through
+		-- the enemy wave INTO the enemy hero at hp 31->19->8 (spell pokes >1.2s apart
+		-- never coincided with the check) and died -- second death, game over. A bottle
+		-- rune is sustain, not a hill to die on: abort the commit when low and either
+		-- recently damaged or a living enemy hero is near the rune spot.
+		local threatAbort = (hp < 0.30
+				and (bot:WasRecentlyDamagedByAnyHero(3.0) or enemyNearLoc(bot.aib_bottleRuneTarget, 800)))
+			or (hp < 0.22 and bot:WasRecentlyDamagedByAnyHero(1.2))
+		if threatAbort then
+			Style.Blocked(bot, diagKey, "threat_abort", string.format("hp=%.0f", hp*100), 4.0)
+			runeResult(bot, diagKey, "abort", string.format("reason=threat hp=%.0f", hp*100), 8.0)
 			clearRuneAttempt(bot)
 			return false
 		end

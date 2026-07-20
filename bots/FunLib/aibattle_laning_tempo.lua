@@ -88,8 +88,15 @@ function M.PreCreepStandoff(ctx)
 		end
 		local anchorGap = GetUnitToLocationDistance(bot, anchor)
 		if anchorGap <= 160 then
-			if enemy ~= nil and dist < range * 0.70 then
-				local back = ctx.towardFountain(bot:GetLocation(), 260)
+			-- Poke-react: the owning hold must not TANK range-edge poke. The counter-attack
+			-- branches above are hp-gated (0.55/0.48) and the old space-back only fired at
+			-- dist<0.62*range, so a 350-500u poke war left the bot standing while its HP
+			-- melted 41->27 pre-creeps (8905049243 W1). Trade while strong (branches above);
+			-- once weakened and still being hit, give ground toward the tower instead.
+			local pokeReact = bot:WasRecentlyDamagedByAnyHero(1.5)
+				and J.GetHP(bot) < 0.55 and enemy ~= nil
+			if pokeReact or (enemy ~= nil and dist < range * 0.70) then
+				local back = ctx.towardFountain(bot:GetLocation(), pokeReact and 320 or 260)
 				if back ~= nil then
 					bot:Action_MoveToLocation(back)
 					ctx.diag("precreep-space")
@@ -103,6 +110,13 @@ function M.PreCreepStandoff(ctx)
 			-- winner=anti-idle x13). Committed-owner invariant: a positioner that placed
 			-- the bot holds the tick for the episode. Standing still is the correct
 			-- pre-creep behavior.
+			Style.DiagRL(bot, "precreep-hold", 5)
+			return true
+		end
+		-- Do not walk back INTO the poke we just gave ground from: while weakened and
+		-- recently hit, hold the safer spot instead of re-approaching the anchor
+		-- (otherwise space-back <-> anchor-return oscillates through the enemy's range).
+		if J.GetHP(bot) < 0.55 and bot:WasRecentlyDamagedByAnyHero(2.5) then
 			Style.DiagRL(bot, "precreep-hold", 5)
 			return true
 		end
