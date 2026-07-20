@@ -9,9 +9,10 @@ local function attackRange(ctx)
 	return ctx.attackRange or ctx.bot:GetAttackRange()
 end
 
-local function hasNearbyLaneCreep(bot, list)
+local function hasNearbyLaneCreep(bot, list, radius)
+	radius = radius or 900
 	for _, creep in pairs(list or {}) do
-		if J.IsValid(creep) and GetUnitToUnitDistance(bot, creep) <= 900 then
+		if J.IsValid(creep) and GetUnitToUnitDistance(bot, creep) <= radius then
 			return true
 		end
 	end
@@ -48,9 +49,15 @@ function M.PreCreepStandoff(ctx)
 		ctx.clearRecovery()
 		ctx.state("post-horn-reset", "reason=precreep", 2.0)
 	end
-	if hasNearbyLaneCreep(bot, ctx.enemyCreeps) or hasNearbyLaneCreep(bot, ctx.allyCreeps) then return false end
-
 	local range = attackRange(ctx)
+	-- Yield to laning-core only once an ENEMY creep is actually last-hittable-close, not the
+	-- instant any creep is within 900. Root of "Dire drifts to river lowground and tanks poke
+	-- to half HP before creeps" (8905283635 W1): allied creeps spawn BEHIND the bot and march
+	-- THROUGH the anchor, so the 900 ally check was true from horn -> the standoff yielded every
+	-- tick and never pulled the bot to its own-highground anchor; it sat at its spawn drift
+	-- point on lowground eating uphill harass until recover finally fired at 55%. Hold the
+	-- anchor through the creep march; switch to CS when enemy creeps arrive in range.
+	if hasNearbyLaneCreep(bot, ctx.enemyCreeps, range + 150) then return false end
 	local enemy, dist = ctx.nearestEnemyHero(math.max(900, range + 320))
 	local preMode = (ctx.rules or {}).pregame_behavior or "default"
 	if preMode == "aggressive_mid" and enemy ~= nil and dist <= range + 20
