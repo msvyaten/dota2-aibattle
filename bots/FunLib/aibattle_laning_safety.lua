@@ -109,7 +109,6 @@ function M.RangedMeleePackSpacing(ctx)
 	local now = DotaTime()
 	local range = attackRange(ctx)
 	if now <= 0 or range <= 350 then return false end
-	if bot.aib_meleeSpaceLast ~= nil and now - bot.aib_meleeSpaceLast < 1.4 then return false end
 	-- Detect the melee pack a bit further out (was 300) so a ranged hero holds the edge
 	-- before it is standing deep inside the creeps, not only once already surrounded.
 	local cen, count = ctx.meleeCreepCentroid(ctx.enemyCreeps, 380)
@@ -121,7 +120,27 @@ function M.RangedMeleePackSpacing(ctx)
 	if d < 1 then return false end
 	local safe = math.max(360, range - 90)
 	local dest = Vector(cen.x + (dx / d) * safe, cen.y + (dy / d) * safe, cen.z)
-	if GetUnitToLocationDistance(bot, dest) < 120 then return false end
+
+	-- At the safe edge: OWN the tick instead of releasing it. Releasing here let creep-work
+	-- (score 38, below this candidate at 41) walk the ranged hero BACK toward an out-of-range
+	-- creep deep in the pack (cs-walk, creeps.lua) -- then spacing pushed out again next tick:
+	-- the "ranged bots stand inside the creeps" oscillation (user 20.07, x2). Hold the edge so
+	-- the walk-in never fires. Two yields keep it CS/aggression-neutral: (a) a last-hit already
+	-- in range is left to cs-inrange (score 50, secures it without moving); (b) an enemy hero in
+	-- range is left to auto-harass (score 40). A ranged hero should not chase into a melee pack
+	-- for a creep -- it holds max range and waits for creeps to enter it.
+	if GetUnitToLocationDistance(bot, dest) < 120 then
+		local hitCreep = AIBCreeps.GetBestLastHitCreep(bot, ctx.enemyCreeps, bot:GetAttackDamage())
+		if hitCreep ~= nil and GetUnitToUnitDistance(bot, hitCreep) <= range then return false end
+		local foes = bot:GetNearbyHeroes(range + 100, true, BOT_MODE_NONE)
+		if foes ~= nil and #foes > 0 and foes[1]:IsAlive() then return false end
+		Style.DiagRL(bot, "melee-pack-hold", 5)
+		return true
+	end
+
+	-- Not at the edge yet: throttled step out toward it (throttle gates the MOVE only, so the
+	-- at-edge hold above can own the tick every frame and not lapse into the walk-in window).
+	if bot.aib_meleeSpaceLast ~= nil and now - bot.aib_meleeSpaceLast < 1.4 then return false end
 	bot.aib_meleeSpaceLast = now
 	Style.Intent(bot, "melee-pack-space", string.format("count=%d dist=%.0f", count, GetUnitToLocationDistance(bot, dest)), 1.5)
 	bot:Action_MoveToLocation(dest)
