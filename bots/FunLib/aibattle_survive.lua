@@ -604,6 +604,31 @@ local function recovery(bot, dials, nEnemyCreeps)
 		end
 	end
 
+	-- d2. Engine survival floor (beats the regen_lane config -- same principle as
+	-- MayDive/concede): regen_lane has NO fountain leg, so a bot with zero sustain at
+	-- 5-22% HP bought a flask and stood under its tower waiting for the courier for 30s
+	-- (8905066151 t=252-285, user: "he could just TP to base and heal"). When in-lane
+	-- sustain is exhausted and HP is critical, go to the fountain regardless of style:
+	-- TP if the scroll is up and we are not being hit (channel would break), else walk
+	-- (walking toward the fountain is also the flee direction).
+	if hp < 0.22 then
+		local tpFloor = getItem(bot, "item_tpscroll")
+		if tpFloor ~= nil and not bot:WasRecentlyDamagedByAnyHero(1.5) then
+			bot.aib_fountainTrip = true
+			recoveryPlan(bot, "tp_fountain", "regen_lane_floor", string.format("hp=%.0f", hp*100), 2.0)
+			Style.Diag(bot, "recovery-tp")
+			bot:Action_UseAbility(tpFloor)
+			return true
+		end
+		if bot.aib_recMoveLast == nil or DotaTime() - bot.aib_recMoveLast >= 5.0 then
+			bot.aib_fountainTrip = true
+			recoveryPlan(bot, "walk_fountain", "regen_lane_floor", string.format("hp=%.0f", hp*100), 2.0)
+			bot.aib_recMoveLast = DotaTime(); Style.Diag(bot, "recovery-walk")
+			bot:Action_MoveToLocation(J.GetTeamFountain())
+		end
+		return true
+	end
+
 	-- e. No-resource recovery: move toward XP/safety once, then yield back to laning.
 	-- Passive regen is context, not a terminal action; standing still here looks like AFK.
 	local back, backKind = xpRecoveryLoc(bot, nEnemyCreeps, hp)

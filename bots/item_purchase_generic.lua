@@ -905,6 +905,12 @@ function ItemPurchaseThink()
 						and GetItemStockCount('item_flask') > 1
 						and (not J.HasItem(bot, 'item_bottle')
 							or (J.HasItem(bot, 'item_bottle') and Item.GetItemCharges(bot, 'item_bottle') <= 0))
+						-- AIB bottle-savings guard: the flask re-buy loop starved the bottle --
+						-- every 110g flask reset the gold climb, no bottle until 5:09
+						-- (8905066151, user watched flasks ferried all game). While no bottle
+						-- is owned early, only re-buy flask when actually low; emergencies
+						-- still go through the recovery-buy critical bypass.
+						and not (not J.HasItem(bot, 'item_bottle') and DotaTime() < 420 and J.GetHP(bot) >= 0.35)
 						then
 							AIBPurchaseConsumable('item_flask')
 						end
@@ -937,6 +943,8 @@ function ItemPurchaseThink()
 						and botGold >= GetItemCost('item_flask')
 						and (not J.HasItem(bot, 'item_bottle')
 							or (J.HasItem(bot, 'item_bottle') and Item.GetItemCharges(bot, 'item_bottle') <= 0))
+						-- AIB bottle-savings guard (see the twin flask site above).
+						and not (not J.HasItem(bot, 'item_bottle') and DotaTime() < 420 and J.GetHP(bot) >= 0.35)
 						then
 							AIBPurchaseConsumable('item_flask')
 						end

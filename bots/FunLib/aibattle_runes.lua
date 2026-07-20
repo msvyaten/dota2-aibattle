@@ -371,8 +371,14 @@ function M.SeekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 				if dist < nearestDist then nearestDist = dist end
 				if runeType == RUNE_WATER and dist < nearestWaterDist then nearestWaterDist = dist end
 				local score = dist + ((runeType == RUNE_WATER) and 0 or 350)
+				-- Critical relax: a LIVE rune just beyond the policy cap is still the best
+				-- sustain a dying bot has. 8905066151 t=375+: a regen rune sat top (~3800u)
+				-- while D stood at 10-16% hp -- the 2600/3600 cap hid it and the staging
+				-- machinery churned cooldowns instead. At sub-25% HP with no enemy at the
+				-- spot, a long walk that fully heals beats standing still.
 				local allowedDist = dist <= (maxDist or 2600)
 					or (runeType == RUNE_WATER and waterRecoveryAllowed(bot, hp, mana, dist, forceEmptyBottle))
+					or (hp < 0.25 and dist <= 4500 and not enemyNearLoc(loc, 900))
 				if allowedDist and score < bestScore then
 					bestRune, bestLoc, bestDist, bestScore = runeId, loc, dist, score
 				end
