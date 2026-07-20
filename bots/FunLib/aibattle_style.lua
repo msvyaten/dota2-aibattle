@@ -5,6 +5,7 @@
 
 local M = {}
 local AIBIntents = require(GetScriptDirectory()..'/FunLib/aibattle_intents')
+local AIBUtils = require(GetScriptDirectory()..'/FunLib/aibattle_utils')
 
 local function hpFrac(unit)
     if unit == nil or unit.GetHealth == nil or unit.GetMaxHealth == nil then return 1.0 end
@@ -665,12 +666,15 @@ local function antiIdleCombat(bot, lowHp)
     if lowHp then return false end
     local enemies = bot:GetNearbyHeroes(1600, true, BOT_MODE_NONE)
     if not (enemies and #enemies > 0 and enemies[1]:IsAlive()) then return false end
-
-    if GetUnitToUnitDistance(bot, enemies[1]) <= bot:GetAttackRange() then
-        bot:Action_AttackUnit(enemies[1], true)
-    else
-        bot:Action_MoveToUnit(enemies[1])
-    end
+    local e = enemies[1]
+    -- P1-C C.1: only hit an enemy ALREADY in range; never walk up to 1600u to one. The old
+    -- MoveToUnit leg made anti-idle a de-facto chaser that bypassed every discipline gate
+    -- (hpBehind / concede / uphill / tower). Approaching a hero is fight/harass work, with
+    -- their gates -- not the last-resort idle watchdog.
+    if hpFrac(bot) < 0.45 then return false end
+    if GetUnitToUnitDistance(bot, e) > bot:GetAttackRange() + 100 then return false end
+    if AIBUtils.UphillMiss(bot, e) then return false end
+    bot:Action_AttackUnit(e, true)
     M.Diag(bot, "anti-idle-combat")
     return true
 end
@@ -693,18 +697,26 @@ local function antiIdleAssist(bot)
 end
 
 local function antiIdleCreep(bot)
+    -- P1-C C.1: under last_hit_only the wave-watch hold candidate owns "stand between last
+    -- hits" -- do NOT attack/chase enemy creeps from the idle watchdog, which pushed the
+    -- wave against the config and paced the bot between targets (200-380 anti-idle
+    -- actions/match, the chronic in-lane "back and forth"). Other cwp values still fill.
+    local cwp = (M.Get().rules or {}).creep_wave_priority or "last_hit_only"
+    if cwp == "last_hit_only" then return false end
     local creeps = bot:GetNearbyCreeps(1200, true)
     if not (creeps and #creeps > 0) then return false end
     for _, c in ipairs(creeps) do
         if c:IsAlive() then
-            if GetUnitToUnitDistance(bot, c) <= bot:GetAttackRange() then
+            local d = GetUnitToUnitDistance(bot, c)
+            if d <= bot:GetAttackRange() then
                 bot:Action_AttackUnit(c, true)
                 M.Diag(bot, "anti-idle-creep")
-            else
+                return true
+            elseif d <= bot:GetAttackRange() + 150 then
                 bot:Action_MoveToUnit(c)
                 M.DiagRL(bot, "anti-idle-creep-walk", 5)
+                return true
             end
-            return true
         end
     end
     return false
@@ -722,6 +734,10 @@ end
 
 local function antiIdlePush(bot, lane, lowHp)
     if lowHp then return false end
+    -- P1-C C.1: pushing the tower from the idle watchdog bypassed the siege gates. Only a
+    -- healthy bot whose config allows tower aggression pushes here.
+    if hpFrac(bot) < 0.45 then return false end
+    if ((M.Get().rules or {}).tower_aggression or "default") == "never" then return false end
     local enmT1 = GetTower(GetOpposingTeam(), TOWER_MID_1)
     if enmT1 == nil or not enmT1:IsAlive() then return false end
 

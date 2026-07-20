@@ -1258,6 +1258,23 @@ local function ThinkLaningCore(dials, rules)
 
 	tail("visual-hold", 20, "position", "ready", function() return AIBLaneSafety.VisualHoldHeartbeat(runtimeCtx) end)
 	tail("lane-line", 18, "position", "ready", function() return AIB_LaneLineFallback(dials) end)
+	-- wave-watch (P1-C C.1, idle band 10, below lane-line so it repositions first, above
+	-- visual-afk/anti-idle): the enemy wave is close but nothing is last-hittable yet (the
+	-- cs candidates above all yielded), so OWN the tick STANDING instead of letting anti-idle
+	-- push the wave / pace between creeps. Standing between last-hits is the correct, watchable
+	-- behavior; this closes the niche that fell through to the (now disciplined) idle watchdog.
+	tail("wave-watch", 10, "idle", "ready", function()
+		local r = botAttackRange or bot:GetAttackRange()
+		local near = false
+		for _, c in pairs(nEnemyCreeps or {}) do
+			if J.IsValid(c) and J.CanBeAttacked(c) and GetUnitToUnitDistance(bot, c) <= r + 250 then
+				near = true; break
+			end
+		end
+		if not near then return false end
+		Style.DiagRL(bot, "wave-watch", 5)
+		return true
+	end)
 	tail("visual-afk", 8, "idle", "ready", function() return AIBLaneSafety.VisualAFK(runtimeCtx) end)
 	tail("anti-idle", 2, "idle", "ready", function()
 		Style.DiagRL(bot, "pre-aig", 3)

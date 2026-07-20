@@ -88,8 +88,9 @@ def report(match_id):
         # surfaced for the "anti-idle as de-facto lane worker" watch (8905429441 R:
         # anti-idle-creep=169 dwarfed every jitter key; P1-C idle-band domain).
         ep = occ(text, side, "lane-line-episode")
-        ai = " anti-idle-creep=%d anti-idle-combat=%d" % (
-            diag_max(text, side, "anti-idle-creep"), diag_max(text, side, "anti-idle-combat"))
+        ai = " anti-idle-creep=%d anti-idle-combat=%d wave-watch=%d" % (
+            diag_max(text, side, "anti-idle-creep"), diag_max(text, side, "anti-idle-combat"),
+            diag_max(text, side, "wave-watch"))
         print("  [%s] %s | lane-line-episodes=%d |%s" % (side, parts, ep, ai))
 
     print("----- archetype contrast (bind check: R vs D) -----")
