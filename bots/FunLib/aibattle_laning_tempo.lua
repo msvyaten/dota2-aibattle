@@ -66,7 +66,14 @@ function M.PreCreepStandoff(ctx)
 		ctx.diag("precreep-trade")
 		return true
 	end
-	if enemy ~= nil and dist <= range + 120
+	-- Forward trades (contact = hit an enemy in range+120; close = walk to the attack edge)
+	-- are for aggressive_mid ONLY. Once the standoff actually runs (anchor fix 4e2dee2), these
+	-- mode-agnostic branches marched the passive FARMER to the river center to trade and it
+	-- took poke 64->35% before creeps (8905381906: precreep-contact x6, precreep-close x6,
+	-- loc -325,-193 -> -15,37). A passive preset holds its own-highground anchor and only ever
+	-- spaces BACK; it never advances to contest pre-creep.
+	local aggressive = preMode == "aggressive_mid"
+	if aggressive and enemy ~= nil and dist <= range + 120
 		and not ctx.uphillMiss(enemy) and J.GetHP(bot) >= 0.55 then
 		bot:Action_AttackUnit(enemy, false)
 		ctx.diag("precreep-contact")
@@ -82,7 +89,7 @@ function M.PreCreepStandoff(ctx)
 				return true
 			end
 		end
-		if ctx.moveToAttackEdge(enemy, "precreep-close", 0) then return true end
+		if aggressive and ctx.moveToAttackEdge(enemy, "precreep-close", 0) then return true end
 	end
 
 	local anchor, totalDist, dirX, dirY = towerLineAnchor(ctx, preMode)
