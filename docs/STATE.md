@@ -1,6 +1,6 @@
 # AIBattle State
 
-Last updated: 2026-07-09.
+Last updated: 2026-07-20.
 
 ## ▶ NEXT SESSION START HERE (fresh Opus context)
 
@@ -9,11 +9,29 @@ uphill<->lane-line osc pair dead, siege cap fired). Post-acceptance triage lande
 21d3145 (rune dead-window + prewave-defend + mango probe) and 140aaa5 (recover no-action
 leak: probe honesty + cap floor 0.25 — closed a 36s AFK class, match 8903952032).
 
-**P1-C slice C.1 is DONE (37e83af, deployed) and awaiting one validation match**
-(SPECS §3.11: wave-watch hold candidate + disciplined anti-idle branches -- the proven
-root of the user-visible in-lane "back and forth"; anti-idle ran 200-380 actions/match
-bypassing every gate). Acceptance: anti-idle-creep ~0 on the last_hit_only side,
-anti-idle-combat down, wave-watch fires, LH not worse, no in-lane pacing by eye.
+**P1-C slice C.1 is DONE and ACCEPTED** (37e83af, match 8905797602: anti-idle-creep=0 /
+anti-idle-combat=0 both sides -- was 169-380 -- wave-watch R26/D35 fires, jitter 1.8/3.1
+both PASS, LH not worse). The proven root of the user-visible in-lane "back and forth" is
+killed.
+
+**► AWAITING 2-PHASE ACCEPTANCE (hand to Fable high after BOTH matches): 2 fountain fixes
+`181b1f2` (deployed, live=head).** From match 8905797602 forensics -- 2 user windows, both
+in survive.lua (engine-floor family):
+- **obs4 greedy fountain top-off** -- fountainRecovery self-initiated a fountain trip from
+  lane on nearBase(<2600)+hp<0.98 (flask active, hp fine) and looped on bottleNotFull so it
+  never reached the TP-back (walked home on foot). Fix: only act in the fountain aura or
+  completing a floor trip; dropped bottleNotFull. Signature `fountain-init-skip`.
+- **obs5 "back-and-forth under own tower"** -- NOT positional: hp=31%, bottle=0, rune
+  nearest=inf, flask budget spent -> no-resource recovery loop paced in the 0.22-0.30 gap.
+  Fix: extended floor commits to fountain when sustain is genuinely exhausted (empty bottle,
+  no active heal, recBuyCount>=2) at hp<0.35, tightly gated so farm is not regressed.
+  Signature reason=`no_sustain_floor`.
+
+Acceptance (BOTH phases, side-bias-free): `fountain-init-skip`>0 and no in-lane fountain
+trip without a preceding floor; `no_sustain_floor` fires and the trip/pacing under tower is
+gone by eye; LH/farm not worse. **Match A = swapped R=farmer/D=brawler (live now)** first,
+then swap back for **match B = R=brawler/D=farmer**. Frugal: `postmatch.py`, no raw dumps.
+Both windows were observed on the farmer -- the swap stresses the brawler-behind case.
 
 **Next implementation-ready mandates (Opus; no re-derivation needed):**
 
@@ -34,9 +52,10 @@ Order by user pain, not slice number. One code owner per file per tact.
 lane-line EPISODES, threshold 8/min; re-scored matches all-PASS on jitter). The only
 chronic scorecard FAIL left is bottle_empty_pct (aspirational north-star).
 
-**Repo state at handoff:** branch `phase-2-team-dials` synced with origin, HEAD = LIVE =
-`37e83af`. Matchup R=brawler / D=farmer; Customize/* dirty = living matchup (do not
-commit without an order). Run `pre_match_state.py` to confirm. Metric is honest as of
+**Repo state at handoff:** branch `phase-2-team-dials`, HEAD = LIVE = `181b1f2` (pushed to
+origin). Matchup **SWAPPED to R=farmer / D=brawler** (deploy.bat playstyle, match A); swap
+back to R=brawler/D=farmer for match B. Customize/* dirty = living matchup (do not commit
+without an order). Run `pre_match_state.py` to confirm. Metric is honest as of
 69eb76c (SPECS §3.10 DONE); the prewave saga (drift/aggression/poke-tank) is closed and
 validated; released-hold audit + anti-idle mandate live in BACKLOG/§3.11.
 
