@@ -31,7 +31,11 @@ local function towerLineAnchor(ctx, mode)
 	if mode == "safe_tower" then dist = 500
 	elseif mode == "aggressive_mid" then dist = totalDist * 0.45
 	elseif mode == "jungle_pressure" then dist = totalDist * 0.70
-	else dist = totalDist * ((ctx.dials or {}).forwardness or 0.5) end
+	-- default (passive) pre-creep anchor: raw forwardness 0.5 put the anchor at the
+	-- T1-T1 MIDPOINT = river lowground, where the bot ate uphill-advantage poke before
+	-- creeps even arrived (8905027149 W1). Cap passive standoff at 0.40 = own-side
+	-- highground edge; aggressive_mid keeps its 0.45 duel spot.
+	else dist = totalDist * math.min((ctx.dials or {}).forwardness or 0.5, 0.40) end
 	return Vector(a.x + dirX * dist, a.y + dirY * dist, a.z), totalDist, dirX, dirY
 end
 
@@ -92,8 +96,15 @@ function M.PreCreepStandoff(ctx)
 					return true
 				end
 			end
+			-- OWN the at-anchor hold. Returning false here released the tick to the rest
+			-- of the pipeline; pre-creeps nothing above anti-idle can act, and anti-idle
+			-- MOVES ("walk to a visible enemy") -- so the bot oscillated anchor<->enemy
+			-- poke range every tick eating harass (8905027149 W1: precreep-anchor x14 vs
+			-- winner=anti-idle x13). Committed-owner invariant: a positioner that placed
+			-- the bot holds the tick for the episode. Standing still is the correct
+			-- pre-creep behavior.
 			Style.DiagRL(bot, "precreep-hold", 5)
-			return false
+			return true
 		end
 		bot:Action_MoveToLocation(anchor)
 		ctx.diag("precreep-anchor")
