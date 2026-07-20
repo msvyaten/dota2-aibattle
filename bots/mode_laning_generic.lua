@@ -789,6 +789,28 @@ local function AIB_LaneLineFallback(dials)
 	AIBMotor.Claim(bot, "lane-line", 20, 1.5)
 	bot:Action_MoveToLocation(dest + RandomVector(45))
 	AIB_Diag("lane-line-fallback")
+	-- Episode honesty (SPECS 3.10 step 1, metric only): the raw diag above counts every
+	-- re-issue of the same legitimate walk (~15-25/min at the 1.5s claim cadence) and
+	-- dominates the jitter FAIL with the uphill pair long dead (8905429441 R: counter
+	-- 28->74 with uphill at 4 -- steady slope, no oscillation partner). Count DECISIONS:
+	-- a new episode only when ownership lapsed >3s or the destination moved >400u.
+	-- Transition-only Intent; JITTER_KEYS still reads the raw diag until 2 matches of
+	-- episode data exist (do not switch key and threshold in the same commit).
+	local nowLL = DotaTime()
+	local destShift = math.huge
+	if bot.aib_laneLineEpDest ~= nil then
+		local ddx, ddy = dest.x - bot.aib_laneLineEpDest.x, dest.y - bot.aib_laneLineEpDest.y
+		destShift = math.sqrt(ddx * ddx + ddy * ddy)
+	end
+	local newEpisode = bot.aib_laneLineEpLast == nil
+		or nowLL - bot.aib_laneLineEpLast > 3.0
+		or destShift > 400
+	if newEpisode then
+		bot.aib_laneLineEpDest = dest
+		Style.Intent(bot, "lane-line-episode",
+			string.format("dist=%.0f fwd=%.2f", GetUnitToLocationDistance(bot, dest), fwd), 2.0)
+	end
+	bot.aib_laneLineEpLast = nowLL
 	-- TickOwner is emitted by the arbiter for the winning candidate (P1-A); no self-emit
 	-- here or lane-line would double-count as tick owner.
 	return true

@@ -83,7 +83,14 @@ def report(match_id):
     print("----- jitter breakdown (which key dominates the sum) -----")
     for side in ("R", "D"):
         parts = " ".join("%s=%d" % (k, diag_max(text, side, k)) for k in sc.JITTER_KEYS)
-        print("  [%s] %s" % (side, parts))
+        # SPECS 3.10 step 1: episode count vs raw re-issues (informational until 2
+        # matches of data, then JITTER_KEYS switches to episodes). anti-idle counters
+        # surfaced for the "anti-idle as de-facto lane worker" watch (8905429441 R:
+        # anti-idle-creep=169 dwarfed every jitter key; P1-C idle-band domain).
+        ep = occ(text, side, "lane-line-episode")
+        ai = " anti-idle-creep=%d anti-idle-combat=%d" % (
+            diag_max(text, side, "anti-idle-creep"), diag_max(text, side, "anti-idle-combat"))
+        print("  [%s] %s | lane-line-episodes=%d |%s" % (side, parts, ep, ai))
 
     print("----- archetype contrast (bind check: R vs D) -----")
     for side in ("R", "D"):
