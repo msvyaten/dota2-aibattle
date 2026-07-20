@@ -184,7 +184,16 @@ local function fountainRecovery(bot)
 	local bottleNotFull = charges ~= nil and charges < 3
 	local nearBase = bot:DistanceFromFountain() < 2600
 	local inFountain = hasFountainAura(bot)
-	if not inFountain and not nearBase and not bot.aib_fountainTrip then return false end
+	-- fountainRecovery must NOT initiate a trip from lane (obs 8905797602 t~300): merely
+	-- being nearBase (<2600) with hp<0.98 dragged an in-lane farmer -- flask active, hp fine --
+	-- to the fountain to top off. It may only act when already standing in the fountain aura
+	-- (opportunistic top-off is free) or when a real low-hp floor already set aib_fountainTrip.
+	if not inFountain and not bot.aib_fountainTrip then
+		if nearBase and (hp < 0.98 or mana < 0.90 or bottleNotFull) then
+			Style.DiagRL(bot, "fountain-init-skip", 5)
+		end
+		return false
+	end
 	if inFountain and charges ~= nil and charges > 0 and (hp < 0.98 or mana < 0.90)
 		and (bot.aib_fountainBottleLast == nil or DotaTime() - bot.aib_fountainBottleLast >= 1.0) then
 		local bottle = getItem(bot, "item_bottle")
@@ -195,7 +204,10 @@ local function fountainRecovery(bot)
 			return true
 		end
 	end
-	if hp < 0.98 or mana < 0.90 or bottleNotFull then
+	-- bottleNotFull no longer forces a fountain wait: the bottle refills instantly in the
+	-- fountain aura (188-197) and via rune/courier in lane, and gating the wait on it kept the
+	-- bot looping here so it never reached the TP-back at 218 -> it walked home on foot.
+	if hp < 0.98 or mana < 0.90 then
 		bot.aib_fountainFullSince = nil
 		if bot.aib_fountainWaitLast == nil or DotaTime() - bot.aib_fountainWaitLast >= 1.0 then
 			bot.aib_fountainWaitLast = DotaTime()
@@ -611,18 +623,30 @@ local function recovery(bot, dials, nEnemyCreeps)
 	-- sustain is exhausted and HP is critical, go to the fountain regardless of style:
 	-- TP if the scroll is up and we are not being hit (channel would break), else walk
 	-- (walking toward the fountain is also the flee direction).
-	if hp < 0.22 then
+	-- Extended floor (obs 8905797602 t=446, user "back-and-forth under the tower"): 22-35% HP with an
+	-- empty bottle, no active flask/tango heal, and its per-life flask budget already spent has
+	-- NO in-lane way to recover -- path (e) below just paces it back-and-forth under the tower.
+	-- Commit to the fountain instead of pacing (same engine-over-config principle as the hp<0.22
+	-- floor). Tightly gated: a bot with a bottle charge, mid-heal, or an affordable flask never
+	-- reaches here (paths a/d handle it first), so farm is not regressed.
+	local fcharges  = bottleCharges(bot)
+	local noSustain = (fcharges == nil or fcharges <= 0)
+		and not bot:HasModifier("modifier_flask_healing")
+		and not bot:HasModifier("modifier_tango_heal")
+		and (bot.aib_recBuyCount or 0) >= 2
+	local floorReason = hp < 0.22 and "regen_lane_floor" or "no_sustain_floor"
+	if hp < 0.22 or (hp < 0.35 and noSustain) then
 		local tpFloor = getItem(bot, "item_tpscroll")
 		if tpFloor ~= nil and not bot:WasRecentlyDamagedByAnyHero(1.5) then
 			bot.aib_fountainTrip = true
-			recoveryPlan(bot, "tp_fountain", "regen_lane_floor", string.format("hp=%.0f", hp*100), 2.0)
+			recoveryPlan(bot, "tp_fountain", floorReason, string.format("hp=%.0f", hp*100), 2.0)
 			Style.Diag(bot, "recovery-tp")
 			bot:Action_UseAbility(tpFloor)
 			return true
 		end
 		if bot.aib_recMoveLast == nil or DotaTime() - bot.aib_recMoveLast >= 5.0 then
 			bot.aib_fountainTrip = true
-			recoveryPlan(bot, "walk_fountain", "regen_lane_floor", string.format("hp=%.0f", hp*100), 2.0)
+			recoveryPlan(bot, "walk_fountain", floorReason, string.format("hp=%.0f", hp*100), 2.0)
 			bot.aib_recMoveLast = DotaTime(); Style.Diag(bot, "recovery-walk")
 			bot:Action_MoveToLocation(J.GetTeamFountain())
 		end
