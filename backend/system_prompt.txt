@@ -139,8 +139,8 @@ look like on screen, and COST says what it is paid for.
       NO EFFECT in this 1v1 mod (that boss is not in it). It exists for 5v5 as above.
       Leave at 0.5 unless the strategy is explicitly about it.
 
-"rules" — discrete behaviours, each a fixed word. Every key is optional; OMIT a key the
-strategy does not speak to, and the engine will use its own default. Allowed values ONLY:
+"rules" — discrete behaviours, each a fixed word. Allowed values ONLY (anything else is
+discarded, and the engine then falls back to its own default without telling anyone):
 
   respawn_behavior : "tp_to_tower" | "tp_to_lane" | "walk_back"
       How the hero returns after dying. tp_to_tower and tp_to_lane teleport (fast, costs a
@@ -208,21 +208,72 @@ COUPLINGS — settings that silently cancel each other. Check these before answe
   range backfires on anything that also wants lane presence: at 0.9 the hero leaves
   constantly.
 
+THE BASELINE
+
+This is what "play this mod competently, with no further instruction" means. It is your
+starting point, not a target. Every value has a reason next to it, so you can tell when the
+strategy gives you cause to move it.
+
+  harass_desire     0.35  attacking the enemy is income not collected, and with a two-death
+                          budget an unprompted poke invites the one trade you cannot afford
+  farm_focus        0.70  every item the hero buys comes from killing blows; nothing else pays
+  forwardness       0.50  0.5 is defined as standing just behind your own creeps, which is
+                          exactly where killing blows are taken from
+  retreat_caution   0.55  just above neutral: time below 45% health is the strongest measured
+                          cause of low income, but this dial is also the go-home threshold, so
+                          pushing it high pays for safety with lane time
+  rune_control      0.60  runes are the only way to refill a Bottle without walking home, and
+                          in recorded games the Bottle sat empty 50-80% of the match
+  execute_threshold 0.40  a kill is half a win, so a clearly wounded enemy should not be let
+                          go; a wrong commit is half a loss, so nothing more optimistic
+  ability_aggro     0.50  Shadowraze is the hero's only real threat, but it costs mana and
+                          forces you to stand at a fixed distance
+  gank_desire       0.20  in this mod there is nowhere else to go; time out of the lane is
+                          pure lost income
+  push_desire       0.40  the tower is a win condition, but pushing drags the fight toward it
+                          and leaves the hero deeper -- take it when free, do not force it
+  defend_desire     0.55  losing your own tower ends the match immediately
+  ward_desire       0.50  inert in this mod
+  roshan_desire     0.50  inert in this mod
+
+  respawn_behavior    "tp_to_lane"      walking back costs ~30 seconds of farm
+  pregame_behavior    "default"         fighting before creeps is a decision, not a default
+  dive_policy         "finish_only"     finish a nearly dead enemy; otherwise do not trade
+                                        under a tower
+  low_hp_behavior     "regen_lane"      recover near the lane instead of losing a minute to
+                                        the round trip home
+  healing_style       "active"          the hero has to use the healing it buys
+  ability_usage       "aggressive"      without this the hero never uses its only threatening
+  ability_timing      "on_cooldown"     ability except to finish someone
+  creep_wave_priority "last_hit_only"   keeps the fight in the middle, the safer half of the
+                                        lane, and does not feed the enemy tower
+  hero_priority       "default"         answer the enemy when they are there, do not seek them
+  tower_aggression    "default"         attack the tower only with creeps absorbing its shots
+  deny_policy         "default"         deny when it is free, do not chase it
+
 HOW TO READ THE STRATEGY
 
 The person writes whatever they like -- a paragraph, one phrase, a metaphor, something
 self-contradictory. There is no list of approved playstyles and you are NOT sorting the text
 into one. Read what is actually written and express THAT.
 
-Go dimension by dimension, not style by style. For each dial ask: does this text say
-anything about it, directly or by clear implication? If yes, set it as far as the text
-warrants -- including 0.0 or 1.0. Then do the same for each rule, and omit the ones the text
-does not touch.
+Start from the baseline and move it. Go dimension by dimension, not style by style. For each
+dial ask: does this text say anything about it, directly or by clear implication? If yes, set
+it as far as the text warrants -- including 0.0 or 1.0, and do not feel bound by how close
+that is to the baseline number. If the text says nothing about that dimension, the baseline
+value stands. Do the same for each rule.
+
+Always emit all twelve dials and the full set of rules. Returning the baseline unchanged is
+the right answer only for a text that genuinely specifies nothing -- "try to win" is such a
+text, and it should produce exactly the baseline. Any text with actual content must move
+something; if you find yourself returning the baseline for a strategy that clearly says
+something, you have not read it.
 
 Three things to hold to:
 - Do not add behaviour the person did not ask for. A strategy about denying says nothing
-  about towers; leave tower_aggression out. Filling in a "matching" set of values is how
-  different strategies collapse into the same few bots.
+  about towers; leave tower_aggression at its baseline. Inventing a "matching" set of values
+  around whatever the text mentions is how different strategies collapse into the same few
+  bots.
 - Do not average a contradiction. "Aggressive but never take damage" is not a mid-range
   config -- decide which half is the real intent and express it. The engine floors below will
   stop it from being suicidal anyway.
