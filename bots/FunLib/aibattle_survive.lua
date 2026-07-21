@@ -526,7 +526,25 @@ local function recovery(bot, dials, nEnemyCreeps)
 					else
 						Style.DiagRL(bot, "empty-bottle-ok", 8)
 					end
-					if hp >= 0.24 then bot.aib_recWaitStart = nil end
+					-- Release the recovery wait so laning resumes -- but only once the bot has
+					-- ARRIVED. This used to clear aib_recWaitStart every tick, and "empty
+					-- bottle above 24% HP" is the chronic state (bottle_empty runs 50-80% in
+					-- every match), so it fired continuously. Path (e) re-arms the latch
+					-- whenever start is nil and re-derives aib_recWaitDest from the MOVING
+					-- enemy creep centroid, so the bot re-issued a move to a slightly
+					-- different point every 1.5s: 8906755360 t=379-390 (D, user window
+					-- "twitched under its own tower"), hp 29-39%, state-recover-xp dist=411
+					-- then 930, arbiter winner cycling visual-hold:20 / anti-idle:2 /
+					-- idle-heal:46 / creep-work:38, and recovery-timeout never fired once in
+					-- the entire match -- the 10s latch it guards was being reset under it.
+					-- Every other release site clears all three fields; this one cleared one,
+					-- which is what let the destination drift while the episode "continued".
+					if hp >= 0.24 and (bot.aib_recWaitDest == nil
+						or GetUnitToLocationDistance(bot, bot.aib_recWaitDest) <= 220) then
+						bot.aib_recWaitStart = nil
+						bot.aib_recWaitDest = nil
+						bot.aib_recWaitKind = nil
+					end
 				end
 			end
 		end
