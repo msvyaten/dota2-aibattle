@@ -721,11 +721,24 @@ local function recovery(bot, dials, nEnemyCreeps)
 	-- Commit to the fountain instead of pacing (same engine-over-config principle as the hp<0.22
 	-- floor). Tightly gated: a bot with a bottle charge, mid-heal, or an affordable flask never
 	-- reaches here (paths a/d handle it first), so farm is not regressed.
+	-- `recBuyCount >= 2` was a proxy for "cannot buy sustain any more", and it is a LAGGING
+	-- one: the counter is per-life (reset at :181), so after a death the bot has to spend two
+	-- flasks before the extended floor can fire -- by which point it has already fallen through
+	-- hp<0.22 and the plain floor owns the tick. That is why no_sustain_floor read 0 for five
+	-- matches straight: not "the window never opened" but "the gate always arrives late".
+	-- 8906755360 life 2 is the proof: recBuyCount hit 2 at t~388 and hp was under 0.22 by t=395.
+	-- Ask the real question instead -- is there ANY sustain, held or purchasable, right now.
+	-- All three added clauses are pure reads (no Style.Blocked side effects), so this cannot
+	-- double-log against the buy block above.
 	local fcharges  = bottleCharges(bot)
+	local cannotBuyFlask = (bot.aib_recBuyCount or 0) >= 2
+		or gold < itemCost("item_flask")
+		or (wantsBottleFromStyle(bot) and hp >= 0.22)   -- gold is reserved for the bottle
 	local noSustain = (fcharges == nil or fcharges <= 0)
 		and not bot:HasModifier("modifier_flask_healing")
 		and not bot:HasModifier("modifier_tango_heal")
-		and (bot.aib_recBuyCount or 0) >= 2
+		and not hasItem(bot, "item_flask")
+		and cannotBuyFlask
 	local floorReason = hp < 0.22 and "regen_lane_floor" or "no_sustain_floor"
 	if hp < 0.22 or (hp < 0.35 and noSustain) then
 		local tpFloor = getTpScroll(bot)
