@@ -840,6 +840,12 @@ local function AIB_BuildDesireCandidates(dials, rules, runtimeCtx, intentCtx)
 	local creepReactReady = recentCreepDamage and attackableCreep
 		and (bot.aib_creepReactLast == nil or nowSafety - bot.aib_creepReactLast >= 0.75)
 		and (bot.aib_creepReliefLast == nil or nowSafety - bot.aib_creepReliefLast >= 1.2)
+		-- Mirror of the recovery-commit yield in CreepHitReact (laning_safety.lua): while a
+		-- recovery episode is committed below 0.55 the handler refuses to trade, so the probe
+		-- must report that too. Without this, safety would still win at 116 and then return
+		-- empty -- worse than the bug being fixed, and exactly the failure 140aaa5 closed for
+		-- recoverCanAct. Keep these two conditions identical.
+		and not (bot.aib_recoveryEpisode ~= nil and hp < 0.55)
 	local unstuckArmed = bot.aib_damageAnchorTime ~= nil
 		and nowSafety - bot.aib_damageAnchorTime >= 3.5
 		and ((bot.aib_damageAnchorHp or 100) - hp * 100) >= 5.0

@@ -213,6 +213,24 @@ function M.CreepHitReact(ctx)
 		return true
 	end
 
+	-- A committed recovery outranks trading with the wave. The bot was already walking home
+	-- after a fight when the creeps caught it, and forced_attack kept stopping it to swing
+	-- back: 8906632392 t=262-278 logs recovery-plan action=back reason=post_fight_regen and
+	-- recovery-owner mode=safe-step while safety:116 outbid recover:60-78 on every tick --
+	-- hp went 61 -> 41 -> 11 -> 0, killed by creeps with no enemy hero involved. Same
+	-- committed-transaction class as the rune-commit yield guard (laning_recovery.lua:234):
+	-- a creep landing a hit must not cancel an in-progress retreat.
+	-- Above 0.55 the safeToTrade branch already owned the tick, so this only releases the
+	-- below-0.55 trade branches (forced_attack / edge_attack). MUST stay mirrored by
+	-- creepReactReady in mode_laning_generic.lua, or safety keeps winning at 116 and returns
+	-- empty instead of trading -- which starves recover even harder (lesson of 140aaa5).
+	if bot.aib_recoveryEpisode ~= nil and hp < 0.55 then
+		Style.Blocked(bot, "creep-hit-react", "recovery_commit",
+			string.format("hp=%.0f band=%s", hp * 100,
+				tostring((bot.aib_recoveryEpisode or {}).band)), 3.0)
+		return false
+	end
+
 	local hasted = bot:HasModifier("modifier_rune_haste")
 	local forcedAttackHp = hasted and 0.24 or 0.30
 	if hp >= forcedAttackHp and repeatedDamage and dist <= range + 110 and ctx.enemyTowerDanger() == nil then
