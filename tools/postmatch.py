@@ -132,6 +132,19 @@ def report(match_id):
         print("       archetype: ability-harass=%d execute=%d (farmer save_for_execute -> harass~0)"
               % (diag_max(text, side, "ability-harass"), diag_max(text, side, "execute")))
 
+    # Farm-efficiency probe (21.07). The farmer walked in for most last hits (cs-walk 275 vs
+    # the brawler's 90 for the same lh). These buckets say how far out of position it stands.
+    print("----- watch: CS positioning (why farm is low) -----")
+    for side in ("R", "D"):
+        walk = diag_max(text, side, "cs-walk")
+        near = diag_max(text, side, "cs-walk-inrange")
+        small = diag_max(text, side, "cs-walk-gap-small")
+        large = diag_max(text, side, "cs-walk-gap-large")
+        deny_try = diag_max(text, side, "deny-act")
+        print("  [%s] cs-walk=%d (inrange=%d gap_small=%d gap_LARGE=%d) | last-hit-urgent=%d "
+              "deny-act=%d" % (side, walk, near, small, large,
+                               diag_max(text, side, "last-hit-urgent"), deny_try))
+
     print("----- jitter breakdown (which key dominates the sum) -----")
     for side in ("R", "D"):
         parts = " ".join("%s=%d" % (k, diag_max(text, side, k)) for k in sc.JITTER_KEYS)

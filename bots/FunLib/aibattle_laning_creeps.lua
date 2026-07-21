@@ -123,6 +123,21 @@ function M.HandleCreepWork(ctx)
 		bot.aib_csWaitStart = nil
 		bot.aib_csWaitTarget = nil
 		ctx.diag("cs-walk")
+		-- MEASUREMENT ONLY (21.07) -- no behaviour change. In 8906632392 the farmer fired
+		-- cs-walk 275x against the brawler's 90x for the same CS output (lh 48 vs 45), i.e.
+		-- it pays a walk-in for most last hits. Established: it is NOT an absence problem
+		-- (87% of the match in lane) and NOT wave-watch parking (only 13% of wave-watch holds
+		-- are followed by cs-walk, vs 16% for the brawler). What is still unknown is HOW FAR
+		-- out of position it stands and therefore which handler parks it there.
+		-- Bucket the gap into plain Diag counters: Intent lines are rate-limited and
+		-- under-report, which already produced one wrong diagnosis this session.
+		if csDist <= attackRange then
+			ctx.diag("cs-walk-inrange")       -- micro-adjust, not a real walk-in
+		elseif csDist <= attackRange * 1.2 then
+			ctx.diag("cs-walk-gap-small")
+		else
+			ctx.diag("cs-walk-gap-large")     -- parked well outside attack range
+		end
 		moveToAttackEdge(ctx, hitCreep, 20)
 		return true
 	end
