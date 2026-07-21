@@ -100,8 +100,12 @@ function M.ShouldDelaySpareTpPurchase(bot, style, itemApi)
 	return true
 end
 
-function M.ShouldUseMango(bot, context)
+function M.ShouldUseMango(bot, style, context)
 	if bot == nil then return false end
+	-- Tolerate the old 2-arg form in case another caller appears.
+	if context == nil and type(style) == "table" and style.Get == nil then
+		context = style; style = nil
+	end
 	context = context or {}
 	local hp = J.GetHP(bot)
 	local mp = J.GetMP(bot)
@@ -115,7 +119,17 @@ function M.ShouldUseMango(bot, context)
 	-- ability_item_usage_generic.lua:2139 only asks this policy, so no vendor edit is needed.
 	if hp < 0.30 then return mp < 0.12 end
 	if context.killWindow == true and mp < 0.55 then return true end
-	if context.abilitySoon == true and mp < 0.42 then return true end
+	-- abilitySoon is computed by the CALLER from raw ability cost + cooldown; it has no idea
+	-- whether this style will ever cast a harass ability. A farmer on
+	-- ability_timing="save_for_execute" has AbilityHarass disabled outright (style.lua:907),
+	-- so "mana for a raze" buys a raze that never happens -- paid for with the mango's passive
+	-- HP regen, which is exactly the trade the user objected to. Only honour abilitySoon when
+	-- harass abilities can actually fire. Execute needs are already covered by killWindow
+	-- above, so save_for_execute builds keep their finisher mana.
+	local mrules = (type(style) == "table" and style.Get ~= nil) and (style.Get().rules or {}) or {}
+	local harassArmed = mrules.ability_usage == "aggressive"
+		and mrules.ability_timing ~= "save_for_execute"
+	if context.abilitySoon == true and harassArmed and mp < 0.42 then return true end
 	if mp < 0.12 then return true end
 	return false
 end

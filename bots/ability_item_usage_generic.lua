@@ -2166,7 +2166,7 @@ X.ConsiderItemDesire["item_enchanted_mango"] = function( hItem )
 		end
 	end
 
-	if AIBItemPolicy.ShouldUseMango(bot, { abilitySoon = abilitySoon, killWindow = killWindow })
+	if AIBItemPolicy.ShouldUseMango(bot, AIBStyle, { abilitySoon = abilitySoon, killWindow = killWindow })
 	then
 		hEffectTarget = bot
 		sCastMotive = '自己吃'
