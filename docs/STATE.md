@@ -1,17 +1,21 @@
 # AIBattle State
 
-Last updated: 2026-07-21.
+Last updated: 2026-07-21 (after match 8907379308).
 
 ## ▶ NEXT SESSION START HERE (fresh context)
 
-**Bot code in LIVE = `cc00c9b`. Matchup R=brawler / D=farmer. Origin in sync.**
+**Bot code in LIVE = HEAD = `90e7ebf`. Matchup R=brawler / D=farmer. Origin in sync.**
 Only `bots/Customize/playstyle_*.lua` are dirty -- that IS the live matchup, do not commit
-them without an explicit order.
+them without an explicit order. Never `git add -A` in this repo; name files explicitly.
 
-**Given a match id, run `python tools/postmatch.py <id>` once** and read, in order:
-`21.07 fix batch` -> `empty_action by winner` -> `damage by source` -> `CS positioning`
--> scorecard. The scorecard passing does NOT mean healthy: empty/min read 8.4 against a
-limit of 13 while ~45% of those ticks were structural no-ops.
+**Given a match id, run `python tools/postmatch.py <id>` once** and read `watch: pending batch`
+FIRST (one row per unvalidated commit, ordered by blast radius), then `empty_action by winner`,
+then `farm drivers`. Then `python tools/pathology.py <id>` for the watchability shapes.
+The scorecard passing does NOT mean healthy: empty/min read 8.4 against a limit of 13 while
+~45% of those ticks were structural no-ops.
+
+**Compare counters PER MINUTE, never raw.** 8907379308 ran 13.7 min against the previous 7.5;
+read raw, `anti-idle-lane` 24 -> 28 looks like a regression when per minute it fell 3.2 -> 2.0.
 
 **Evidence hierarchy (this cost three wrong diagnoses on 21.07):** positions+hp over time
 (`t=..s hp=..% loc=..`) > plain `Style.Diag` counters > `Style.Intent` reason strings, which
@@ -21,36 +25,57 @@ hypothesis; do not commit a fix on an unverified theory.
 **Validation debt** = `git log <build-sha-from-the-match-log>..HEAD`. Do not carry a total
 forward by hand -- a played match clears everything up to its own build.
 
-### Awaiting validation (debt from `bbfed91`)
-Behaviour-changing: `d7fb5ae` (recover penalty during the enemy-dead free-farm window),
-`d63e224` -> `44cbc78` -> `cc00c9b` (mango: eaten ONLY when mana is short for a skill --
-damage and HP are no longer part of the decision at all). Everything else in the debt is a probe
-(`dd4284b`, damage-by-source), behaviour-preserving (`90ea347`, low_hp_hold derived from
-retreat_caution), or generator-schema only (`951fc18`).
+### Awaiting validation (debt from `c97c618`)
+- `e344e49` -- no salve during a committed fountain trip. The salve is eaten by the VENDOR
+  rule in `ability_item_usage_generic`, not by our sites: `f942b46` guarded ours and read
+  consume-blocked=0 for a whole match. Signature `blocked=heal-item reason=fountain_trip_committed`.
+- `39e3e6b` -- the twitch pair. `fwd-position` bypassed its cooldown entirely past 1600 units
+  (17 -> 109 in 63s) and `hero-prio-chase` had no throttle at all (88 in the first 93s). Both
+  now throttled and wired into Motor; `fwd-position` was the one positioner never in it.
+  Baselines to beat: fwd-position 10.0/min, hero-prio-chase 12.1/min.
+- `90e7ebf` -- tools only.
 
-### Open, needs match data before any fix
-1. **Farmer CS positioning** -- the root of low farm. cs-walk fired 189x for the farmer vs 28x
-   for the brawler, and 133 of those were `gap_small` (target 0-20% beyond attack range). The
-   probe now buckets it; the next match should identify which handler parks it there.
-   Two hypotheses are already REFUTED and must not be retried: "the farmer is not in lane"
-   (87% of the match in lane) and "wave-watch parks it out of range" (only 13% of holds lead
-   to a cs-walk, vs 16% for the brawler).
-2. **Melee-pack pull-in** -- unverified hypothesis: RangedMeleePackSpacing yields the tick on
-   every in-range last hit (laning_safety.lua:134), and the CS walk-in then routes through the
-   melee line toward a target behind it. Needs a probe on the target creep type.
-3. **Damage by source** -- probe deployed, never yet run.
+### Open, needs a decision before any fix
+1. **Fountain trips at 30-34% HP.** Four of nine trips in 8907379308 were at 15-25% (correct);
+   three were at 30-34%, all from the extended `no_sustain_floor` that `183a5f7` made reachable
+   after five silent matches. User called those out as "why did it go at all". Two candidate
+   fixes, DEFERRED by the user: raise the floor's band, or teach it the rune timer (a bot with
+   an empty bottle 20s before a rune spawn should take the rune, not walk home).
+   ⚠️ Do NOT re-add a mid-trip abort: the user rolled that back on 21.07 -- a committed floor
+   trip runs to completion because it also restores mana and bottle charges.
+2. **"Started drinking a salve -> do not enter a trade"** (user rule, any trade cancels it).
+   Not implemented.
+3. **Rune spawn inference** -- confirmed in the log (8907379308 t=351-361: staged to dist=0,
+   then `stage_dead_window nearest=inf`, ~15s wasted, rune had spawned at the other side).
+   User parked it as a future item.
+4. **Damage-by-source probe v2 FAILED** -- `death=0` and `other` still 16-24%: the sampler does
+   not run while the bot is dead, so the death bucket never fills. Until this is fixed, any
+   "who is chewing on me" claim is unsupported.
 
 ### Diagnosed, ready, no match needed
-- **Uncapped empty wins**: after the capped-candidate veto, the remaining empty_action is
-  `fight@96`, `safety@116`, `recover@78/102` -- NOT at cap, so the probe claims it can act and
-  the action chain returns nothing. Same class as the recoverCanAct / safetyCanAct fixes.
-  Largest remaining structural item; the data is already in match 8906632392.
-- `item_purchase_generic.lua:913` -- flask re-buy guard has no gold term. Real gap but
-  unexercised in matches so far (`checkpoint-gold-protect` = 0), so expect no visible effect.
+- **`trade.lua` forks `moveToAttackEdge`** (`:41`), and its copy is NOT melee-pack aware. Used
+  by the three URGENT-stage handlers (KillLock, HealInterrupt, PassingHeroTrade), which run
+  before the arbiter -- so it undercuts `3e64ecb` on that path. Highest-value dedup left.
+- **`HandleCreepWork` is the only handler built a hand-rolled ctx** (18 keys) instead of
+  `runtimeCtx`, which is why it has no `ctx.blocked` / `ctx.meleeCreepCentroid` and why cs-walk
+  and deny were awkward to instrument.
+- **Three shipped fixes have never shown their signature.** `recovery_commit` was unobservable
+  by construction and is fixed (`604de19`); `fountain-init-skip` has a real but very thin
+  window (base area, outside the aura, no latch -- usually skipped by TP'ing out) and must NOT
+  be treated as an acceptance gate; `power-rune-candidate/no_action_capped` needs the bot to be
+  HOLDING an action rune, which SF rarely is.
 
-### Observed, NOT diagnosed -- do not fix blind
-`deny-act` 106 -> 12 conversions for the farmer; creep aggro held 16x vs 1 disengage;
-`hero-prio-chase reason=lane_work` 30x for the brawler.
+### Refuted -- do not retry
+- **cs-walk is NOT the root of low farm.** 133 side-matches (`tools/farm_drivers.py`):
+  cs-walk/min correlates **+0.35** with lh/min, i.e. it marks CS activity, not cost. It is
+  SIDE-determined (Radiant 11.7-13.4/min vs Dire 6.3-7.2/min, archetype effect ~0) -- the old
+  "the farmer walks in for every last hit" reading came from matches where the farmer happened
+  to be Radiant. The real predictor is time below 45% HP (**-0.40**).
+- `deny-act` is not an 8% conversion story either -- the probe split it and 75-80% are real
+  swings; the enemy contests the same creep. Same trap cs-walk fell into; do not re-open
+  either without splitting the counter first.
+- "The farmer is not in lane" (87% in lane) and "wave-watch parks it out of range" (13% of
+  holds lead to a cs-walk vs 16% for the brawler).
 
 ### LLM experiment
 Schema now matches the engine (`docs/PROMPT_DRIFT.md`, sections A/B/C/E + corrections
