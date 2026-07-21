@@ -950,8 +950,19 @@ local function AIB_BuildDesireCandidates(dials, rules, runtimeCtx, intentCtx)
 		end
 	end
 
+	-- CAPPED = VETO, not participation. dd74e76 established this for recover (see the
+	-- no_action_capped block below): a capped candidate means "no feasible action this tick",
+	-- and at cap it still outbids the low-band workers (creep-work 38, wave-watch 10) and
+	-- empty-wins first. That fix was never extended to the other three capped candidates, and
+	-- 8906632392 shows them as the dominant remaining empty_action source -- the empty-win
+	-- scores match the cap constants exactly (fightNoAction 40, safetyNoAction 44,
+	-- siegeNoAction 42): [R] fight@40 x34, safety@44 x7, siege@42 x6 = 47 of 105 empty
+	-- actions; [D] fight@40 x14, safety@44 x12 = 26 of 65. Same treatment, same signature.
 	local safetyPolicy = AIBLanePolicy.Safety(policyArgs)
-	if safetyPolicy ~= nil then
+	if safetyPolicy ~= nil and safetyPolicy.capped then
+		Style.Blocked(bot, "safety-candidate", "no_action_capped",
+			string.format("hp=%.0f score=%.0f", hp * 100, safetyPolicy.score or 0), 3.0)
+	elseif safetyPolicy ~= nil then
 		candidates[#candidates + 1] = AIBTopArbiter.Candidate("safety", safetyPolicy.score, safetyPolicy.reason,
 			safetyPolicy.detail,
 			function()
@@ -972,7 +983,10 @@ local function AIB_BuildDesireCandidates(dials, rules, runtimeCtx, intentCtx)
 	end
 
 	local fightPolicy = AIBLanePolicy.Fight(policyArgs)
-	if fightPolicy ~= nil then
+	if fightPolicy ~= nil and fightPolicy.capped then
+		Style.Blocked(bot, "fight-candidate", "no_action_capped",
+			string.format("hp=%.0f score=%.0f", hp * 100, fightPolicy.score or 0), 3.0)
+	elseif fightPolicy ~= nil then
 		candidates[#candidates + 1] = AIBTopArbiter.Candidate("fight", fightPolicy.score, fightPolicy.reason,
 			fightPolicy.detail,
 			function()
@@ -1021,7 +1035,10 @@ local function AIB_BuildDesireCandidates(dials, rules, runtimeCtx, intentCtx)
 		policyArgs.hasSiegeCandidate = AIB_HasSiegeCandidate()
 		policyArgs.enemyDeadRecently = AIB_EnemyDeadRecently()
 		local siegePolicy = AIBLanePolicy.Siege(policyArgs)
-		if siegePolicy ~= nil then
+		if siegePolicy ~= nil and siegePolicy.capped then
+			Style.Blocked(bot, "siege-candidate", "no_action_capped",
+				string.format("hp=%.0f score=%.0f", hp * 100, siegePolicy.score or 0), 3.0)
+		elseif siegePolicy ~= nil then
 			candidates[#candidates + 1] = AIBTopArbiter.Candidate("siege", siegePolicy.score, siegePolicy.reason,
 				siegePolicy.detail,
 				function() return AIB_SiegeIntent(dials, rules) end, nil, siegePolicy.capped)
