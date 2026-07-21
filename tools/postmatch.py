@@ -132,8 +132,6 @@ def report(match_id):
         print("       archetype: ability-harass=%d execute=%d (farmer save_for_execute -> harass~0)"
               % (diag_max(text, side, "ability-harass"), diag_max(text, side, "execute")))
 
-    # Farm-efficiency probe (21.07). The farmer walked in for most last hits (cs-walk 275 vs
-    # the brawler's 90 for the same lh). These buckets say how far out of position it stands.
     # Damage attribution (21.07). Cumulative, so take the LAST line per side. creep/tower/hero
     # are lower bounds -- ticks with two live sources land in `mixed` rather than being split.
     print("----- watch: damage by source (lower bounds; mixed = ambiguous) -----")
@@ -150,16 +148,24 @@ def report(match_id):
         print("  [%s] total=%d | creep=%d(%d%%) tower=%d(%d%%) hero=%d(%d%%) mixed=%d(%d%%) other=%d"
               % (side, tot, c, pct(c), t, pct(t), h, pct(h), m, pct(m), o))
 
-    print("----- watch: CS positioning (why farm is low) -----")
+    # Farm drivers. The cs-walk buckets are kept as ACTIVITY telemetry, not as a farm
+    # diagnosis: across 133 side-matches (tools/farm_drivers.py) cs-walk/min correlates
+    # +0.35 with lh/min, i.e. a high count means the bot is doing CS, not that it is out
+    # of position. The count is side-determined (Radiant 11.7-13.4/min vs Dire 6.3-7.2/min
+    # in the 2x2, archetype effect ~0), so R>D here is normal and not a finding. The real
+    # predictor is time in the low-HP band (-0.40), which is what costs lane-minutes.
+    print("----- watch: farm drivers (hp band = the predictor; cs-walk = activity) -----")
     for side in ("R", "D"):
-        walk = diag_max(text, side, "cs-walk")
-        near = diag_max(text, side, "cs-walk-inrange")
-        small = diag_max(text, side, "cs-walk-gap-small")
-        large = diag_max(text, side, "cs-walk-gap-large")
-        deny_try = diag_max(text, side, "deny-act")
-        print("  [%s] cs-walk=%d (inrange=%d gap_small=%d gap_LARGE=%d) | last-hit-urgent=%d "
-              "deny-act=%d" % (side, walk, near, small, large,
-                               diag_max(text, side, "last-hit-urgent"), deny_try))
+        hp_samples = [int(v) for v in re.findall(r"AIB\[%s\] t=\d+s hp=(\d+)%%" % side, text)]
+        alive = [v for v in hp_samples if v > 0]
+        low = 100 * sum(1 for v in alive if v < 45) // len(alive) if alive else 0
+        crit = 100 * sum(1 for v in alive if v < 25) // len(alive) if alive else 0
+        print("  [%s] time hp<45%%=%d%% hp<25%%=%d%% (corr with lh/min: -0.40) | cs-walk=%d "
+              "(inrange=%d gap_small=%d gap_LARGE=%d) last-hit-urgent=%d deny-act=%d"
+              % (side, low, crit, diag_max(text, side, "cs-walk"),
+                 diag_max(text, side, "cs-walk-inrange"), diag_max(text, side, "cs-walk-gap-small"),
+                 diag_max(text, side, "cs-walk-gap-large"),
+                 diag_max(text, side, "last-hit-urgent"), diag_max(text, side, "deny-act")))
 
     print("----- jitter breakdown (which key dominates the sum) -----")
     for side in ("R", "D"):
