@@ -92,11 +92,18 @@ def report(match_id):
         f_tp = diag_max(text, side, "fountain-tp-lane")
         no_sustain = occ(text, side, "reason=no_sustain_floor")
         lane_floor = occ(text, side, "reason=regen_lane_floor")
-        trip_init = (occ(text, side, "action=walk_fountain")
-                     + occ(text, side, "action=tp_fountain"))
-        print("  [%s] init_skip=%d no_sustain_floor=%d regen_lane_floor=%d | trip_init=%d "
-              "fountain-wait=%d bottle=%d tp-lane=%d"
-              % (side, init_skip, no_sustain, lane_floor, trip_init, f_wait, f_bottle, f_tp))
+        # trip_init MUST come from the plain Diag counters, not from recovery-plan Intent
+        # lines: Style.Intent is rate-limited/deduped, so action=walk_fountain under-reports
+        # badly (8906520389 [R]: recovery-walk=3 but zero intent lines -- which made a
+        # legitimate hp<0.22 floor trip look like an uninitiated one and produced a wrong
+        # "retreat anchor collapsed to the fountain" diagnosis). Same caveat applies to the
+        # *_floor reason columns below: they are "logged", not "fired" -- treat as a lower bound.
+        trip_init = (diag_max(text, side, "recovery-walk")
+                     + diag_max(text, side, "recovery-tp"))
+        print("  [%s] trip_init=%d fountain-wait=%d bottle=%d tp-lane=%d | init_skip=%d "
+              "latch_drop=%d | logged-reason: no_sustain=%d regen_lane=%d (lower bound)"
+              % (side, trip_init, f_wait, f_bottle, f_tp, init_skip,
+                 diag_max(text, side, "fountain-latch-drop"), no_sustain, lane_floor))
 
     print("----- jitter breakdown (which key dominates the sum) -----")
     for side in ("R", "D"):
