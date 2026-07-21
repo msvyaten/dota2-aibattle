@@ -79,7 +79,9 @@ forward by hand -- a played match clears everything up to its own build.
 
 ### LLM experiment
 Schema now matches the engine (`docs/PROMPT_DRIFT.md`, sections A/B/C/E + corrections
-appendix). Blocker unchanged: `OPENAI_API_KEY`. `water_rune` is reachable in the engine but
+appendix). No API key is involved: the user runs the prompt in an LLM UI and hands the JSON
+back, which goes in via `--radiant-json` / `--dire-json` through the same sanitiser.
+`water_rune` is reachable in the engine but
 deliberately kept out of the generator whitelist until a match tests it.
 ⚠️ The schema describes the ENGINE, which also runs 5v5 -- do not delete a dial because it is
 inert in 1v1 mid. ward_desire/roshan_desire were removed on that reasoning and restored.

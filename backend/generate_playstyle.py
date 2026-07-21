@@ -52,6 +52,10 @@ _client = None
 def _get_client():
     global _client
     if _client is None:
+        # Imported here, not at module scope: the --*-json path is the one we actually use
+        # (the user runs the system prompt in an LLM UI and hands the JSON back), and it must
+        # work with no API key and no openai package installed.
+        from openai import OpenAI
         _client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
     return _client
 
@@ -138,15 +142,41 @@ def write_playstyle_lua(style: dict, output_path: str) -> None:
     with open(output_path, "w") as f:
         f.write("\n".join(lines) + "\n")
 
+def _load_style_arg(value: str) -> dict:
+    """A style given as JSON: a path to a .json file, or the JSON text itself.
+
+    This is the primary path. The system prompt is run by hand in an LLM UI and the answer
+    is pasted back here, so no API key is involved. It deliberately goes through the SAME
+    _parse_llm_json + _sanitize_style as the API path, so a hand-carried answer is clamped,
+    filtered and defaulted identically -- an invalid rule value is dropped here exactly as it
+    would be there, rather than reaching the engine and silently falling back.
+    """
+    if os.path.isfile(value):
+        with open(value, "r", encoding="utf-8") as f:
+            value = f.read()
+    return _sanitize_style(_parse_llm_json(value))
+
+
 def main():
     parser = argparse.ArgumentParser(description="Generate playstyle configs for Dota 2 AIBattle")
-    parser.add_argument("--radiant", required=True, help="Natural language prompt for Radiant bot")
-    parser.add_argument("--dire", required=True, help="Natural language prompt for Dire bot")
+    parser.add_argument("--radiant", help="Natural language prompt for Radiant bot (calls the API)")
+    parser.add_argument("--dire", help="Natural language prompt for Dire bot (calls the API)")
+    parser.add_argument("--radiant-json", help="LLM answer for Radiant: .json path or JSON text (no API key needed)")
+    parser.add_argument("--dire-json", help="LLM answer for Dire: .json path or JSON text (no API key needed)")
     parser.add_argument("--output-dir", default=".", help="Directory to write playstyle_radiant.lua and playstyle_dire.lua")
     args = parser.parse_args()
 
-    radiant_style = prompt_to_style(args.radiant)
-    dire_style    = prompt_to_style(args.dire)
+    if bool(args.radiant_json) != bool(args.dire_json):
+        parser.error("--radiant-json and --dire-json must be given together")
+    if not args.radiant_json and not (args.radiant and args.dire):
+        parser.error("give either --radiant-json/--dire-json (offline) or --radiant/--dire (API)")
+
+    if args.radiant_json:
+        radiant_style = _load_style_arg(args.radiant_json)
+        dire_style    = _load_style_arg(args.dire_json)
+    else:
+        radiant_style = prompt_to_style(args.radiant)
+        dire_style    = prompt_to_style(args.dire)
 
     radiant_path = os.path.join(args.output_dir, "playstyle_radiant.lua")
     dire_path    = os.path.join(args.output_dir, "playstyle_dire.lua")

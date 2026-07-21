@@ -147,7 +147,7 @@ Fiend / nevermore). База — OpenHyperAI (OHA), форк движка бот
 |---|---:|---|
 | `generate_playstyle.py` | 145 | Пайплайн: стратегия-текст → LLM → валидный конфиг (12 диалов + 10 rules). |
 | `system_prompt.txt` | 84 | Промпт генератора (под SF). |
-| `test_generate.py` | 83 | Тесты (10/10). E2E упирается в OPENAI_API_KEY. |
+| `test_generate.py` | 96 | Тесты (11/11). Прогон идёт офлайн через `--radiant-json/--dire-json`, ключ не нужен. |
 
 ---
 

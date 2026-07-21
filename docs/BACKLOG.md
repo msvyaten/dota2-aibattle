@@ -110,7 +110,10 @@
 
 ## TIER 3 — продукт / инфра
 
-- [ ] **LLM-генератор E2E**: backend готов, промпт под SF, тесты 10/10. **Блок: OPENAI_API_KEY.**
+- [ ] **LLM-прогон**: backend готов, промпт переписан 21.07, тесты 11/11. **OPENAI_API_KEY НЕ нужен**
+  (юзер 21.07): промпт вбивается в ЛЛМ вручную, ответ приходит JSON'ом и заезжает через
+  `python backend/generate_playstyle.py --radiant-json <файл|JSON> --dire-json <...> --output-dir bots/Customize`,
+  затем `cmd //c "tools\deploy.bat playstyle"`. Тот же санитайзер, что и у API-пути.
       Fable-high (промпт-дизайн) когда ключ появится. Последний непроверенный кусок продукта.
 - [ ] jitter-метрика recalibration — **НЕ отдельно**, сольётся в П3-B (эпизоды).
 
