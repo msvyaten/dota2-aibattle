@@ -1,63 +1,62 @@
 # AIBattle State
 
-Last updated: 2026-07-20.
+Last updated: 2026-07-21.
 
-## ▶ NEXT SESSION START HERE (fresh Opus context)
+## ▶ NEXT SESSION START HERE (fresh context)
 
-**P1-A phase A is DONE and ACCEPTED** (a2bc9a9, match 8903907295: first-ever jitter PASS,
-uphill<->lane-line osc pair dead, siege cap fired). Post-acceptance triage landed:
-21d3145 (rune dead-window + prewave-defend + mango probe) and 140aaa5 (recover no-action
-leak: probe honesty + cap floor 0.25 — closed a 36s AFK class, match 8903952032).
+**LIVE = HEAD = `951fc18`. Matchup R=brawler / D=farmer. Origin in sync.**
+Only `bots/Customize/playstyle_*.lua` are dirty -- that IS the live matchup, do not commit
+them without an explicit order.
 
-**P1-C slice C.1 is DONE and ACCEPTED** (37e83af, match 8905797602: anti-idle-creep=0 /
-anti-idle-combat=0 both sides -- was 169-380 -- wave-watch R26/D35 fires, jitter 1.8/3.1
-both PASS, LH not worse). The proven root of the user-visible in-lane "back and forth" is
-killed.
+**Given a match id, run `python tools/postmatch.py <id>` once** and read, in order:
+`21.07 fix batch` -> `empty_action by winner` -> `damage by source` -> `CS positioning`
+-> scorecard. The scorecard passing does NOT mean healthy: empty/min read 8.4 against a
+limit of 13 while ~45% of those ticks were structural no-ops.
 
-**► AWAITING 2-PHASE ACCEPTANCE (hand to Fable high after BOTH matches): 2 fountain fixes
-`181b1f2` (deployed, live=head).** From match 8905797602 forensics -- 2 user windows, both
-in survive.lua (engine-floor family):
-- **obs4 greedy fountain top-off** -- fountainRecovery self-initiated a fountain trip from
-  lane on nearBase(<2600)+hp<0.98 (flask active, hp fine) and looped on bottleNotFull so it
-  never reached the TP-back (walked home on foot). Fix: only act in the fountain aura or
-  completing a floor trip; dropped bottleNotFull. Signature `fountain-init-skip`.
-- **obs5 "back-and-forth under own tower"** -- NOT positional: hp=31%, bottle=0, rune
-  nearest=inf, flask budget spent -> no-resource recovery loop paced in the 0.22-0.30 gap.
-  Fix: extended floor commits to fountain when sustain is genuinely exhausted (empty bottle,
-  no active heal, recBuyCount>=2) at hp<0.35, tightly gated so farm is not regressed.
-  Signature reason=`no_sustain_floor`.
+**Evidence hierarchy (this cost three wrong diagnoses on 21.07):** positions+hp over time
+(`t=..s hp=..% loc=..`) > plain `Style.Diag` counters > `Style.Intent` reason strings, which
+are rate-limited and must be read as a LOWER BOUND only. Mark every claim as proven or
+hypothesis; do not commit a fix on an unverified theory.
 
-Acceptance (BOTH phases, side-bias-free): `fountain-init-skip`>0 and no in-lane fountain
-trip without a preceding floor; `no_sustain_floor` fires and the trip/pacing under tower is
-gone by eye; LH/farm not worse. **Match A = swapped R=farmer/D=brawler (live now)** first,
-then swap back for **match B = R=brawler/D=farmer**. Frugal: `postmatch.py`, no raw dumps.
-Both windows were observed on the farmer -- the swap stresses the brawler-behind case.
+**Validation debt** = `git log <build-sha-from-the-match-log>..HEAD`. Do not carry a total
+forward by hand -- a played match clears everything up to its own build.
 
-**Next implementation-ready mandates (Opus; no re-derivation needed):**
+### Awaiting validation (debt from `bbfed91`)
+Behaviour-changing: `d7fb5ae` (recover penalty during the enemy-dead free-farm window) and
+`d63e224` (stop eating the mango at low HP). Everything else in the debt is a probe
+(`dd4284b`, damage-by-source), behaviour-preserving (`90ea347`, low_hp_hold derived from
+retreat_caution), or generator-schema only (`951fc18`).
 
-1. **P1-C C.2/C.3/C.4 (SPECS §3.11).** C.2 = arbiter commit-TTL (replaces
-   siegeCommitUntil x9 + Motor claims); C.3 = band-refractory + delete 5 time-based
-   suppress arms; C.4 = windup gate + EmergencyKill/KillLock merge + Motor v1 retire.
-   ⚠️ C.2 touches arbiter.lua -- never parallel with anything.
-2. **P3-B.2 -- Recovery.Owner completion (SPECS §2.6 + §2.6.1).** Architecture debt:
-   dissolve ActiveLowHp/regenLane/heal-pullback into destination-aware Owner episodes.
-   Files: recovery.lua / survive.lua / mode_laning recover-candidate. Does NOT fix a
-   live FAIL (low-hp-back=0 for weeks). File-independent from C.1/C.2 -- parallelizable
-   except with C.2.
-3. **P1-B** -- head-of-tick (SPECS §3.6; Fable re-pins the registry first), AFTER P3-B.2.
+### Open, needs match data before any fix
+1. **Farmer CS positioning** -- the root of low farm. cs-walk fired 189x for the farmer vs 28x
+   for the brawler, and 133 of those were `gap_small` (target 0-20% beyond attack range). The
+   probe now buckets it; the next match should identify which handler parks it there.
+   Two hypotheses are already REFUTED and must not be retried: "the farmer is not in lane"
+   (87% of the match in lane) and "wave-watch parks it out of range" (only 13% of holds lead
+   to a cs-walk, vs 16% for the brawler).
+2. **Melee-pack pull-in** -- unverified hypothesis: RangedMeleePackSpacing yields the tick on
+   every in-range last hit (laning_safety.lua:134), and the CS walk-in then routes through the
+   melee line toward a target behind it. Needs a probe on the target creep type.
+3. **Damage by source** -- probe deployed, never yet run.
 
-Order by user pain, not slice number. One code owner per file per tact.
+### Diagnosed, ready, no match needed
+- **Uncapped empty wins**: after the capped-candidate veto, the remaining empty_action is
+  `fight@96`, `safety@116`, `recover@78/102` -- NOT at cap, so the probe claims it can act and
+  the action chain returns nothing. Same class as the recoverCanAct / safetyCanAct fixes.
+  Largest remaining structural item; the data is already in match 8906632392.
+- `item_purchase_generic.lua:913` -- flask re-buy guard has no gold term. Real gap but
+  unexercised in matches so far (`checkpoint-gold-protect` = 0), so expect no visible effect.
 
-**Metric status:** scorecard is honest as of 69eb76c (SPECS §3.10 DONE: jitter counts
-lane-line EPISODES, threshold 8/min; re-scored matches all-PASS on jitter). The only
-chronic scorecard FAIL left is bottle_empty_pct (aspirational north-star).
+### Observed, NOT diagnosed -- do not fix blind
+`deny-act` 106 -> 12 conversions for the farmer; creep aggro held 16x vs 1 disengage;
+`hero-prio-chase reason=lane_work` 30x for the brawler.
 
-**Repo state at handoff:** branch `phase-2-team-dials`, HEAD = LIVE = `181b1f2` (pushed to
-origin). Matchup **SWAPPED to R=farmer / D=brawler** (deploy.bat playstyle, match A); swap
-back to R=brawler/D=farmer for match B. Customize/* dirty = living matchup (do not commit
-without an order). Run `pre_match_state.py` to confirm. Metric is honest as of
-69eb76c (SPECS §3.10 DONE); the prewave saga (drift/aggression/poke-tank) is closed and
-validated; released-hold audit + anti-idle mandate live in BACKLOG/§3.11.
+### LLM experiment
+Schema now matches the engine (`docs/PROMPT_DRIFT.md`, sections A/B/C/E + corrections
+appendix). Blocker unchanged: `OPENAI_API_KEY`. `water_rune` is reachable in the engine but
+deliberately kept out of the generator whitelist until a match tests it.
+⚠️ The schema describes the ENGINE, which also runs 5v5 -- do not delete a dial because it is
+inert in 1v1 mid. ward_desire/roshan_desire were removed on that reasoning and restored.
 
 ---
 
