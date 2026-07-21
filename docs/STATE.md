@@ -77,7 +77,23 @@ forward by hand -- a played match clears everything up to its own build.
 - "The farmer is not in lane" (87% in lane) and "wave-watch parks it out of range" (13% of
   holds lead to a cs-walk vs 16% for the brawler).
 
-### LLM experiment
+### LLM experiment -- ready to run, no key needed
+The prompt was rewritten from scratch on 21.07 (`backend/system_prompt.txt`, 306 lines) on two
+user corrections: (1) NO archetypes -- a person types any strategy in their own words and the
+model must read it, not classify it into a preset; a recipe list is a classifier and collapses
+distinct prompts back into the same few bots. (2) The model does NOT know Dota -- explain
+everything, the way this project's chess prompt does. So it now opens with THE GAME (1v1 mid
+mod; win by destroying the tower OR killing the enemy twice, hence one kill is half a win and
+the life budget is two), each dial is anchors-at-0/0.5/1.0 plus what it COSTS, and THE BASELINE
+defines what "play competently with no further instruction" means so that any text -- including
+"try to win" -- yields a real config instead of twelve 0.5s.
+
+Workflow is manual and deliberate: the user pastes the prompt into an LLM themselves and hands
+back the JSON, which goes in via `--radiant-json` / `--dire-json` through the same sanitiser as
+the API path. Writing those files replaces the live matchup, so decide first whether the run is
+LLM vs LLM or LLM vs a canonical preset as a control.
+
+### LLM schema notes
 Schema now matches the engine (`docs/PROMPT_DRIFT.md`, sections A/B/C/E + corrections
 appendix). No API key is involved: the user runs the prompt in an LLM UI and hands the JSON
 back, which goes in via `--radiant-json` / `--dire-json` through the same sanitiser.
