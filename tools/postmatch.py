@@ -137,16 +137,20 @@ def report(match_id):
     print("----- watch: damage by source (lower bounds; mixed = ambiguous) -----")
     for side in ("R", "D"):
         hits = re.findall(
-            r"AIB\[%s\] intent=damage-by-source[^']*?creep=(\d+) tower=(\d+) hero=(\d+) mixed=(\d+) other=(\d+)" % side,
-            text)
+            r"AIB\[%s\] intent=damage-by-source[^']*?creep=(\d+) tower=(\d+) hero=(\d+) mixed=(\d+)"
+            r"(?: death=(\d+))? other=(\d+)" % side, text)
         if not hits:
             print("  [%s] (no samples -- probe not in this build)" % side)
             continue
-        c, t, h, m, o = (int(x) for x in hits[-1])
-        tot = c + t + h + m + o
+        c, t, h, m, dth, o = (int(x or 0) for x in hits[-1])
+        tot = c + t + h + m + dth + o
         pct = lambda v: (100 * v // tot) if tot else 0
-        print("  [%s] total=%d | creep=%d(%d%%) tower=%d(%d%%) hero=%d(%d%%) mixed=%d(%d%%) other=%d"
-              % (side, tot, c, pct(c), t, pct(t), h, pct(h), m, pct(m), o))
+        # other should now be small: probe v2 split deaths out and sized the flag window from
+        # the real sample gap. If other is still >15%, the attribution is not to be trusted.
+        print("  [%s] total=%d | creep=%d(%d%%) tower=%d(%d%%) hero=%d(%d%%) mixed=%d(%d%%) "
+              "death=%d(%d%%) other=%d(%d%%)%s"
+              % (side, tot, c, pct(c), t, pct(t), h, pct(h), m, pct(m), dth, pct(dth), o, pct(o),
+                 "  <-- UNTRUSTED, other>15%" if pct(o) > 15 else ""))
 
     # Farm drivers. The cs-walk buckets are kept as ACTIVITY telemetry, not as a farm
     # diagnosis: across 133 side-matches (tools/farm_drivers.py) cs-walk/min correlates

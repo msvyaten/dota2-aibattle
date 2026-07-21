@@ -208,14 +208,25 @@ function M.HandleCreepWork(ctx)
 			end
 			if not skipDeny then
 				bot:SetTarget(denyCreep)
+				-- MEASUREMENT ONLY (21.07) -- no behaviour change. deny-act reads 34-42 per
+				-- match against 3 denies, which looks like 8% conversion. It is not safe to
+				-- read it that way: deny-act counts a TICK, and a tick can be an approach.
+				-- That is exactly the mistake cs-walk cost us -- a high count was read as
+				-- wasted effort when it actually correlates +0.35 with lh/min. So split the
+				-- counter before anyone proposes a deny fix: -atk is a real swing at a
+				-- denyable creep, -walk is an approach, -skip is the backtrack guard
+				-- declining. Only -atk is comparable to the dn stat.
 				if GetUnitToUnitDistance(bot, denyCreep) <= attackRange + 40 then
 					bot:Action_AttackUnit(denyCreep, true)
+					ctx.diag("deny-act-atk")
 				else
 					moveToAttackEdge(ctx, denyCreep, 20)
+					ctx.diag("deny-act-walk")
 				end
 				ctx.diag("deny-act")
 				return true
 			end
+			Style.DiagRL(bot, "deny-skip-backtrack", 5)
 		end
 	end
 
