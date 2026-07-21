@@ -559,7 +559,21 @@ local function recovery(bot, dials, nEnemyCreeps)
 	local gold     = bot:GetGold()
 
 	-- a. Buy flask + courier (rate-limited 15s)
-	if gold >= 55 and (bot.aib_recBuyLast == nil or DotaTime() - bot.aib_recBuyLast >= 15.0) then
+	-- Don't buy sustain the fountain is about to give away for free (user rule, 21.07): the
+	-- buy at (a) runs BEFORE the hp<0.22 fountain floor at (d2), so a bot that is already
+	-- going home was spending 110g per flask on the way -- 3 flasks per side in 8906537715
+	-- while bottle_empty FAILed at 57/58 (the flask-loop that starves the bottle). If the
+	-- floor is going to fire anyway and nobody is hitting us, walk home and heal for free.
+	-- Under hero fire the buy stays available: surviving the walk beats saving the gold.
+	-- NOTE: must NOT return here -- the floor lives further down in this same function, so an
+	-- early return would stop the trip as well as the buy. Skip only the purchase block.
+	local floorWillSendHome = hp < 0.22 and not bot:WasRecentlyDamagedByAnyHero(2.0)
+	if floorWillSendHome and not hasItem(bot, "item_flask") then
+		Style.Blocked(bot, "recovery-buy", "fountain_floor_free_heal", string.format("hp=%.0f gold=%d", hp*100, gold), 8.0)
+		Style.DiagRL(bot, "buy-skip-fountain-floor", 5)
+	end
+	if gold >= 55 and not floorWillSendHome
+		and (bot.aib_recBuyLast == nil or DotaTime() - bot.aib_recBuyLast >= 15.0) then
 		if hasItem(bot, "item_flask") then
 			Style.Blocked(bot, "recovery-buy", "flask_in_inventory", string.format("hp=%.0f", hp*100), 8.0)
 			return false
