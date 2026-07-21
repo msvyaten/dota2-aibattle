@@ -375,6 +375,9 @@ function M.VisualHoldHeartbeat(ctx)
 		or dist2D(loc, bot.aib_holdAnchorLoc) > Const.Visual.holdDistance then
 		bot.aib_holdAnchorLoc = loc
 		bot.aib_holdAnchorTime = now
+		bot.aib_holdSpot = nil        -- hold episode ended: drop the committed stand-still spot
+		bot.aib_holdSpotBase = nil
+		bot.aib_holdSpotOffset = nil
 		return false
 	end
 	if now - bot.aib_holdAnchorTime < Const.Visual.holdSeconds then return false end
@@ -449,8 +452,33 @@ function M.VisualHoldHeartbeat(ctx)
 	if front ~= nil then
 		local offset = (reason == "tower" or J.GetHP(bot) < 0.38) and -420 or 0
 		local dest = GetLaneFrontLocation(GetTeam(), LANE_MID, offset) or front
-		bot:Action_MoveToLocation(dest + RandomVector(35))
-		ctx.diag(reason == "tower" and "visual-hold-safe" or "visual-hold-lane")
+		-- The user-visible "hangs and twitches in place" (8906632392 at 6:38-6:40 and
+		-- 10:12-10:14, visual-hold-lane=15) was a two-part loop, both halves right here:
+		--   1. RandomVector(35) was re-rolled EVERY tick, so a bot already standing at the
+		--      lane front got a new target ~35u away each tick and vibrated on the spot.
+		--   2. Two opposite rolls drift up to 70u > Const.Visual.holdDistance (55), which
+		--      resets the anchor above and makes this function return false -- the tick then
+		--      falls to visual-afk:8 / anti-idle:2, which move the bot, and the hold re-arms.
+		--      That is exactly the winner=visual-hold <-> visual-afk alternation in the log.
+		-- Fix: commit the spot for the whole hold episode, and once we are on it, own the tick
+		-- STANDING STILL rather than re-issuing a move (standing is the correct visual for a
+		-- hold, and it keeps the bot inside holdDistance so the anchor survives). Re-roll only
+		-- if the offset flips or the lane front itself has moved.
+		local reroll = (bot.aib_holdSpot == nil) or (bot.aib_holdSpotOffset ~= offset)
+		if not reroll and bot.aib_holdSpotBase ~= nil then
+			if dist2D(dest, bot.aib_holdSpotBase) > 250 then reroll = true end
+		end
+		if reroll then
+			bot.aib_holdSpotBase = dest
+			bot.aib_holdSpot = dest + RandomVector(35)
+			bot.aib_holdSpotOffset = offset
+		end
+		if GetUnitToLocationDistance(bot, bot.aib_holdSpot) > 100 then
+			bot:Action_MoveToLocation(bot.aib_holdSpot)
+			ctx.diag(reason == "tower" and "visual-hold-safe" or "visual-hold-lane")
+		else
+			ctx.diag("visual-hold-still")
+		end
 		return true
 	end
 	return false
