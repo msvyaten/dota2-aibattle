@@ -80,6 +80,24 @@ def report(match_id):
               % (side, cap_veto, cap_hit, no_dive, owner["total"], owner["critical"],
                  owner["soft"], owner["caution"], owner["threat"]))
 
+    # 181b1f2 acceptance: obs4 greedy fountain top-off + obs5 no-sustain floor.
+    # A fountain trip is only legitimate when recovery INITIATED it (plan action=
+    # walk_fountain/tp_fountain) or the bot respawned into the aura. Any fountain-wait
+    # without an initiating plan action = the greedy self-init regression coming back.
+    print("----- watch: fountain fixes (181b1f2) -----")
+    for side in ("R", "D"):
+        init_skip = diag_max(text, side, "fountain-init-skip")
+        f_wait = diag_max(text, side, "fountain-wait")
+        f_bottle = diag_max(text, side, "fountain-bottle")
+        f_tp = diag_max(text, side, "fountain-tp-lane")
+        no_sustain = occ(text, side, "reason=no_sustain_floor")
+        lane_floor = occ(text, side, "reason=regen_lane_floor")
+        trip_init = (occ(text, side, "action=walk_fountain")
+                     + occ(text, side, "action=tp_fountain"))
+        print("  [%s] init_skip=%d no_sustain_floor=%d regen_lane_floor=%d | trip_init=%d "
+              "fountain-wait=%d bottle=%d tp-lane=%d"
+              % (side, init_skip, no_sustain, lane_floor, trip_init, f_wait, f_bottle, f_tp))
+
     print("----- jitter breakdown (which key dominates the sum) -----")
     for side in ("R", "D"):
         parts = " ".join("%s=%d" % (k, diag_max(text, side, k)) for k in sc.JITTER_KEYS)
