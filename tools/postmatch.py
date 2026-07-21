@@ -34,6 +34,12 @@ def last_time(text, side):
     return vals[-1] if vals else "?"
 
 
+def _minutes(text):
+    """Match length in minutes, from the last t= sample on either side."""
+    vals = [int(v) for v in re.findall(r"AIB\[[RD]\] t=(\d+)s", text)]
+    return (max(vals) / 60.0) if vals else 0.0
+
+
 def recovery_owner_counts(text, side):
     lines = re.findall(r"AIB\[%s\][^']*intent=recovery-owner[^']*" % side, text)
     counts = {
@@ -177,6 +183,19 @@ def report(match_id):
         # mode_laning_generic, where the decision is actually taken.
         print("       recovery_commit(now observable): %d"
               % occ(text, side, "blocked=creep-hit-react reason=recovery_commit"))
+        # 8907379308 batch. The twitch pair is judged PER MINUTE -- raw counts scale with
+        # game length and 8907379308 ran 13.7 min. Baseline there: fwd-position 137 (10/min),
+        # hero-prio-chase 166 (12/min), both re-issuing every tick.
+        mins = _minutes(text)
+        rate = lambda k: diag_max(text, side, k) / mins if mins else 0
+        print("       twitch(39e3e6b): fwd-position=%.1f/min (was 10.0) hero-prio-chase=%.1f/min"
+              " (was 12.1) | holds: motor=%d chase=%d"
+              % (rate("fwd-position"), rate("hero-prio-chase"),
+                 diag_max(text, side, "fwd-suppressed-motor"),
+                 diag_max(text, side, "hero-prio-chase-hold")))
+        print("       salve-on-trip(e344e49): fountain_trip_committed=%d | fountain-wait=%d"
+              % (occ(text, side, "blocked=heal-item reason=fountain_trip_committed"),
+                 diag_max(text, side, "fountain-wait")))
 
     # Damage attribution (21.07). Cumulative, so take the LAST line per side. creep/tower/hero
     # are lower bounds -- ticks with two live sources land in `mixed` rather than being split.
