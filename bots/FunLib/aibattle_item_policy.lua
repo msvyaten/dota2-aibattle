@@ -107,31 +107,30 @@ function M.ShouldUseMango(bot, style, context)
 		context = style; style = nil
 	end
 	context = context or {}
-	local hp = J.GetHP(bot)
-	local mp = J.GetMP(bot)
-	-- Mango restores MANA, never HP, and its +0.5 HP regen applies only while the item is
-	-- still in the inventory. The usual "in trouble -> drink everything" shape is therefore
-	-- backwards for this item: eating it at low HP buys nothing for survival AND permanently
-	-- removes the regen that was helping. (User, 8906694824 ~3:00: the bot ate a mango on
-	-- taking damage and cut its own HP regen.) Old rule: `hp < 0.30 and mp < 0.55 -> true`.
-	-- Low HP now makes the bot MORE reluctant, not less: hold the regen unless mana is truly
-	-- critical. This is the single decision point -- the vendor desire in
-	-- ability_item_usage_generic.lua:2139 only asks this policy, so no vendor edit is needed.
-	if hp < 0.30 then return mp < 0.12 end
-	if context.killWindow == true and mp < 0.55 then return true end
-	-- abilitySoon is computed by the CALLER from raw ability cost + cooldown; it has no idea
-	-- whether this style will ever cast a harass ability. A farmer on
-	-- ability_timing="save_for_execute" has AbilityHarass disabled outright (style.lua:907),
-	-- so "mana for a raze" buys a raze that never happens -- paid for with the mango's passive
-	-- HP regen, which is exactly the trade the user objected to. Only honour abilitySoon when
-	-- harass abilities can actually fire. Execute needs are already covered by killWindow
-	-- above, so save_for_execute builds keep their finisher mana.
+
+	-- RULE (user, 21.07): a mango is a MANA item. The ONLY reason to eat one is that mana is
+	-- short for a skill we are about to cast. Taking damage must NEVER be a trigger -- the
+	-- mango's HP regen applies only while the item is still held, so eating it under fire
+	-- strictly worsens the situation it was supposed to help.
+	-- Removed accordingly: the old `hp < 0.30 and mp < 0.55` rule (ate on damage), the later
+	-- `hp < 0.30 -> mp < 0.12` remnant (still keyed on HP), the standalone `mp < 0.12`
+	-- (low mana with nothing to cast buys nothing), and the bare killWindow branch at
+	-- mp < 0.55 (an enemy being killable is not by itself a mana shortage).
+	--
+	-- abilitySoon is exactly the wanted condition: the caller sets it when an ability is off
+	-- cooldown within 3s, costs more mana than we have, and one mango would cover the gap.
+	if context.abilitySoon ~= true then return false end
+
+	-- Which skill is it short for? The caller cannot tell us, so use the kill window as the
+	-- proxy for "this is the finisher": that is always worth a mango, including for
+	-- save_for_execute builds. Otherwise the mana is for harassment, which is only worth a
+	-- mango when harass abilities can actually fire -- a farmer on save_for_execute has
+	-- AbilityHarass disabled outright (style.lua:907), so it would be buying a raze that
+	-- never happens at the cost of its regen.
+	if context.killWindow == true then return true end
 	local mrules = (type(style) == "table" and style.Get ~= nil) and (style.Get().rules or {}) or {}
-	local harassArmed = mrules.ability_usage == "aggressive"
+	return mrules.ability_usage == "aggressive"
 		and mrules.ability_timing ~= "save_for_execute"
-	if context.abilitySoon == true and harassArmed and mp < 0.42 then return true end
-	if mp < 0.12 then return true end
-	return false
 end
 
 function M.ShouldUseBottle(bot, item, context)
