@@ -156,9 +156,17 @@ def report(match_id):
         print("       recovery-latch(b4b24af): recovery-timeout=%d (was structurally 0) | wait=%d yield=%d"
               % (diag_max(text, side, "recovery-timeout"),
                  diag_max(text, side, "recovery-wait"), diag_max(text, side, "recovery-yield")))
+        # KNOWN RISK of 70999f0, check it here rather than being surprised: below 0.45 the
+        # only remaining AntiIdleGlobal legs are assist (needs an ally -- none in 1v1) and
+        # creep (gated off for last_hit_only), so the watchdog now declines those ticks
+        # entirely. Standing still while regenerating is the intended look, but if `idle` or
+        # anti-idle@2 empty-wins spike, the bot is being left with no owner too often.
         print("       anti-idle(70999f0): anti-idle-lane=%d (want DOWN) enter=%d creep=%d push=%d"
+              " | RISK: idle=%d anti-idle-empty=%d"
               % (diag_max(text, side, "anti-idle-lane"), diag_max(text, side, "anti-idle-enter"),
-                 diag_max(text, side, "anti-idle-creep"), diag_max(text, side, "anti-idle-push")))
+                 diag_max(text, side, "anti-idle-creep"), diag_max(text, side, "anti-idle-push"),
+                 diag_max(text, side, "idle"),
+                 occ(text, side, "reason=empty_action winner=anti-idle")))
         print("       no_sustain(183a5f7): no_sustain_floor=%d (was structurally 0) | regen_lane_floor=%d"
               % (occ(text, side, "reason=no_sustain_floor"), occ(text, side, "reason=regen_lane_floor")))
         print("       deny probe(d418d34): deny-act=%d = atk %d + walk %d | skip-backtrack=%d -> dn=%s"
