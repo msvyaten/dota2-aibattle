@@ -27,25 +27,39 @@ imply it (the engine then uses its own default). Allowed values ONLY:
       tp_to_tower = after dying, TP to the most-forward surviving tower
       tp_to_lane  = after dying, TP straight to the lane
       walk_back   = walk back without teleporting
-  pregame_behavior : "safe_tower" | "aggressive_mid" | "jungle_pressure"
-      safe_tower = wait ~350u in front of own T1; aggressive_mid = hold the river
-      crossing mid-way; jungle_pressure = zone deep in the enemy half before creeps.
+  pregame_behavior : "default" | "safe_tower" | "aggressive_mid" | "jungle_pressure"
+      What to do between the horn and the first creep wave.
+      default = PASSIVE: hold your own highground anchor, never walk out to trade. Use this
+        for any farming / patient / scaling style. Only "aggressive_mid" enables pre-creep
+        trading, so anything else is passive by definition.
+      safe_tower = wait ~500u in front of own T1 (more defensive than default).
+      aggressive_mid = advance to ~45% of the lane and contest/poke before creeps. This is
+        the ONLY value that fights pre-creep; pick it only for genuinely aggressive prompts.
+      jungle_pressure = walk ~70% toward the enemy T1 to zone before creeps.
   dive_policy : "never" | "finish_only" | "when_grouped" | "when_ahead" | "always"
       When the bot may stay inside enemy tower range. finish_only = only to secure
-      a nearly-dead enemy; always = tower damage never stops the chase.
+      a nearly-dead enemy. NOTE: "always" does NOT mean tower damage is ignored -- an
+      engine survival floor still refuses any dive below 30% HP, or below 40% once the
+      bot has died. See ENGINE FLOORS below.
   low_hp_behavior : "tp_fountain" | "run_to_tower" | "fight_back" | "regen_lane" | "walk_fountain"
-      What to do at critically low HP: TP home / run to own tower / never retreat /
-      step back ~400u and regen near lane / walk home on foot.
+      What to do at critically low HP: tp_fountain = teleport home (fast, but damage
+      cancels the channel); walk_fountain = walk home on foot, never teleports;
+      run_to_tower = fall back to your own tower; fight_back = do not retreat at all;
+      regen_lane = step back ~400u and regen near the lane.
+      NOTE: regardless of this rule, an engine floor sends the bot home at very low HP
+      when in-lane sustain is exhausted. See ENGINE FLOORS below.
   healing_style : "active" | "default" | "never"
       active = use heal items + pullback logic when low; never = suppress all healing.
   ability_usage : "aggressive" | "default"
       aggressive = enable the raze-harass system (its intensity comes from ability_aggro).
+      default = no raze harassment; abilities still fire for the execute window.
   ability_timing : "on_cooldown" | "save_for_execute" | "harass_only"
       on_cooldown = cast whenever available; save_for_execute = hold mana for the kill
       window; harass_only = poke only, never as a finisher.
-  creep_wave_priority : "push" | "last_hit_only" | "freeze"
-      push = hit all creeps freely; last_hit_only = only kill-window hits (equilibrium);
-      freeze = never touch enemy creeps (drags the wave back to own tower).
+  creep_wave_priority : "push" | "last_hit_only"
+      push = hit all creeps freely (shoves the wave); last_hit_only = only kill-window hits,
+      which holds the equilibrium. Under last_hit_only the bot also STANDS STILL between
+      last hits instead of drifting -- that is intended, not idling.
   hero_priority : "always" | "default" | "never"
       always = auto-attack the hero whenever in range; never = pure creep focus.
   tower_aggression : "always" | "default" | "never"
@@ -64,8 +78,10 @@ Interpretation rules:
   forwardness > 0.7, retreat_caution < 0.4, execute_threshold ~0.4-0.5,
   hero_priority "always", ability_usage "aggressive", pregame_behavior "aggressive_mid".
 - Safe farmer / greedy / scaling -> farm_focus > 0.75, harass_desire < 0.35,
-  forwardness < 0.45, retreat_caution > 0.6, creep_wave_priority "last_hit_only" or
-  "freeze", healing_style "active", low_hp_behavior "regen_lane".
+  forwardness < 0.45, retreat_caution > 0.6, creep_wave_priority "last_hit_only",
+  healing_style "active", low_hp_behavior "regen_lane",
+  pregame_behavior "default" (passive prewave -- do NOT leave this to chance: any value
+  other than "default"/"safe_tower" makes a farmer walk out and trade before creeps).
 - Pusher / tower pressure -> push_desire > 0.7, creep_wave_priority "push",
   forwardness > 0.6, dive_policy "when_ahead" or "always" if the prompt is reckless.
   Add tower_aggression "always" ONLY when the prompt accepts risk for buildings
@@ -82,3 +98,20 @@ Interpretation rules:
 - Denying / lane control mentioned -> deny_policy "always"; "ignore denies" -> "never".
 - Respawn: "teleport back fast" -> tp_to_lane or tp_to_tower; "walk back" -> walk_back.
 - If a dial is not implied by the prompt, use 0.5. If a rule is not implied, OMIT the key.
+
+ENGINE FLOORS — behaviour the engine guarantees regardless of what you write.
+These exist so that ANY config stays watchable. Do not promise the user behaviour that
+contradicts them, and do not try to defeat them with extreme dials.
+- Dive: no dive below 30% HP, and none below 40% once the bot has died. Beats dive_policy
+  "always".
+- Losing lane: a bot that is fed/behind stops INITIATING fights, and will not seek a trade
+  at a >=15% HP disadvantage. Beats low_hp_behavior "fight_back" and high harass_desire.
+- Low HP: at very low HP with in-lane sustain exhausted the bot goes to the fountain and
+  heals, whatever low_hp_behavior says. It will not stand in lane and die.
+- Under an enemy tower: the bot will not chase a finish under the enemy tower.
+- Sustain: an emergency flask purchase can override item-budget saving; conversely the bot
+  will not buy sustain it is about to get free at the fountain.
+- Idle: under last_hit_only the bot deliberately STANDS STILL between last hits rather than
+  drifting toward creeps. This is correct behaviour, not idleness.
+Practical effect: aggression dials control how the bot plays while it is healthy. They do
+not control whether it suicides -- it will not.

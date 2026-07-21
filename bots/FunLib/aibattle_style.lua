@@ -97,8 +97,18 @@ local DEFAULT_LOW_HP = "tp_fountain"
 -- jungle_pressure = walk deep into enemy half (~70% toward enemy T1), near their jungle entrance.
 --                 Safe in 1v1 (neutrals almost never attack). Can zone or observe.
 -- Diag: 'pregame-<value>' rate-limited 5s.
-local PREGAME_VALUES = { safe_tower = true, aggressive_mid = true, jungle_pressure = true }
-local DEFAULT_PREGAME = nil  -- nil = OHA default (no override)
+-- default = passive prewave: hold your own highground anchor and never advance to trade
+--                 (every pre-creep trade branch is gated on preMode == "aggressive_mid").
+-- "default" was NOT in this table before, so canonical_farmer's pregame_behavior="default"
+-- failed validation and fell through to DEFAULT_PREGAME = nil. It worked only by accident:
+-- every consumer reads (rules.pregame_behavior or "default"), so nil normalised back to the
+-- same string. Listing it is behaviour-preserving and, more importantly, gives the generator
+-- a way to REQUEST a passive prewave -- previously impossible, and the root of the repeated
+-- "stands in the river taking poke before the creeps" reports.
+-- NOTE: laning_tempo.lua:177 also branches on "water_rune", which is likewise absent here and
+-- therefore unreachable. Left dead on purpose -- that behaviour has never been match-tested.
+local PREGAME_VALUES = { safe_tower = true, aggressive_mid = true, jungle_pressure = true, default = true }
+local DEFAULT_PREGAME = nil  -- nil = OHA default (no override); consumers read it as "default"
 
 -- healing_style: controls whether our defensive heal system is active.
 -- active  = use heal items / pullback / regen when low HP (was: improvements.defensive_heal=true).

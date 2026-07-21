@@ -14,15 +14,27 @@ DIAL_KEYS = (
 )
 # rule -> allowed values. A rule absent from the LLM answer is OMITTED from the
 # output config so the engine falls back to its own default for that rule.
+# Audited against the engine 21.07 (docs/PROMPT_DRIFT.md section E): every value listed
+# here must be branched on somewhere in bots/ AND behave the way the prompt describes it.
 RULE_VALUES = {
     "respawn_behavior":    ("tp_to_tower", "tp_to_lane", "walk_back"),
-    "pregame_behavior":    ("safe_tower", "aggressive_mid", "jungle_pressure"),
+    # "default" = passive prewave (hold own highground, never advance to trade). It was
+    # missing here AND from the engine's PREGAME_VALUES, so the generator could not express
+    # a passive prewave at all -- every non-cowardly prompt landed on aggressive_mid, which
+    # is exactly the "stands in the river taking poke before creeps" symptom.
+    "pregame_behavior":    ("safe_tower", "aggressive_mid", "jungle_pressure", "default"),
     "dive_policy":         ("never", "finish_only", "when_grouped", "when_ahead", "always"),
     "low_hp_behavior":     ("tp_fountain", "run_to_tower", "fight_back", "regen_lane", "walk_fountain"),
     "healing_style":       ("active", "default", "never"),
-    "ability_usage":       ("aggressive", "default", "basic"),
+    # "basic" removed: style.lua:343 silently rewrites it to "default" (backward compat), so
+    # offering it as a distinct choice just means the LLM picks a value that does nothing.
+    "ability_usage":       ("aggressive", "default"),
     "ability_timing":      ("on_cooldown", "save_for_execute", "harass_only"),
-    "creep_wave_priority": ("push", "last_hit_only", "freeze"),
+    # "freeze" removed: NOT implemented. The engine branches on cwp only for "push" and
+    # "last_hit_only"; freeze falls past the last_hit_only guard in the anti-idle watchdog
+    # (style.lua:705) and ATTACKS enemy creeps -- the opposite of "never touch enemy creeps".
+    # Re-add only once freeze is actually gated at those sites.
+    "creep_wave_priority": ("push", "last_hit_only"),
     "hero_priority":       ("always", "default", "never"),
     "deny_policy":         ("always", "default", "never"),
     "tower_aggression":    ("always", "default", "never"),
