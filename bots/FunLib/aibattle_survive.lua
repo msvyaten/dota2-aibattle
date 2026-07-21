@@ -628,9 +628,15 @@ local function recovery(bot, dials, nEnemyCreeps)
 		return true
 	end
 
-	-- b. TP to fountain
+	-- b. TP to fountain -- tp_fountain ONLY.
+	-- walk_fountain is defined as "no TP escape; walk to own fountain on foot" (style.lua:86):
+	-- a fountain trip pre-chosen by the rule must stay a walk. It used to be lumped in here,
+	-- which was latent only because the TP branch was unreachable (getItem filtered on
+	-- ITEM_SLOT_TYPE_MAIN while the scroll lives in the TP slot); edd7a44 made that branch live,
+	-- so walk_fountain would have started teleporting. mode_retreat_generic.lua:839 already
+	-- walks correctly -- this was the single divergent site. Falls through to (c) below.
 	local tp = getTpScroll(bot)
-	if tp and (behavior == "tp_fountain" or behavior == "walk_fountain") then
+	if tp and behavior == "tp_fountain" then
 		bot.aib_fountainTrip = true
 		bot.aib_fountainFloorTrip = true
 		recoveryPlan(bot, "tp_fountain", "critical", string.format("hp=%.0f", hp*100), 2.0)
