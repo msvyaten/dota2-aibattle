@@ -832,32 +832,50 @@ end
 -- which means slow chip damage that regen outpaces is undercounted; that is acceptable
 -- for a "who is chewing on me" readout.
 -- Emitted cumulatively every 15s: postmatch takes the LAST line, so it needs no counter.
+-- Probe v2 (21.07): the first run read other=33-35% on both sides, which made the whole
+-- readout unusable -- a third of the damage was unattributed. Two causes, both fixed here.
+-- (1) DEATH. The killing blow drops the full remaining bar in one sample, and by the next
+-- tick the flag that caused it has usually expired, so every death dumped a whole HP bar
+-- into `other`. Deaths get their own bucket now; they are an outcome, not a damage source,
+-- and mixing them in was drowning the signal we actually wanted.
+-- (2) A FIXED 0.3s FLAG WINDOW. The sampler runs on the laning tick, not on a timer, so
+-- whenever two samples fell more than 0.3s apart the flags had already lapsed and the delta
+-- landed in `other`. Size the window from the real gap between samples instead.
 local function AIB_SampleDamageBySource()
-	local hpNow = bot:GetHealth()
+	local now = DotaTime()
+	local gap = (bot.aib_dmgSampleLast ~= nil) and (now - bot.aib_dmgSampleLast) or 0.3
+	bot.aib_dmgSampleLast = now
+	local window = math.max(0.3, math.min(1.0, gap + 0.15))
+	local alive = bot:IsAlive()
+	local hpNow = alive and bot:GetHealth() or 0
 	local prev = bot.aib_dmgHpPrev
 	bot.aib_dmgHpPrev = hpNow
 	if prev ~= nil and hpNow < prev then
 		local d = prev - hpNow
-		local c = bot:WasRecentlyDamagedByCreep(0.3)
-		local t = bot:WasRecentlyDamagedByTower(0.3)
-		local h = bot:WasRecentlyDamagedByAnyHero(0.3)
-		local n = (c and 1 or 0) + (t and 1 or 0) + (h and 1 or 0)
-		if n == 1 then
-			if c then bot.aib_dmgCreep = (bot.aib_dmgCreep or 0) + d
-			elseif t then bot.aib_dmgTower = (bot.aib_dmgTower or 0) + d
-			else bot.aib_dmgHero = (bot.aib_dmgHero or 0) + d end
-		elseif n > 1 then
-			bot.aib_dmgMixed = (bot.aib_dmgMixed or 0) + d
+		if not alive then
+			bot.aib_dmgDeath = (bot.aib_dmgDeath or 0) + d
 		else
-			bot.aib_dmgOther = (bot.aib_dmgOther or 0) + d
+			local c = bot:WasRecentlyDamagedByCreep(window)
+			local t = bot:WasRecentlyDamagedByTower(window)
+			local h = bot:WasRecentlyDamagedByAnyHero(window)
+			local n = (c and 1 or 0) + (t and 1 or 0) + (h and 1 or 0)
+			if n == 1 then
+				if c then bot.aib_dmgCreep = (bot.aib_dmgCreep or 0) + d
+				elseif t then bot.aib_dmgTower = (bot.aib_dmgTower or 0) + d
+				else bot.aib_dmgHero = (bot.aib_dmgHero or 0) + d end
+			elseif n > 1 then
+				bot.aib_dmgMixed = (bot.aib_dmgMixed or 0) + d
+			else
+				bot.aib_dmgOther = (bot.aib_dmgOther or 0) + d
+			end
 		end
 	end
-	if bot.aib_dmgLogLast == nil or DotaTime() - bot.aib_dmgLogLast >= 15.0 then
-		bot.aib_dmgLogLast = DotaTime()
+	if bot.aib_dmgLogLast == nil or now - bot.aib_dmgLogLast >= 15.0 then
+		bot.aib_dmgLogLast = now
 		Style.Intent(bot, "damage-by-source", string.format(
-			"creep=%d tower=%d hero=%d mixed=%d other=%d",
+			"creep=%d tower=%d hero=%d mixed=%d death=%d other=%d",
 			bot.aib_dmgCreep or 0, bot.aib_dmgTower or 0, bot.aib_dmgHero or 0,
-			bot.aib_dmgMixed or 0, bot.aib_dmgOther or 0), 1.0)
+			bot.aib_dmgMixed or 0, bot.aib_dmgDeath or 0, bot.aib_dmgOther or 0), 1.0)
 	end
 end
 
@@ -921,7 +939,15 @@ local function AIB_BuildDesireCandidates(dials, rules, runtimeCtx, intentCtx)
 	if hpBehind and (enemyDist or 99999) > range + 80 then
 		Style.DiagRL(bot, "fight-hp-behind", 3)
 	end
-	local fightCanAct = enemy ~= nil and not concedeLane and (
+	-- Reach bound, mirroring what the fight ACTION can actually do. Every leg of the fight
+	-- closure is distance-gated -- AbilityPressure scans 900, ContactHero range+50, the
+	-- HarassAndChase chase branches top out at 1150 -- but legs 2 and 3 of this probe had no
+	-- distance term at all, so a healthy bot with the enemy visible at 1400 read canAct=true,
+	-- won the tick at 96-122 and returned empty. 8906755360 [R]: fight@114 x7, fight@96 x6,
+	-- fight@122 x1, fight@104 x1 = 15 of 18 empty_action ticks on that side. 1200 keeps slack
+	-- above the widest action gate so no reachable engage is cut.
+	local fightReach = (enemyDist or 99999) <= 1200
+	local fightCanAct = enemy ~= nil and not concedeLane and fightReach and (
 		(enemyDist or 99999) <= range + 80
 		or hp < 0.32
 		or (not AIB_UphillMiss(enemy) and not hpBehind
@@ -936,8 +962,19 @@ local function AIB_BuildDesireCandidates(dials, rules, runtimeCtx, intentCtx)
 	-- step-back is not recovery. (b) "enemy visible within 900" counted a passive enemy
 	-- as an action while the bot idled at its anchor (W3). If none hold, policy caps
 	-- recover below CS and lane work takes the tick.
+	-- (c), third leak: "recently damaged" alone. AIBSurvive.recovery() refuses outright above
+	-- its own fallback threshold (survive.lua: 0.20 + 0.20*retreat_caution, +0.08 once dead),
+	-- so a bot with no items, taking hero damage at 33% HP with zero deaths -- threshold 0.31 --
+	-- had canAct=true and no action anywhere. 8906755360 [D] t=112-117 and t=379-390:
+	-- recover@102 empty-won 7 ticks, and the tick then fell to the idle watchdog, which walked
+	-- it into the creek (70999f0). Being hit only makes recovery real work if a recovery leg
+	-- actually exists, so mirror recovery()'s gate. Must stay in step with survive.lua:
+	-- if that threshold moves, this moves.
+	local recoverFallbackHp = 0.20 + 0.20 * (dials.retreat_caution or 0.5)
+		+ (GetHeroDeaths(bot:GetPlayerID()) >= 1 and 0.08 or 0.0)
 	local recoverCanAct = AIB_HasRecoveryResources()
-		or bot:WasRecentlyDamagedByAnyHero(2.0) or bot:WasRecentlyDamagedByCreep(2.0)
+		or ((bot:WasRecentlyDamagedByAnyHero(2.0) or bot:WasRecentlyDamagedByCreep(2.0))
+			and hp < recoverFallbackHp)
 		or (hp < AIBLanePolicy.Hp.danger
 			and not AIBUtils.IsCloserToFountain(bot, AIBUtils.SafeRetreatTowerLoc(bot)))
 	-- canAct probe for the siege desire: true only when the siege module would ACT this
