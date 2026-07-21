@@ -4,7 +4,7 @@ Last updated: 2026-07-21.
 
 ## ▶ NEXT SESSION START HERE (fresh context)
 
-**Bot code in LIVE = `44cbc78`. Matchup R=brawler / D=farmer. Origin in sync.**
+**Bot code in LIVE = `cc00c9b`. Matchup R=brawler / D=farmer. Origin in sync.**
 Only `bots/Customize/playstyle_*.lua` are dirty -- that IS the live matchup, do not commit
 them without an explicit order.
 
@@ -23,8 +23,8 @@ forward by hand -- a played match clears everything up to its own build.
 
 ### Awaiting validation (debt from `bbfed91`)
 Behaviour-changing: `d7fb5ae` (recover penalty during the enemy-dead free-farm window),
-`d63e224` + `44cbc78` (mango: not eaten at low HP, and abilitySoon honoured only when harass
-abilities can actually fire). Everything else in the debt is a probe
+`d63e224` -> `44cbc78` -> `cc00c9b` (mango: eaten ONLY when mana is short for a skill --
+damage and HP are no longer part of the decision at all). Everything else in the debt is a probe
 (`dd4284b`, damage-by-source), behaviour-preserving (`90ea347`, low_hp_hold derived from
 retreat_caution), or generator-schema only (`951fc18`).
 
