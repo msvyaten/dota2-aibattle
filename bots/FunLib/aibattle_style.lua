@@ -757,8 +757,19 @@ local function antiIdleCreep(bot)
     return false
 end
 
-local function antiIdleLane(bot, lane)
-    local dest = GetLaneFrontLocation(bot:GetTeam(), lane, 0)
+local function antiIdleLane(bot, lane, lowHp)
+    -- P1-C C.1 gated antiIdleCreep and antiIdlePush because the idle watchdog was making
+    -- real lane decisions from score 2. antiIdleLane was left ungated and inherited the
+    -- traffic: it had NO hp check at all and walked to offset 0 -- the lane FRONT, the most
+    -- forward point on the lane, further forward than antiIdlePush's own destination (-400)
+    -- and than forwardness' hp-scaled offset. 8906755360 t=107-122 (D): hp=44% sitting 147u
+    -- from its regen point, recover won the tick and came back empty, every other candidate
+    -- declined, so anti-idle won at score 2 and walked the bot ~1000u into the river, where
+    -- it lost 14% HP and walked straight back -- 2012u of path, 17u of net displacement, no
+    -- last hit. anti-idle-lane went 4->11 across that window, i.e. it owned most of it.
+    -- Same two gates its siblings already carry: not while hurt, and not to the front line.
+    if lowHp or hpFrac(bot) < 0.45 then return false end
+    local dest = GetLaneFrontLocation(bot:GetTeam(), lane, -400)
     if dest ~= nil and GetUnitToLocationDistance(bot, dest) > 150 then
         bot:Action_MoveToLocation(dest)
         M.DiagRL(bot, "anti-idle-lane", 5)
@@ -801,7 +812,7 @@ function M.AntiIdleGlobal(bot)
     if antiIdleCombat(bot, lowHp) then return true end
     if antiIdleAssist(bot) then return true end
     if antiIdleCreep(bot) then return true end
-    if antiIdleLane(bot, lane) then return true end
+    if antiIdleLane(bot, lane, lowHp) then return true end
     if antiIdlePush(bot, lane, lowHp) then return true end
 
     M.DiagRL(bot, "idle", 3)
