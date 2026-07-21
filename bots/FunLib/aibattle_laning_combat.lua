@@ -149,6 +149,40 @@ function M.RunePowerPressure(ctx)
 	return false
 end
 
+-- Pure feasibility probe for the power-rune candidate (canAct contract, same as
+-- AIBLaneSiege.CanAct). Mirrors the return-false gates of RunePowerPressure above WITHOUT
+-- side effects -- no Intent, no diag, no orders.
+-- Why: the candidate's ONLY entry test was args.actionPowerRune, i.e. "do I hold an action
+-- rune", while the action checks seven further conditions. So it entered the election at
+-- score 104-114 -- above safe-cs 56 and creep-work 38 -- and empty-won 19 times in
+-- 8906632392 [R] while the bot stood doing nothing with a rune in the bottle.
+-- NOTE: absence of an enemy is NOT a veto -- the tower and creep branches run without one.
+-- Keep in sync with RunePowerPressure; if that grows a target path, add it here too.
+function M.RunePowerCanAct(ctx)
+	local bot = ctx.bot
+	local policy = AIBEngine.RuneUsePolicy(bot, ctx.dials, ctx.rules)
+	if policy == nil then return false end
+	if not AIBEngine.IsActionPowerRune(policy.name) then return false end
+	if J.GetHP(bot) < (policy.minFightHp or 0.38) then return false end
+	local hasDamageRune = policy.name == "double_damage"
+	local hasHasteRune = policy.name == "haste"
+	local range = attackRange(ctx)
+	local enemy = ctx.nearestEnemyHero(policy.maxChase or (hasHasteRune and 1150 or 950))
+	if enemy ~= nil and enemy:IsAlive()
+		and ctx.enemyTowerDanger() == nil
+		and not ctx.uphillMiss(enemy)
+		and ((policy.heroPressure or 0.5) >= 0.45 or J.GetHP(enemy) <= 0.45) then
+		return true
+	end
+	if policy.useForTowerWithWave == true and (policy.towerPressure or 0.5) >= 0.45 then
+		if powerRuneTowerTarget(ctx, range) ~= nil then return true end
+	end
+	if hasDamageRune and (policy.creepPressure or 0.5) >= 0.35 then
+		if ctx.nearestAttackableEnemyCreep(range + 80) ~= nil then return true end
+	end
+	return false
+end
+
 function M.HeroOverCreep(ctx)
 	local bot = ctx.bot
 	local atkHero = bot:GetNearbyHeroes(attackRange(ctx) + 60, true, BOT_MODE_NONE)

@@ -975,8 +975,15 @@ local function AIB_BuildDesireCandidates(dials, rules, runtimeCtx, intentCtx)
 			end, nil, safetyPolicy.capped)
 	end
 
+	-- power-rune had NO canAct contract at all: its only entry test was actionPowerRune
+	-- ("do I hold an action rune"), while RunePowerPressure gates on seven more conditions.
+	-- At score 104-114 it outbids everything, so each infeasible tick was a silent no-op:
+	-- 19 empty wins in 8906632392 [R]. Same veto shape as fight/safety/siege/recover.
 	local powerPolicy = AIBLanePolicy.PowerRune(policyArgs)
-	if powerPolicy ~= nil then
+	if powerPolicy ~= nil and not AIBLaneCombat.RunePowerCanAct(AIB_LaningModuleCtx(dials, rules)) then
+		Style.Blocked(bot, "power-rune-candidate", "no_action_capped",
+			string.format("hp=%.0f score=%.0f", hp * 100, powerPolicy.score or 0), 3.0)
+	elseif powerPolicy ~= nil then
 		candidates[#candidates + 1] = AIBTopArbiter.Candidate("power-rune", powerPolicy.score, powerPolicy.reason,
 			powerPolicy.detail,
 			function() return AIBLaneCombat.RunePowerPressure(runtimeCtx) end)
