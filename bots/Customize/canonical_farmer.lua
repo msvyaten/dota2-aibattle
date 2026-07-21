@@ -15,7 +15,10 @@
 --   hero_priority "default" (vs "always"): fight through farm_focus/hp-adv gate, not reflex
 --   harass 0.55 (vs 0.90): contest CS / deny / zone when free, do not over-commit
 --   push 0.45 (vs 0.30): take tower when the wave is already shoved & safe (conversion)
---   retreat_caution 0.55 (vs 0.35): preserve economy, avoid feeding the lead back
+--   retreat_caution 0.55 (vs 0.35): preserve economy. (Tried 0.65 after 8885447129's
+--     early feed, but 8885499372 showed 0.65 over-corrects -- the farmer paces/misses CS;
+--     reverted to 0.55. Early feed is handled by the engine concede-when-losing floor,
+--     not by blunt caution.)
 --   ability_aggro 0.45 (vs 0.65): spend spells on securing CS / finishing, not harass
 --
 -- NEEDS MATCH VALIDATION: dials are a judgment call; tune if games run long or the
@@ -64,14 +67,23 @@ return {
 	},
 	rules = {
 		respawn_behavior    = "tp_to_lane",
-		pregame_behavior    = "aggressive_mid",
+		pregame_behavior    = "default",
 		dive_policy         = "finish_only",
 		low_hp_behavior     = "regen_lane",
 		healing_style       = "active",
 		ability_usage       = "aggressive",
+		-- save_for_execute (vs brawler on_cooldown): disables AbilityHarass entirely
+		-- (style.lua:907), so razes go only to securing/finishing -- exactly what the
+		-- ability_aggro 0.45 note above asks for ("spend spells on securing CS / finishing,
+		-- not harass"). Previously unset -> silently defaulted to on_cooldown.
+		ability_timing      = "save_for_execute",
 		creep_wave_priority = "last_hit_only",
 		hero_priority       = "default",
 		deny_policy         = "default",
+		-- default (vs brawler always): attack the tower only under wave cover. Keeps the
+		-- farmer's proven win path -- convert a farm lead into an objective (8905560371) --
+		-- without the reckless no-wave siege that "always" permits.
+		tower_aggression    = "default",
 	},
 	skill_build = { npc_dota_hero_nevermore = {1,5,1,5,1,6,1,5,5,4,6,4,4,4,6} },
 }

@@ -13,7 +13,7 @@ return {
 		harass_desire     = 0.90,
 		farm_focus        = 0.15,
 		forwardness       = 0.78,
-		retreat_caution   = 0.35,
+		retreat_caution   = 0.50,
 		rune_control      = 0.85,
 		execute_threshold = 0.42,
 		ability_aggro     = 0.65,
@@ -55,9 +55,18 @@ return {
 		low_hp_behavior     = "regen_lane",
 		healing_style       = "active",
 		ability_usage       = "aggressive",
+		-- on_cooldown (vs farmer save_for_execute): raze whenever it is up, matching
+		-- harass 0.90 / ability_aggro 0.65. Was the silent default already -- now explicit so
+		-- the contrast with the farmer is stated, not accidental.
+		ability_timing      = "on_cooldown",
 		creep_wave_priority = "last_hit_only",
 		hero_priority       = "always",
 		deny_policy         = "default",
+		-- always (vs farmer default): hit the tower even without a wave tanking it.
+		-- Deliberately independent of push_desire 0.30 -- the brawler rarely SEEKS towers,
+		-- but when it does it accepts the risk. Engine floors (MayDive, concede) still cap
+		-- the suicidal end. Previously unset -> silently defaulted to "default".
+		tower_aggression    = "always",
 	},
 	skill_build = { npc_dota_hero_nevermore = {1,5,1,5,1,6,1,5,5,4,6,4,4,4,6} },
 }
