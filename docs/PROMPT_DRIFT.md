@@ -88,6 +88,40 @@ LLM не знает о трети допустимых значений.
 
 ---
 
+## E. Аудит валидности ВСЕХ значений правил (21.07)
+
+Проверены все 38 значений 11 правил: реализовано ли значение в движке, достижима ли ветка,
+совпадает ли поведение с описанием. ⚠️ Методика: греп по литералам даёт ложные «мёртвые»
+(сравнение часто идёт с локальной переменной — `policy == "never"`, а не `dive_policy == ...`),
+и `style.lua` содержит И таблицы валидации, И реализацию. Каждый кандидат проверен глазами.
+
+**Здоровы (8 правил, все значения):** `respawn_behavior`, `pregame_behavior`, `dive_policy`,
+`healing_style`, `ability_timing`, `hero_priority`, `deny_policy`, `tower_aggression`.
+
+**Три реальные проблемы:**
+
+**E1 — `creep_wave_priority = "freeze"` НЕ РЕАЛИЗОВАН, и ведёт себя ПРОТИВОПОЛОЖНО описанию.**
+Движок ветвится по cwp только на `"push"` (`laning_creeps.lua:135`, `laning_siege.lua:42/126/204`)
+и на `"last_hit_only"` (`style.lua:705`). На `freeze` не ветвится НИГДЕ. Следствие: в анти-айдл
+сторожке `style.lua:705` стоит `if cwp == "last_hit_only" then return false end` — `freeze`
+проваливается мимо и **атакует вражеских крипов**. Промпт (:48) обещает «never touch enemy creeps
+(drags the wave back to own tower)» — на деле freeze пушит волну сильнее, чем last_hit_only.
+Фикс: либо реализовать freeze (гейт в тех же точках + не бить крипов), либо убрать из whitelist.
+
+**E2 — `ability_usage = "basic"` = молчаливый алиас на `"default"`** (`style.lua:343`:
+`if au == "basic" then au = "default" end  -- backward compat`). В whitelist
+(`generate_playstyle.py:23`) предлагается как отдельный выбор, в промпте не документирован (см. A2).
+LLM, выбравший «basic», молча получает «default». Фикс: убрать из whitelist или задокументировать
+как алиас.
+
+**E3 — `low_hp_behavior = "walk_fountain"` ТЕЛЕПОРТИРУЕТСЯ вопреки собственному определению.**
+`style.lua:86` описывает его как «no TP escape; walk to own fountain on foot», но
+`survive.lua:633` даёт TP обоим: `if tp and (behavior == "tp_fountain" or behavior == "walk_fountain")`.
+⚠️ Было латентно, пока TP-ветка была мертва (getItem требовал ITEM_SLOT_TYPE_MAIN, а свиток лежит
+в TP-слоте); после фикса `edd7a44` ветка ожила → расхождение стало РЕАЛЬНЫМ. Ни один канонический
+конфиг сейчас walk_fountain не использует, но он в whitelist → LLM его выдаст.
+Фикс: убрать `walk_fountain` из условия TP (тогда падает в пеший путь (c), как заявлено).
+
 ## Порядок работ
 
 1. **A1 (`pregame_behavior:"default"`)** — самое дорогое и самое связанное с текущей юзер-болью.
