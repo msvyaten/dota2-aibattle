@@ -134,6 +134,22 @@ def report(match_id):
 
     # Farm-efficiency probe (21.07). The farmer walked in for most last hits (cs-walk 275 vs
     # the brawler's 90 for the same lh). These buckets say how far out of position it stands.
+    # Damage attribution (21.07). Cumulative, so take the LAST line per side. creep/tower/hero
+    # are lower bounds -- ticks with two live sources land in `mixed` rather than being split.
+    print("----- watch: damage by source (lower bounds; mixed = ambiguous) -----")
+    for side in ("R", "D"):
+        hits = re.findall(
+            r"AIB\[%s\] intent=damage-by-source[^']*?creep=(\d+) tower=(\d+) hero=(\d+) mixed=(\d+) other=(\d+)" % side,
+            text)
+        if not hits:
+            print("  [%s] (no samples -- probe not in this build)" % side)
+            continue
+        c, t, h, m, o = (int(x) for x in hits[-1])
+        tot = c + t + h + m + o
+        pct = lambda v: (100 * v // tot) if tot else 0
+        print("  [%s] total=%d | creep=%d(%d%%) tower=%d(%d%%) hero=%d(%d%%) mixed=%d(%d%%) other=%d"
+              % (side, tot, c, pct(c), t, pct(t), h, pct(h), m, pct(m), o))
+
     print("----- watch: CS positioning (why farm is low) -----")
     for side in ("R", "D"):
         walk = diag_max(text, side, "cs-walk")

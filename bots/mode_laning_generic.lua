@@ -822,8 +822,48 @@ end
 -- ONE election. These candidates carry no band -> the arbiter's nil default treats them as
 -- the desire band (winner-hysteresis + empty_action as before). Order-preserving guarantee
 -- for the tail lives in the explicit bands/scores assigned there.
+-- MEASUREMENT ONLY (21.07, user request) -- no behaviour change.
+-- The engine exposes only boolean WasRecentlyDamagedBy* flags, never damage amounts, so
+-- "how much did creeps take off versus the tower" was unanswerable and the melee-creep
+-- positioning complaints could not be quantified. Sample the HP delta each tick and
+-- attribute it by whichever flags are live. Overlapping sources go to a mixed bucket
+-- instead of being double counted -- deliberately conservative, so creep/tower/hero are
+-- lower bounds and mixed is the ambiguity budget. Regen ticks (delta >= 0) are ignored,
+-- which means slow chip damage that regen outpaces is undercounted; that is acceptable
+-- for a "who is chewing on me" readout.
+-- Emitted cumulatively every 15s: postmatch takes the LAST line, so it needs no counter.
+local function AIB_SampleDamageBySource()
+	local hpNow = bot:GetHealth()
+	local prev = bot.aib_dmgHpPrev
+	bot.aib_dmgHpPrev = hpNow
+	if prev ~= nil and hpNow < prev then
+		local d = prev - hpNow
+		local c = bot:WasRecentlyDamagedByCreep(0.3)
+		local t = bot:WasRecentlyDamagedByTower(0.3)
+		local h = bot:WasRecentlyDamagedByAnyHero(0.3)
+		local n = (c and 1 or 0) + (t and 1 or 0) + (h and 1 or 0)
+		if n == 1 then
+			if c then bot.aib_dmgCreep = (bot.aib_dmgCreep or 0) + d
+			elseif t then bot.aib_dmgTower = (bot.aib_dmgTower or 0) + d
+			else bot.aib_dmgHero = (bot.aib_dmgHero or 0) + d end
+		elseif n > 1 then
+			bot.aib_dmgMixed = (bot.aib_dmgMixed or 0) + d
+		else
+			bot.aib_dmgOther = (bot.aib_dmgOther or 0) + d
+		end
+	end
+	if bot.aib_dmgLogLast == nil or DotaTime() - bot.aib_dmgLogLast >= 15.0 then
+		bot.aib_dmgLogLast = DotaTime()
+		Style.Intent(bot, "damage-by-source", string.format(
+			"creep=%d tower=%d hero=%d mixed=%d other=%d",
+			bot.aib_dmgCreep or 0, bot.aib_dmgTower or 0, bot.aib_dmgHero or 0,
+			bot.aib_dmgMixed or 0, bot.aib_dmgOther or 0), 1.0)
+	end
+end
+
 local function AIB_BuildDesireCandidates(dials, rules, runtimeCtx, intentCtx)
 	local hp = J.GetHP(bot)
+	AIB_SampleDamageBySource()
 	local range = botAttackRange or bot:GetAttackRange()
 	local enemy, enemyDist = AIB_NearestEnemyHero(AIBLanePolicy.EnemyScanRange(range))
 	local enemyHp = enemy ~= nil and J.GetHP(enemy) or 1.0
