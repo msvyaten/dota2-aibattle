@@ -86,6 +86,16 @@ local function hasFountainAura(bot)
 		or bot:HasModifier("modifier_fountain_aura_buff")
 end
 
+-- Mirror of the recovery-buy guard at (a): the hp<0.22 engine floor is about to walk/TP us
+-- to a fountain that heals for free, so a flask drunk now is 110g burned on the way home
+-- (8906755360 t=400: hp=11% -> drank flask -> hp 11->25->47 while walking 1092,917 ->
+-- 6936,6397, arrived at 100% anyway). The buy side was fixed in 543c0c1 but the CONSUME side
+-- was never gated, and there are three consume sites -- hence one shared predicate.
+-- Under hero fire the flask stays available: surviving the walk beats saving the gold.
+local function fountainFreeHealSoon(bot, hp)
+	return hp < 0.22 and not bot:WasRecentlyDamagedByAnyHero(2.0)
+end
+
 local function bottleCharges(bot)
 	local bSlot = bot:FindItemSlot("item_bottle")
 	if bSlot < 0 then return nil end
@@ -321,6 +331,7 @@ local function defensiveHeal(bot, dials)
 
 	if hpMissing >= 400
 		and (bot.aib_flaskLast == nil or DotaTime() - bot.aib_flaskLast >= FLASK_CD)
+		and not fountainFreeHealSoon(bot, hp)
 		and not (bot:WasRecentlyDamagedByAnyHero(0.5) or bot:WasRecentlyDamagedByCreep(0.5)) then
 		local flask = getItem(bot, "item_flask")
 		if flask then
@@ -415,6 +426,10 @@ local function defensiveHeal(bot, dials)
 	-- At critical HP (< 0.30) bypass recent-damage check (channel gets cancelled but worth trying).
 	if hp < 0.40 and (bot.aib_flaskLast == nil or DotaTime() - bot.aib_flaskLast >= FLASK_CD) then
 		local flask = getItem(bot, "item_flask")
+		if flask and fountainFreeHealSoon(bot, hp) then
+			Style.Blocked(bot, "heal-item", "fountain_floor_free_heal", string.format("hp=%.0f", hp*100), 8.0)
+			flask = nil
+		end
 		if flask then
 			local recently_dmg = bot:WasRecentlyDamagedByAnyHero(0.5) or bot:WasRecentlyDamagedByCreep(0.5)
 			if hp < 0.30 or not recently_dmg then
@@ -523,6 +538,10 @@ local function recovery(bot, dials, nEnemyCreeps)
 	--    Don't return true when on CD; laning should continue during the cooldown window.
 	if hp < 0.70 then
 		local flask = getItem(bot, "item_flask")
+		if flask and fountainFreeHealSoon(bot, hp) then
+			Style.Blocked(bot, "recovery-flask", "fountain_floor_free_heal", string.format("hp=%.0f", hp*100), 8.0)
+			flask = nil
+		end
 		if flask then
 			if bot.aib_recFlaskLast == nil or DotaTime() - bot.aib_recFlaskLast >= 8.0 then
 				bot.aib_recFlaskLast = DotaTime()
