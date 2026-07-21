@@ -2258,6 +2258,15 @@ end
 X.ConsiderItemDesire["item_flask"] = function( hItem )
 
 	if bot:DistanceFromFountain() < 3000 then return BOT_ACTION_DESIRE_NONE end
+	-- AIB: the same idea as the line above, extended to the rest of the walk home. A committed
+	-- floor trip is about to restore this HP for free, so a salve drunk en route is 110g burned
+	-- to arrive full. See aibattle_item_policy.SkipConsumableForFountainTrip.
+	if AIBItemPolicy.SkipConsumableForFountainTrip ~= nil
+		and AIBItemPolicy.SkipConsumableForFountainTrip(bot) then
+		AIBStyle.Blocked(bot, "heal-item", "fountain_trip_committed",
+			string.format("hp=%.0f", J.GetHP(bot) * 100), 8.0)
+		return BOT_ACTION_DESIRE_NONE
+	end
 
 	local nCastRange = 900
 	local sCastType = 'unit'

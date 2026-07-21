@@ -80,6 +80,28 @@ function M.PurchaseConsumable(bot, style, itemName)
 	return res
 end
 
+-- A committed fountain trip restores HP for free in a few seconds, so a consumable spent on
+-- the way is pure waste. The user has now called this out four times across two matches
+-- ("пошёл на фонтан и по пути выпил фласку", 8907379308 at 3:40 / 6:10 / 8:40 / 11:00).
+--
+-- Why here and not in survive.lua: our own consume sites were already guarded (f942b46) and
+-- read consume-blocked=0 for the whole match, while heal-item did not move during the 11:00
+-- trip either. The salve is eaten by the VENDOR rule in ability_item_usage_generic, whose
+-- conditions a fountain walk satisfies perfectly -- HP missing > 500, no enemy within 900,
+-- no recent hero damage. It already bails inside 3000 of the fountain; this is the same idea
+-- applied to the rest of the walk.
+--
+-- This deliberately does NOT abort the trip. The 21.07 rollback settled that a committed
+-- floor trip runs to completion, because the trip also restores mana and bottle charges that
+-- an HP test cannot see. The only thing being fixed is paying 110g to arrive full.
+function M.SkipConsumableForFountainTrip(bot)
+	if bot == nil then return false end
+	if bot.aib_fountainFloorTrip ~= true and bot.aib_fountainTrip ~= true then return false end
+	-- Low enough that the walk itself is in doubt: heal anyway, arriving alive beats saving.
+	if J.GetHP(bot) < 0.15 then return false end
+	return true
+end
+
 function M.HasSufficientTp(bot, itemApi)
 	local charges = itemApi.GetItemCharges(bot, "item_tpscroll")
 	return charges >= 2
