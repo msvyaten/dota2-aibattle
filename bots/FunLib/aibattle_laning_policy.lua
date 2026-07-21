@@ -71,6 +71,10 @@ M.Score = {
 	recoverDanger = 102,
 	recoverRunePenalty = -18,
 	recoverCreepDamagePenalty = -14,
+	-- Free-farm window: while the enemy is dead the lane is safe, so a soft recover must not
+	-- pull the bot off the wave -- that is the bot spending the reward it just earned.
+	-- -20 drops the base band 74 -> 54, just under safe-cs 56, so CS takes the tick instead.
+	recoverEnemyDeadPenalty = -20,
 	-- Score cap when recover has low-HP SYMPTOMS but no feasible action: behind the safe
 	-- anchor, no recovery resources and no live threat, so the retreat move just twitches
 	-- under the tower (8888784979 t=118-123: recover:92 won post-fight, empty 2x+). Below
@@ -262,6 +266,17 @@ function M.Recover(args)
 	if args.recentCreepDamage == true then
 		score = score + M.Score.recoverCreepDamagePenalty
 		add(parts, "creep_dmg", M.Score.recoverCreepDamagePenalty)
+	end
+	-- Free-farm window (8906694824 t=238: the brawler took a kill worth 463g at 19% HP and
+	-- immediately walked off to regen, returning only at t=258 -- it spent its own reward).
+	-- A penalty, NOT a veto, and only above critical HP: with the enemy dead the lane is safe
+	-- from heroes, but the creep wave alone still kills a critical bot (proven in 8906632392).
+	-- LIMIT, stated honestly: this does not cover that exact 19% case, which sits below
+	-- critical. There the bot walked AWAY from its own tower toward a rune -- rune-seek eating
+	-- the dead-window is a separate, already-known issue and is NOT addressed here.
+	if args.enemyDeadRecently == true and hp >= M.Hp.critical then
+		score = score + M.Score.recoverEnemyDeadPenalty
+		add(parts, "enemy_dead", M.Score.recoverEnemyDeadPenalty)
 	end
 	local reason = "hp_gate"
 	local capped = false

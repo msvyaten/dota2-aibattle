@@ -948,6 +948,10 @@ local function AIB_BuildDesireCandidates(dials, rules, runtimeCtx, intentCtx)
 		fightCanAct = fightCanAct,
 		recoverCanAct = recoverCanAct,
 		siegeCanAct = siegeCanAct,
+		-- Must be set HERE, not in the siege block below: Recover() is called ~37 lines
+		-- earlier than that assignment, so the free-farm penalty would have read nil and
+		-- never fired. The later siege-side assignment is now redundant but harmless.
+		enemyDeadRecently = AIB_EnemyDeadRecently(),
 		bot = bot,
 		dials = dials,
 		rules = rules,
