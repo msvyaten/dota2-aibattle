@@ -31,6 +31,18 @@ local function hasItem(bot, name)
 	return slot >= 0 and bot:GetItemSlotType(slot) == ITEM_SLOT_TYPE_MAIN and bot:GetItemInSlot(slot) ~= nil
 end
 
+-- The TP scroll lives in the dedicated TP slot, NOT a main slot, so getItem() -- which filters
+-- on ITEM_SLOT_TYPE_MAIN -- could never see it. Both TP branches in this file were therefore
+-- structurally unreachable and the bot always walked home: fountain-tp-lane=0 and recovery-tp
+-- absent in every match analysed (user, first report: "walked to lane on foot with a teleport").
+-- Scan the full inventory the way the vendor code does (utils.GetItemFromCountedInventory, 16
+-- slots), then apply the castability check that getItem() would have done.
+local function getTpScroll(bot)
+	local it = J.Utils.GetItemFromFullInventory(bot, "item_tpscroll")
+	if it ~= nil and it:IsFullyCastable() then return it end
+	return nil
+end
+
 local function forwardTowerLoc(bot) return AIBUtils.SafeRetreatTowerLoc(bot) end
 
 local function dist2D(a, b)
@@ -222,7 +234,12 @@ local function fountainRecovery(bot)
 	-- Mana alone must NEVER drive the walk: SF sits at 40-80% mana permanently, so `mana<0.90`
 	-- as a trip reason meant "always go home" (8906495087). Mana tops off only while already
 	-- standing in the aura; out on a floor trip only HP keeps the walk alive.
-	if hp < 0.98 or (mana < 0.90 and inFountain) then
+	-- ROLLBACK (user, 21.07): a committed floor trip runs to COMPLETION. Turning the bot around
+	-- mid-way because a flask or passive regen topped its HP back up is wrong -- the engine
+	-- already decided it needed to go home, and the trip also restores mana and bottle charges,
+	-- which the HP test does not see. Only a self-issued top-off stays subject to the hp/mana
+	-- test (and that one is already confined to the fountain/base area by the entry gate).
+	if hp < 0.98 or (mana < 0.90 and inFountain) or (floorTrip and not inFountain) then
 		bot.aib_fountainFullSince = nil
 		if bot.aib_fountainWaitLast == nil or DotaTime() - bot.aib_fountainWaitLast >= 1.0 then
 			bot.aib_fountainWaitLast = DotaTime()
@@ -243,7 +260,7 @@ local function fountainRecovery(bot)
 	bot.aib_fountainFloorTrip = false
 	bot.aib_fountainFullSince = nil
 
-	local tp = getItem(bot, "item_tpscroll")
+	local tp = getTpScroll(bot)
 	local t1 = GetTower(bot:GetTeam(), TOWER_MID_1)
 	if tp ~= nil and t1 ~= nil and t1:IsAlive() and nearBase then
 		Style.Diag(bot, "fountain-tp-lane")
@@ -612,7 +629,7 @@ local function recovery(bot, dials, nEnemyCreeps)
 	end
 
 	-- b. TP to fountain
-	local tp = getItem(bot, "item_tpscroll")
+	local tp = getTpScroll(bot)
 	if tp and (behavior == "tp_fountain" or behavior == "walk_fountain") then
 		bot.aib_fountainTrip = true
 		bot.aib_fountainFloorTrip = true
@@ -668,7 +685,7 @@ local function recovery(bot, dials, nEnemyCreeps)
 		and (bot.aib_recBuyCount or 0) >= 2
 	local floorReason = hp < 0.22 and "regen_lane_floor" or "no_sustain_floor"
 	if hp < 0.22 or (hp < 0.35 and noSustain) then
-		local tpFloor = getItem(bot, "item_tpscroll")
+		local tpFloor = getTpScroll(bot)
 		if tpFloor ~= nil and not bot:WasRecentlyDamagedByAnyHero(1.5) then
 			bot.aib_fountainTrip = true
 			bot.aib_fountainFloorTrip = true
