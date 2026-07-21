@@ -105,9 +105,13 @@ local DEFAULT_LOW_HP = "tp_fountain"
 -- same string. Listing it is behaviour-preserving and, more importantly, gives the generator
 -- a way to REQUEST a passive prewave -- previously impossible, and the root of the repeated
 -- "stands in the river taking poke before the creeps" reports.
--- NOTE: laning_tempo.lua:177 also branches on "water_rune", which is likewise absent here and
--- therefore unreachable. Left dead on purpose -- that behaviour has never been match-tested.
-local PREGAME_VALUES = { safe_tower = true, aggressive_mid = true, jungle_pressure = true, default = true }
+-- water_rune = pregame, walk to the nearest power-rune spawn and wait there.
+-- The implementation exists (laning_tempo.lua:177) but was unreachable because this table
+-- omitted the value -- the same dead-branch class as the TP-slot bug. Listed now so a
+-- hand-written config can reach it. Deliberately NOT added to the generator whitelist yet:
+-- it has never been match-tested, and in 1v1 mid it is likely pointless (no rune has spawned
+-- before the horn). It is plausible for 5v5, where a bounty rune is up at 0:00.
+local PREGAME_VALUES = { safe_tower = true, aggressive_mid = true, jungle_pressure = true, default = true, water_rune = true }
 local DEFAULT_PREGAME = nil  -- nil = OHA default (no override); consumers read it as "default"
 
 -- healing_style: controls whether our defensive heal system is active.
