@@ -132,6 +132,44 @@ def report(match_id):
         print("       archetype: ability-harass=%d execute=%d (farmer save_for_execute -> harass~0)"
               % (diag_max(text, side, "ability-harass"), diag_max(text, side, "execute")))
 
+    # Current pending batch. Read this section FIRST after a match -- the panel above is the
+    # previous batch, kept as a regression watch. One row per commit, in the order to debug
+    # them if something moves the wrong way (the canAct vetoes are the widest-blast-radius
+    # change: they hand ticks to lane work and can shift aggression either way).
+    print("----- watch: pending batch (f942b46..9e74621) -----")
+    for side in ("R", "D"):
+        # Count the CONSUME sites only. The same reason string is also used by 543c0c1's buy
+        # guard, which has been live for a while -- summing them would show the new fix
+        # landing when only the old one fired.
+        consume = (occ(text, side, "blocked=heal-item reason=fountain_floor_free_heal")
+                   + occ(text, side, "blocked=recovery-flask reason=fountain_floor_free_heal"))
+        print("  [%s] flask-guard(f942b46): consume-blocked=%d (heal-item + recovery-flask) "
+              "| buy-blocked=%d (543c0c1, older)"
+              % (side, consume, occ(text, side, "blocked=recovery-buy reason=fountain_floor_free_heal")))
+        print("       melee-pack(3e64ecb): inside_melee_pack=%d | creep-hit-react atk=%d step=%d back=%d"
+              % (occ(text, side, "blocked=creep-hit-react reason=inside_melee_pack"),
+                 diag_max(text, side, "creep-hit-react-atk"),
+                 diag_max(text, side, "creep-hit-react-step"),
+                 diag_max(text, side, "creep-hit-react-back")))
+        # recovery-timeout was structurally 0: the empty-bottle branch reset the latch that
+        # feeds its 10s timer on every tick. Non-zero here is the fix landing, not a fault.
+        print("       recovery-latch(b4b24af): recovery-timeout=%d (was structurally 0) | wait=%d yield=%d"
+              % (diag_max(text, side, "recovery-timeout"),
+                 diag_max(text, side, "recovery-wait"), diag_max(text, side, "recovery-yield")))
+        print("       anti-idle(70999f0): anti-idle-lane=%d (want DOWN) enter=%d creep=%d push=%d"
+              % (diag_max(text, side, "anti-idle-lane"), diag_max(text, side, "anti-idle-enter"),
+                 diag_max(text, side, "anti-idle-creep"), diag_max(text, side, "anti-idle-push")))
+        print("       no_sustain(183a5f7): no_sustain_floor=%d (was structurally 0) | regen_lane_floor=%d"
+              % (occ(text, side, "reason=no_sustain_floor"), occ(text, side, "reason=regen_lane_floor")))
+        print("       deny probe(d418d34): deny-act=%d = atk %d + walk %d | skip-backtrack=%d -> dn=%s"
+              % (diag_max(text, side, "deny-act"), diag_max(text, side, "deny-act-atk"),
+                 diag_max(text, side, "deny-act-walk"), diag_max(text, side, "deny-skip-backtrack"),
+                 last_stat(text, side, "dn")))
+        # ead1e05's signature was unobservable until 9e74621 moved it to the mirror in
+        # mode_laning_generic, where the decision is actually taken.
+        print("       recovery_commit(now observable): %d"
+              % occ(text, side, "blocked=creep-hit-react reason=recovery_commit"))
+
     # Damage attribution (21.07). Cumulative, so take the LAST line per side. creep/tower/hero
     # are lower bounds -- ticks with two live sources land in `mixed` rather than being split.
     print("----- watch: damage by source (lower bounds; mixed = ambiguous) -----")

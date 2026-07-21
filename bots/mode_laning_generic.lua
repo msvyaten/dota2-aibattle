@@ -890,6 +890,18 @@ local function AIB_BuildDesireCandidates(dials, rules, runtimeCtx, intentCtx)
 	-- effects, so a symptom-only safety desire stops outbidding a live fight while
 	-- all of its actions would return empty this tick.
 	local nowSafety = DotaTime()
+	-- Observability, not behaviour (21.07). ead1e05's acceptance signature -- blocked=
+	-- creep-hit-react reason=recovery_commit, logged inside CreepHitReact -- has read 0 in
+	-- every match, and the audit says it always will: the mirror below removes safety from
+	-- the election on exactly the ticks the inner guard would fire, so the handler never runs
+	-- to log it. The fix works, it was just unobservable. Log it where the decision actually
+	-- happens. The inner guard stays as the enforcement for any path that reaches it.
+	local recoveryCommitted = bot.aib_recoveryEpisode ~= nil and hp < 0.55
+	if recoveryCommitted and recentCreepDamage and attackableCreep then
+		Style.Blocked(bot, "creep-hit-react", "recovery_commit",
+			string.format("hp=%.0f band=%s", hp * 100,
+				tostring((bot.aib_recoveryEpisode or {}).band)), 3.0)
+	end
 	local creepReactReady = recentCreepDamage and attackableCreep
 		and (bot.aib_creepReactLast == nil or nowSafety - bot.aib_creepReactLast >= 0.75)
 		and (bot.aib_creepReliefLast == nil or nowSafety - bot.aib_creepReliefLast >= 1.2)
@@ -898,7 +910,7 @@ local function AIB_BuildDesireCandidates(dials, rules, runtimeCtx, intentCtx)
 		-- must report that too. Without this, safety would still win at 116 and then return
 		-- empty -- worse than the bug being fixed, and exactly the failure 140aaa5 closed for
 		-- recoverCanAct. Keep these two conditions identical.
-		and not (bot.aib_recoveryEpisode ~= nil and hp < 0.55)
+		and not recoveryCommitted
 	local unstuckArmed = bot.aib_damageAnchorTime ~= nil
 		and nowSafety - bot.aib_damageAnchorTime >= 3.5
 		and ((bot.aib_damageAnchorHp or 100) - hp * 100) >= 5.0
