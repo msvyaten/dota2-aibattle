@@ -102,6 +102,13 @@ M.Forward = {
 	minUsefulMoveDist = 900,
 	cooldown = 10.0,
 	longMoveOverrideDist = 1600,
+	-- The long-move override exists so a badly out-of-position bot does not wait out the 10s
+	-- cooldown. It used to bypass the cooldown ENTIRELY, which reads as "re-issue the move
+	-- every tick": 8907379308 [R] fwd-position went 17 -> 109 in 63s (~1.5/s) while the
+	-- destination is recomputed from the moving lane front each tick, so every re-issue
+	-- retargets slightly and the hero stutters in place. Same class as f26c645. Still prompt,
+	-- no longer a per-tick order spam.
+	longMoveCooldown = 1.5,
 	suppressAfterEmptyDesire = 3.0,
 	laneFallbackMinHp = 0.55,
 	laneFallbackRecoveryCooldown = 2.5,

@@ -345,6 +345,21 @@ function M.HarassAndChase(ctx)
 				and (not creepNear or not ctx.csAllowed)
 			if hpAdvChase or killPressureChase or closeVisibleChase or lowFarmHeroChase or laneOverrideChase
 				or (chaseDist <= 950 and not ctx.csAllowed and not creepNear) then
+				-- Re-issuing the chase every tick retargets the attack edge as the enemy
+				-- drifts, which reads as a stutter rather than a chase: 8907379308 [R] hit
+				-- hero-prio-chase 88 times in the first 93 seconds (~1/s) and 166 by the end,
+				-- and the user reported the hero "twitching in place" across exactly those
+				-- windows. A 0.4s throttle is invisible to a real chase and removes the
+				-- per-tick order spam. Own the tick while throttled -- releasing it would let
+				-- a positioner move the hero instead, which is the bug one layer down.
+				local nowChase = DotaTime()
+				if bot.aib_chaseLast ~= nil and nowChase - bot.aib_chaseLast < 0.4 then
+					Style.DiagRL(bot, "hero-prio-chase-hold", 5)
+					return true
+				end
+				bot.aib_chaseLast = nowChase
+				-- Above the positioners (20) and below the recovery movers (90-110).
+				Motor.Claim(bot, "hero-prio-chase", 30, 1.0)
 				return ctx.moveToAttackEdge(chase[1], "hero-prio-chase")
 			end
 			ctx.blocked("hero-prio-chase", "lane_work",

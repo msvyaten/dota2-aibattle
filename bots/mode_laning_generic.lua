@@ -1303,6 +1303,13 @@ local function ThinkLaningCore(dials, rules)
 		local recentTopEmpty = bot.aib_topArbiterEmptyLast ~= nil and nowFwd - bot.aib_topArbiterEmptyLast < AIBLanePolicy.Forward.suppressAfterEmptyDesire
 		local runeCommit = bot.aib_bottleRuneStarted ~= nil and nowFwd - bot.aib_bottleRuneStarted < AIB_RUNE_COMMIT_SECONDS
 		local siegeCommit = bot.aib_siegeCommitUntil ~= nil and nowFwd <= bot.aib_siegeCommitUntil
+		-- Yield to whoever owns the motor, exactly as lane-line does. Recovery movers claim at
+		-- 90-110, so this also stops forwardness dragging a retreating bot back out.
+		local fwdMotor = AIBMotor.Active(bot)
+		if fwdMotor ~= nil and fwdMotor ~= "fwd-position" then
+			Style.DiagRL(bot, "fwd-suppressed-motor", 5)
+			return false
+		end
 		local suppressForward = pressureEnemy ~= nil
 			or attackableCreep
 			or pendingLastHit
@@ -1333,9 +1340,16 @@ local function ThinkLaningCore(dials, rules)
 				end
 			end
 			if dest ~= nil and GetUnitToLocationDistance(bot, dest) > AIBLanePolicy.Forward.minUsefulMoveDist then
-				if bot.aib_fwdLast == nil or nowFwd - bot.aib_fwdLast >= AIBLanePolicy.Forward.cooldown
-					or GetUnitToLocationDistance(bot, dest) > AIBLanePolicy.Forward.longMoveOverrideDist then
+				local sinceFwd = bot.aib_fwdLast == nil and math.huge or (nowFwd - bot.aib_fwdLast)
+				local farMove = GetUnitToLocationDistance(bot, dest) > AIBLanePolicy.Forward.longMoveOverrideDist
+				if sinceFwd >= AIBLanePolicy.Forward.cooldown
+					or (farMove and sinceFwd >= AIBLanePolicy.Forward.longMoveCooldown) then
 					bot.aib_fwdLast = nowFwd
+					-- Own the motor while walking, and it is claimed at the same priority
+					-- lane-line uses so the two positioners can no longer both move the hero
+					-- in the same second. fwd-position was the one positioner never wired
+					-- into Motor, which is exactly the pair Motor was built to kill.
+					AIBMotor.Claim(bot, "fwd-position", 20, 1.5)
 					bot:Action_MoveToLocation(dest)
 					AIB_Diag("fwd-position")
 					return true
