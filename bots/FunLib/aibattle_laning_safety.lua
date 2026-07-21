@@ -202,7 +202,30 @@ function M.CreepHitReact(ctx)
 	-- last-hit-urgent; the trade/edge/step branches below own the creep-damage reaction.
 
 	local repeatedDamage = (bot.aib_creepReactCount or 0) >= 3
-	local safeToTrade = hp >= 0.55 and dist <= range + 80 and ctx.enemyTowerDanger() == nil
+
+	-- Standing INSIDE the melee pack, trading back is a straight HP loss for a ranged hero.
+	-- 8906755360 t=321-331 (D, user window "stood in the melee creeps and hit them"):
+	-- creep-hit-react fired reason=attack on four consecutive ticks at dist 45/107/102/109
+	-- with hits climbing 1->3->5->7 and hp 74->64 in five seconds. safeToTrade's
+	-- `dist <= range + 80` scores a creep at 45 units exactly like one at 570, so the
+	-- trade branch owns every tick; and because it runs as the safety desire (116-134) it
+	-- outranks RangedMeleePackSpacing (41), which fired all through the window
+	-- (melee-pack-space count=2-3) and could never take the tick back. Yield the two
+	-- swing-back branches when we are inside the pack -- edge_attack below then steps out
+	-- to the attack edge, which still attacks, so safety keeps a real action and does not
+	-- fall to no_action_capped (the empty-tick trap the recovery_commit note warns about).
+	local insidePack = false
+	if range > 350 and ctx.meleeCreepCentroid ~= nil then
+		local cen, count = ctx.meleeCreepCentroid(ctx.enemyCreeps, 380)
+		if cen ~= nil and count >= 2
+			and GetUnitToLocationDistance(bot, cen) < math.max(360, range - 90) - 40 then
+			insidePack = true
+			ctx.blocked("creep-hit-react", "inside_melee_pack",
+				string.format("count=%d dist=%.0f hp=%.0f", count, dist, hp * 100), 3.0)
+		end
+	end
+
+	local safeToTrade = not insidePack and hp >= 0.55 and dist <= range + 80 and ctx.enemyTowerDanger() == nil
 	if safeToTrade then
 		bot.aib_creepReactLast = now
 		Style.Intent(bot, "creep-hit-react", string.format("dist=%.0f hp=%.0f hits=%d reason=attack", dist, hp * 100, bot.aib_creepReactCount or 0), 1.5)
@@ -233,7 +256,7 @@ function M.CreepHitReact(ctx)
 
 	local hasted = bot:HasModifier("modifier_rune_haste")
 	local forcedAttackHp = hasted and 0.24 or 0.30
-	if hp >= forcedAttackHp and repeatedDamage and dist <= range + 110 and ctx.enemyTowerDanger() == nil then
+	if not insidePack and hp >= forcedAttackHp and repeatedDamage and dist <= range + 110 and ctx.enemyTowerDanger() == nil then
 		bot.aib_creepReactLast = now
 		Style.Intent(bot, "creep-hit-react", string.format("dist=%.0f hp=%.0f hits=%d reason=forced_attack", dist, hp * 100, bot.aib_creepReactCount or 0), 1.0)
 		if not alreadySwinging then
