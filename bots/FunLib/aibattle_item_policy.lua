@@ -105,7 +105,15 @@ function M.ShouldUseMango(bot, context)
 	context = context or {}
 	local hp = J.GetHP(bot)
 	local mp = J.GetMP(bot)
-	if hp < 0.30 and mp < 0.55 then return true end
+	-- Mango restores MANA, never HP, and its +0.5 HP regen applies only while the item is
+	-- still in the inventory. The usual "in trouble -> drink everything" shape is therefore
+	-- backwards for this item: eating it at low HP buys nothing for survival AND permanently
+	-- removes the regen that was helping. (User, 8906694824 ~3:00: the bot ate a mango on
+	-- taking damage and cut its own HP regen.) Old rule: `hp < 0.30 and mp < 0.55 -> true`.
+	-- Low HP now makes the bot MORE reluctant, not less: hold the regen unless mana is truly
+	-- critical. This is the single decision point -- the vendor desire in
+	-- ability_item_usage_generic.lua:2139 only asks this policy, so no vendor edit is needed.
+	if hp < 0.30 then return mp < 0.12 end
 	if context.killWindow == true and mp < 0.55 then return true end
 	if context.abilitySoon == true and mp < 0.42 then return true end
 	if mp < 0.12 then return true end
