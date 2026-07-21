@@ -141,6 +141,7 @@ end
 function M.Reset(bot)
 	if bot == nil then return end
 	bot.aib_fountainTrip = false
+	bot.aib_fountainFloorTrip = false
 	bot.aib_fountainTping = false
 	bot.aib_fountainTpCast = nil
 	bot.aib_fountainWaitLast = nil
@@ -184,11 +185,22 @@ local function fountainRecovery(bot)
 	local bottleNotFull = charges ~= nil and charges < 3
 	local nearBase = bot:DistanceFromFountain() < 2600
 	local inFountain = hasFountainAura(bot)
-	-- fountainRecovery must NOT initiate a trip from lane (obs 8905797602 t~300): merely
-	-- being nearBase (<2600) with hp<0.98 dragged an in-lane farmer -- flask active, hp fine --
-	-- to the fountain to top off. It may only act when already standing in the fountain aura
-	-- (opportunistic top-off is free) or when a real low-hp floor already set aib_fountainTrip.
-	if not inFountain and not bot.aib_fountainTrip then
+	-- fountainRecovery must NOT initiate or SUSTAIN a trip from lane.
+	-- obs 8905797602 t~300 killed the nearBase self-init. obs 8906495087 t=154-179 showed the
+	-- rest of the class: aib_fountainTrip is set by this function itself (below), and it only
+	-- clears once hp>=0.98 AND mana>=0.90 -- but a raze-spamming SF is never at 90% mana, so the
+	-- latch never opened and the bot kept walking home. Trace: hp 28%->100% (flask landed) while
+	-- loc marched 1730,1499 -> 6928,6372, fountain-wait=37 with trip_init=0.
+	-- Fix: only a floor/config-initiated trip (aib_fountainFloorTrip) survives away from base.
+	-- A self-issued top-off is confined to the fountain aura or the base area, and the latch is
+	-- dropped the moment the bot is out in the lane.
+	local floorTrip = bot.aib_fountainFloorTrip == true
+	if not (inFountain or floorTrip or (bot.aib_fountainTrip and nearBase)) then
+		if bot.aib_fountainTrip then
+			bot.aib_fountainTrip = false
+			bot.aib_fountainFullSince = nil
+			Style.DiagRL(bot, "fountain-latch-drop", 5)
+		end
 		if nearBase and (hp < 0.98 or mana < 0.90 or bottleNotFull) then
 			Style.DiagRL(bot, "fountain-init-skip", 5)
 		end
@@ -205,9 +217,12 @@ local function fountainRecovery(bot)
 		end
 	end
 	-- bottleNotFull no longer forces a fountain wait: the bottle refills instantly in the
-	-- fountain aura (188-197) and via rune/courier in lane, and gating the wait on it kept the
-	-- bot looping here so it never reached the TP-back at 218 -> it walked home on foot.
-	if hp < 0.98 or mana < 0.90 then
+	-- fountain aura and via rune/courier in lane, and gating the wait on it kept the bot looping
+	-- here so it never reached the TP-back below -> it walked home on foot.
+	-- Mana alone must NEVER drive the walk: SF sits at 40-80% mana permanently, so `mana<0.90`
+	-- as a trip reason meant "always go home" (8906495087). Mana tops off only while already
+	-- standing in the aura; out on a floor trip only HP keeps the walk alive.
+	if hp < 0.98 or (mana < 0.90 and inFountain) then
 		bot.aib_fountainFullSince = nil
 		if bot.aib_fountainWaitLast == nil or DotaTime() - bot.aib_fountainWaitLast >= 1.0 then
 			bot.aib_fountainWaitLast = DotaTime()
@@ -225,6 +240,7 @@ local function fountainRecovery(bot)
 		end
 	end
 	bot.aib_fountainTrip = false
+	bot.aib_fountainFloorTrip = false
 	bot.aib_fountainFullSince = nil
 
 	local tp = getItem(bot, "item_tpscroll")
@@ -585,6 +601,7 @@ local function recovery(bot, dials, nEnemyCreeps)
 	local tp = getItem(bot, "item_tpscroll")
 	if tp and (behavior == "tp_fountain" or behavior == "walk_fountain") then
 		bot.aib_fountainTrip = true
+		bot.aib_fountainFloorTrip = true
 		recoveryPlan(bot, "tp_fountain", "critical", string.format("hp=%.0f", hp*100), 2.0)
 		Style.Diag(bot, "recovery-tp"); bot:Action_UseAbility(tp); return true
 	end
@@ -593,6 +610,7 @@ local function recovery(bot, dials, nEnemyCreeps)
 	if behavior == "walk_fountain" or (behavior == "tp_fountain" and not tp) then
 		if bot.aib_recMoveLast == nil or DotaTime() - bot.aib_recMoveLast >= 5.0 then
 			bot.aib_fountainTrip = true
+			bot.aib_fountainFloorTrip = true
 			recoveryPlan(bot, "walk_fountain", "no_tp", string.format("hp=%.0f", hp*100), 2.0)
 			bot.aib_recMoveLast = DotaTime(); Style.Diag(bot, "recovery-walk")
 			bot:Action_MoveToLocation(J.GetTeamFountain())
@@ -639,6 +657,7 @@ local function recovery(bot, dials, nEnemyCreeps)
 		local tpFloor = getItem(bot, "item_tpscroll")
 		if tpFloor ~= nil and not bot:WasRecentlyDamagedByAnyHero(1.5) then
 			bot.aib_fountainTrip = true
+			bot.aib_fountainFloorTrip = true
 			recoveryPlan(bot, "tp_fountain", floorReason, string.format("hp=%.0f", hp*100), 2.0)
 			Style.Diag(bot, "recovery-tp")
 			bot:Action_UseAbility(tpFloor)
@@ -646,6 +665,7 @@ local function recovery(bot, dials, nEnemyCreeps)
 		end
 		if bot.aib_recMoveLast == nil or DotaTime() - bot.aib_recMoveLast >= 5.0 then
 			bot.aib_fountainTrip = true
+			bot.aib_fountainFloorTrip = true
 			recoveryPlan(bot, "walk_fountain", floorReason, string.format("hp=%.0f", hp*100), 2.0)
 			bot.aib_recMoveLast = DotaTime(); Style.Diag(bot, "recovery-walk")
 			bot:Action_MoveToLocation(J.GetTeamFountain())
