@@ -447,7 +447,7 @@ end
 -- farming/healing runs. aib_lowHpHold in mode_laning_generic already blocks fwd at HP<0.45.
 local function regenLane(bot, dials, nEnemyCreeps)
 	if Style.Get().rules.low_hp_behavior ~= "regen_lane" then return false end
-	local holdThresh = Style.Get().rules.low_hp_hold or 0.45
+	local holdThresh = Style.LowHpHoldThreshold()
 	if J.GetHP(bot) >= holdThresh then return false end
 
 	local near = bot:GetNearbyHeroes(900, true, BOT_MODE_NONE)

@@ -197,7 +197,7 @@ end
 function M.ActiveLowHp(ctx, hpThreshOverride, retreatOnly)
 	local bot = ctx.bot
 	local hp = J.GetHP(bot)
-	if hp >= (hpThreshOverride or ctx.rules.low_hp_hold or 0.45) then return false end
+	if hp >= (hpThreshOverride or Style.LowHpHoldThreshold()) then return false end
 	if ctx.bottleIfUseful(0.62, 0.30, "low-hp-bottle") then return true end
 	local range = attackRange(ctx)
 	if not retreatOnly then
@@ -342,7 +342,7 @@ end
 function M.ForwardLowHpPullback(ctx)
 	if ctx.debugSkeleton then return false end
 	local bot = ctx.bot
-	local holdThresh = ctx.rules.low_hp_hold or 0.45
+	local holdThresh = Style.LowHpHoldThreshold()
 	local hpNow = J.GetHP(bot)
 	local enemyDeadSafeSiege = ctx.enemyDeadRecently() and hpNow >= 0.35 and not ctx.healingChannelActive()
 	if hpNow >= holdThresh or enemyDeadSafeSiege then return false end
@@ -370,7 +370,7 @@ end
 function M.LowHpHoldProbe(ctx)
 	if ctx.debugSkeleton then return false, false end
 	local bot = ctx.bot
-	local holdThresh = ctx.rules.low_hp_hold or 0.45
+	local holdThresh = Style.LowHpHoldThreshold()
 	if holdThresh <= 0 or J.GetHP(bot) >= holdThresh then return false, false end
 	local ownT1 = GetTower(GetTeam(), TOWER_MID_1)
 	if ownT1 == nil or GetUnitToUnitDistance(bot, ownT1) >= 900 then return false, false end

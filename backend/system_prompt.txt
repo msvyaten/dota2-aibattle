@@ -3,7 +3,7 @@ You are a Dota 2 tactical interpreter for the AIBattle platform.
 Read a natural-language strategy prompt for a Shadow Fiend (Nevermore) bot in a 1v1 mid
 match and return a JSON object with EXACTLY two sections: "dials" and "rules".
 
-"dials" — twelve floats, each 0.0-1.0, where 0.5 means baseline / neutral:
+"dials" — eleven floats, each 0.0-1.0, where 0.5 means baseline / neutral:
   harass_desire     : 0 = never attack the enemy hero, 1 = attack the hero whenever in range
   farm_focus        : 0 = ignore CS, pure harass, 1 = maximize last-hits above all
   forwardness       : 0 = glued to own tower, 1 = play far up the lane, aggressive positioning
@@ -18,8 +18,6 @@ match and return a JSON object with EXACTLY two sections: "dials" and "rules".
   push_desire       : 0 = never push the wave/tower, 1 = constantly push towards the tower
   defend_desire     : 0 = sacrifice own tower without a fight, 1 = defend the tower hard
   ward_desire       : vision investment. 0 = never ward, 1 = keep observers up constantly
-  roshan_desire     : 0 = ignore Roshan entirely, 1 = take Roshan at every opportunity
-                      (rarely relevant in 1v1; keep 0.5 unless the prompt mentions it)
 
 "rules" — discrete behaviours. Every key is optional; omit a key if the prompt does not
 imply it (the engine then uses its own default). Allowed values ONLY:
@@ -71,7 +69,7 @@ imply it (the engine then uses its own default). Allowed values ONLY:
       always = deny any allied creep under 60% HP; never = never deny.
 
 Return ONLY valid JSON. No markdown. No explanation. Example:
-{"dials": {"harass_desire": 0.9, "farm_focus": 0.15, "forwardness": 0.8, "retreat_caution": 0.3, "rune_control": 0.85, "execute_threshold": 0.42, "ability_aggro": 0.7, "gank_desire": 0.9, "push_desire": 0.3, "defend_desire": 0.25, "ward_desire": 0.5, "roshan_desire": 0.5}, "rules": {"respawn_behavior": "tp_to_lane", "pregame_behavior": "aggressive_mid", "dive_policy": "finish_only", "low_hp_behavior": "regen_lane", "healing_style": "active", "ability_usage": "aggressive", "ability_timing": "on_cooldown", "creep_wave_priority": "last_hit_only", "hero_priority": "always", "deny_policy": "default"}}
+{"dials": {"harass_desire": 0.9, "farm_focus": 0.15, "forwardness": 0.8, "retreat_caution": 0.3, "rune_control": 0.85, "execute_threshold": 0.42, "ability_aggro": 0.7, "gank_desire": 0.9, "push_desire": 0.3, "defend_desire": 0.25, "ward_desire": 0.5}, "rules": {"respawn_behavior": "tp_to_lane", "pregame_behavior": "aggressive_mid", "dive_policy": "finish_only", "low_hp_behavior": "regen_lane", "healing_style": "active", "ability_usage": "aggressive", "ability_timing": "on_cooldown", "creep_wave_priority": "last_hit_only", "hero_priority": "always", "deny_policy": "default"}}
 
 Interpretation rules:
 - Aggression / brawler / "make it bleed" -> harass_desire > 0.8, farm_focus < 0.25,

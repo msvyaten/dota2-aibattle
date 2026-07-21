@@ -372,6 +372,10 @@ local function buildStyle(raw)
     local rune_use_policy = parseRuneUsePolicy(rawRules.rune_use_policy)
 
     local low_hp_hold = ruleNumber(rawRules, "low_hp_hold")
+    -- ruleNumber always fills the schema default, so the normalised value can never be
+    -- nil. Remember whether the config actually asked for it, so LowHpHoldThreshold can
+    -- tell "explicitly tuned" from "left alone" and derive from retreat_caution instead.
+    local low_hp_hold_set = rawRules.low_hp_hold ~= nil
     local creep_aggro_relief_hp = ruleNumber(rawRules, "creep_aggro_relief_hp")
 
     -- Debug-only switches for isolating AFK/jitter. These are deliberately not LLM-visible
@@ -388,6 +392,7 @@ local function buildStyle(raw)
         tower_aggression = tower_aggression,
         rune_use_policy = rune_use_policy,
         low_hp_hold = low_hp_hold,
+        low_hp_hold_set = low_hp_hold_set,
         creep_aggro_relief_hp = creep_aggro_relief_hp,
         debug_disable_forwardness_fallbacks = debug_disable_forwardness_fallbacks,
         debug_skeleton_laning = debug_skeleton_laning,
@@ -612,6 +617,22 @@ local function countNonSelfAllies(bot, radius)
     if list then for _, h in ipairs(list) do if h ~= bot and h:IsAlive() then n = n + 1 end end end
     return n
 end
+-- low_hp_hold: the HP band at which recovery holds position instead of stepping.
+-- It was reachable only by hand-editing a config -- no dial fed it -- so an LLM-authored
+-- style could never move it, while it IS a real behavioural fork. Per the product rule
+-- (a reachable fork must be expressible; an unreachable knob must not be advertised),
+-- derive it from retreat_caution, which is semantically the same axis.
+-- 0.35 + 0.20*caution reproduces the historical 0.45 EXACTLY at the neutral caution 0.5,
+-- so this is behaviour-preserving for every config in the repo today.
+-- An explicit rules.low_hp_hold still wins, for hand-tuned configs.
+function M.LowHpHoldThreshold()
+    local st = M.Get()
+    local r = st.rules or {}
+    if r.low_hp_hold_set and type(r.low_hp_hold) == "number" then return r.low_hp_hold end
+    local caution = (st.dials or {}).retreat_caution or 0.5
+    return 0.35 + 0.20 * caution
+end
+
 function M.MayDive(bot)
     local policy = M.Get().rules.dive_policy or DEFAULT_DIVE
     if policy == "never" then return false end

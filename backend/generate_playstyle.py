@@ -7,10 +7,15 @@ from openai import OpenAI
 MODEL = "gpt-5.5"  # current flagship (June 2026). Switch to "gpt-5.4-mini" for cheaper runs.
 
 # Full engine schema. Must stay in sync with bots/FunLib/aibattle_style.lua whitelists.
+# roshan_desire dropped 21.07: it is read only by mode_roshan_generic, and there is no
+# Roshan in 1v1 mid -- the dial cannot influence anything, so per the product rule
+# ("a knob that cannot be influenced must not be shown") it is not offered to the LLM.
+# ward_desire is kept for now: also suspect (mode_ward only, no config buys wards) but
+# not yet verified, and removing it unverified would repeat this session's main mistake.
 DIAL_KEYS = (
     "harass_desire", "farm_focus", "forwardness", "retreat_caution",
     "rune_control", "execute_threshold", "ability_aggro", "gank_desire",
-    "push_desire", "defend_desire", "ward_desire", "roshan_desire",
+    "push_desire", "defend_desire", "ward_desire",
 )
 # rule -> allowed values. A rule absent from the LLM answer is OMITTED from the
 # output config so the engine falls back to its own default for that rule.
