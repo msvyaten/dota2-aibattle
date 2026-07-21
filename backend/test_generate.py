@@ -36,15 +36,23 @@ def test_sanitize_accepts_valid_rules():
         "healing_style": "active",
         "ability_usage": "aggressive",
         "ability_timing": "save_for_execute",
-        "creep_wave_priority": "freeze",
+        "creep_wave_priority": "last_hit_only",
         "hero_priority": "always",
         "deny_policy": "never",
     }})
     assert s["rules"]["respawn_behavior"] == "tp_to_tower"
     assert s["rules"]["pregame_behavior"] == "aggressive_mid"
     assert s["rules"]["ability_timing"] == "save_for_execute"
-    assert s["rules"]["creep_wave_priority"] == "freeze"
+    assert s["rules"]["creep_wave_priority"] == "last_hit_only"
     assert len(s["rules"]) == 10
+
+def test_sanitize_drops_freeze_creep_wave_priority():
+    # 28c3019 dropped "freeze" from RULE_VALUES because nothing implements it, but left this
+    # test asserting the old behaviour -- it has been red ever since. Keep the case, invert
+    # the expectation: a config carrying "freeze" does not freeze anything, it falls past the
+    # last_hit_only guard in the anti-idle watchdog and attacks enemy creeps instead.
+    s = _sanitize_style({"dials": {}, "rules": {"creep_wave_priority": "freeze"}})
+    assert "creep_wave_priority" not in s["rules"]
 
 def test_sanitize_handles_garbage_input():
     s = _sanitize_style("not a dict")

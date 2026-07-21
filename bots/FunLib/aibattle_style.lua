@@ -131,7 +131,16 @@ local DEFAULT_ABILITY_USAGE = "default"
 -- push         = attack all in-range creeps freely (wave advances toward enemy tower).
 -- last_hit_only = only attack within the kill window (default; wave holds equilibrium).
 -- freeze        = never attack enemy creeps (wave drifts back; enemy must walk far to farm).
-local CREEP_WAVE_PRIORITY_VALUES = { push = true, last_hit_only = true, freeze = true }
+-- "freeze" removed 21.07. It was accepted here but implemented NOWHERE: every branch in the
+-- tree tests cwp against "push" or "last_hit_only" only, so a freeze config did not freeze
+-- the wave -- and it was worse than a no-op, because it fell past the last_hit_only guard in
+-- antiIdleCreep below and let the idle watchdog ATTACK enemy creeps, the exact 169-380
+-- anti-idle-creep pathology P1-C C.1 was written to kill. The generator whitelist already
+-- dropped it (28c3019); this closes the engine half of that change, so a hand-written or
+-- stale config carrying "freeze" now falls back to the last_hit_only default.
+-- This is NOT the ward_desire/roshan_desire case: those are read by the engine in 5v5 and
+-- were rightly restored. Nothing anywhere reads freeze.
+local CREEP_WAVE_PRIORITY_VALUES = { push = true, last_hit_only = true }
 local DEFAULT_CREEP_WAVE_PRIORITY = "last_hit_only"
 
 -- ability_timing: when to use abilities (only meaningful when ability_usage = "aggressive").
@@ -737,7 +746,10 @@ local function antiIdleCreep(bot)
     -- wave against the config and paced the bot between targets (200-380 anti-idle
     -- actions/match, the chronic in-lane "back and forth"). Other cwp values still fill.
     local cwp = (M.Get().rules or {}).creep_wave_priority or "last_hit_only"
-    if cwp == "last_hit_only" then return false end
+    -- State the rule positively: ONLY a push config attacks enemy creeps from the idle
+    -- watchdog. Enumerating the excluded value meant any third value silently re-enabled
+    -- the behaviour -- which is how "freeze" turned into a live regression path.
+    if cwp ~= "push" then return false end
     local creeps = bot:GetNearbyCreeps(1200, true)
     if not (creeps and #creeps > 0) then return false end
     for _, c in ipairs(creeps) do
