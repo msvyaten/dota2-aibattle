@@ -37,11 +37,9 @@ function M.Active(bot)
 	return bot.aib_motorOwner, bot.aib_motorPrio or 0
 end
 
-function M.Release(bot, owner)
-	if bot == nil or bot.aib_motorOwner ~= owner then return end
-	bot.aib_motorOwner = nil
-	bot.aib_motorPrio = nil
-	bot.aib_motorUntil = nil
-end
+-- M.Release removed 21.07: exported since v1 and never called by anything. That is not an
+-- oversight, it follows from the design above -- claims are short-TTL and expire on their
+-- own, and Active() already clears an expired record when it reads one. If an owner ever
+-- needs to hand the motor back EARLY, add it back deliberately with a caller.
 
 return M

@@ -7,12 +7,7 @@ local Style = require(GetScriptDirectory()..'/FunLib/aibattle_style')
 local Engine = require(GetScriptDirectory()..'/FunLib/aibattle_engine')
 local AIBUtils = require(GetScriptDirectory()..'/FunLib/aibattle_utils')
 
-local function moveAwayFrom(loc, awayFrom, distance)
-	local dx, dy = loc.x - awayFrom.x, loc.y - awayFrom.y
-	local d = math.sqrt(dx*dx + dy*dy)
-	if d < 1 then return loc + RandomVector(distance) end
-	return Vector(loc.x + (dx/d)*distance, loc.y + (dy/d)*distance, loc.z)
-end
+local moveAwayFrom = AIBUtils.MoveAwayFrom
 
 local function laneRetreatLoc(bot, ctx, fallbackCen)
 	local lane = ctx.assignedLane or LANE_MID

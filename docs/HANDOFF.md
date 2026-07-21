@@ -83,7 +83,7 @@
 | `aegis_policy` | **core** / any | — | ✅ |
 | `healing_style` | never / **default** / active | `bottle-heal` / `tango-heal` / `heal-item` | ✅ |
 | `ability_usage` | **default** / aggressive | `ability-harass` | ✅ |
-| `creep_wave_priority` | **last_hit_only** / push / freeze | `cw-push` / `cw-freeze` | ✅ |
+| `creep_wave_priority` | **last_hit_only** / push | `cw-push` | ✅ |
 | `ability_timing` | **on_cooldown** / save_for_execute / harass_only | — | ✅ |
 | `hero_priority` | always / **default** / never | `hero-prio-always` | ✅ |
 | `tower_aggression` | always / **default** / never | — | 📋 PLANNED |
@@ -418,7 +418,10 @@ Merge в `main` — осознанно, когда фаза с пруфами з
 |---|---|
 | `push` | Атаковать крипов свободно — волна едет к башне врага |
 | `last_hit_only` (дефолт) | Атаковать только в окне ласт-хита — волна стоит в равновесии |
-| `freeze` | Не атаковать крипов — волна тянется к своей башне; враг вынужден идти за фармом далеко от своей базы |
+
+⛔ `freeze` **удалён 21.07** (`69e8b11`). Он не был реализован ни в одной точке ветвления и при
+этом проваливался мимо гарда `last_hit_only` в анти-айдл-сторожке, из-за чего бот АТАКОВАЛ
+вражеских крипов — поведение, противоположное описанию. Подробности — `PROMPT_DRIFT.md` E1.
 
 ### `ability_timing` (отдельная пара к `ability_usage`)
 

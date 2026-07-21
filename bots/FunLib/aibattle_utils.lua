@@ -94,6 +94,16 @@ function M.EnemyCreepCentroid(enemyCreeps)
 	return n > 0 and Vector(cx / n, cy / n, 0) or nil
 end
 
+-- Point `distance` away from `awayFrom`, measured from `loc`. Two byte-identical copies of
+-- this lived in mode_laning_generic (AIB_MoveAwayFrom) and laning_survival; geometry with no
+-- tick state belongs here, next to EnemyCreepCentroid.
+function M.MoveAwayFrom(loc, awayFrom, distance)
+	local dx, dy = loc.x - awayFrom.x, loc.y - awayFrom.y
+	local d = math.sqrt(dx * dx + dy * dy)
+	if d < 1 then return loc + RandomVector(distance) end
+	return Vector(loc.x + (dx / d) * distance, loc.y + (dy / d) * distance, loc.z)
+end
+
 local function safeHeightLevel(loc)
 	if loc == nil or GetHeightLevel == nil then return nil end
 	local ok, height = pcall(GetHeightLevel, loc)

@@ -461,12 +461,7 @@ local function AIB_ResetVisualAFK(now, loc)
 	bot.aib_afkAnchorTime = now
 end
 
-local function AIB_MoveAwayFrom(loc, awayFrom, distance)
-	local dx, dy = loc.x - awayFrom.x, loc.y - awayFrom.y
-	local d = math.sqrt(dx*dx + dy*dy)
-	if d < 1 then return loc + RandomVector(distance) end
-	return Vector(loc.x + (dx/d)*distance, loc.y + (dy/d)*distance, loc.z)
-end
+local AIB_MoveAwayFrom = AIBUtils.MoveAwayFrom
 
 local function AIB_TowardFountainFrom(loc, distance)
 	local fountain = J.GetTeamFountain()

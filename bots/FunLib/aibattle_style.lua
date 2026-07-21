@@ -436,17 +436,11 @@ function M.GetItemRules()
     return M.Get().item_rules
 end
 
-function M.RuleNumberSchema()
-    return RULE_NUMBERS
-end
-
--- Backward-compat shim for old callers; new code should read rules directly.
-function M.Imp(name)
-    local r = M.Get().rules
-    if name == "defensive_heal"   then return r.healing_style  == "active"     end
-    if name == "ability_on_dials" then return r.ability_usage  == "aggressive"  end
-    return false
-end
+-- Removed 21.07 (dead exports, verified against the whole tree):
+--   M.RuleNumberSchema() -- returned RULE_NUMBERS to nobody; RULE_NUMBERS itself is still
+--     read internally at the validation site, so only the accessor was dead.
+--   M.Imp(name) -- a backward-compat shim for "old callers" that had none left. Its own
+--     comment said new code should read rules directly, and all of it does.
 
 -- Evaluate a named situational condition for the CALLING bot. Returns boolean.
 -- Cheap, fog-of-war-tolerant signals used so a prompt-authored item_rule can react
