@@ -7,6 +7,7 @@ verdict, then the specific signatures the current fixes are validated against, t
 a jitter-key breakdown (which handler dominates) and an archetype contrast row.
 Keep this the default post-match tool so a review costs ~20 lines, not a log dump.
 """
+import collections
 import re
 import sys
 
@@ -104,6 +105,32 @@ def report(match_id):
               "latch_drop=%d | logged-reason: no_sustain=%d regen_lane=%d (lower bound)"
               % (side, trip_init, f_wait, f_bottle, f_tp, init_skip,
                  diag_max(text, side, "fountain-latch-drop"), no_sustain, lane_floor))
+
+    # 21.07 batch. empty_action was the top blocked reason on both sides (105/65 in
+    # 8906632392) and the scorecard did NOT flag it -- empty/min read 8.4/5.2 against a
+    # limit of 13. Always read the per-winner split, not the aggregate.
+    print("----- watch: empty_action by winner (structural: capped/no-contract wins) -----")
+    for side in ("R", "D"):
+        tot = occ(text, side, "reason=empty_action")
+        pairs = re.findall(r"AIB\[%s\][^']*?reason=empty_action winner=([a-z-]+) score=(\d+)" % side, text)
+        top = collections.Counter("%s@%s" % (w, s) for w, s in pairs).most_common(4)
+        print("  [%s] empty_action=%d | top: %s"
+              % (side, tot, ", ".join("%s x%d" % (k, n) for k, n in top) or "none"))
+
+    print("----- watch: 21.07 fix batch (one signature per fix) -----")
+    for side in ("R", "D"):
+        vetoes = {n: occ(text, side, "blocked=%s-candidate reason=no_action_capped" % n)
+                  for n in ("fight", "safety", "siege", "recover", "power-rune")}
+        print("  [%s] veto: %s" % (side, " ".join("%s=%d" % (k, v) for k, v in vetoes.items())))
+        print("       visual-hold-still=%d (was vibrating) | still/lane=%d/%d | creep-react recovery_commit=%d"
+              % (diag_max(text, side, "visual-hold-still"),
+                 diag_max(text, side, "visual-hold-still"),
+                 diag_max(text, side, "visual-hold-lane"),
+                 occ(text, side, "blocked=creep-hit-react reason=recovery_commit")))
+        print("       tp: recovery-tp=%d fountain-tp-lane=%d (both were structurally 0 before edd7a44)"
+              % (diag_max(text, side, "recovery-tp"), diag_max(text, side, "fountain-tp-lane")))
+        print("       archetype: ability-harass=%d execute=%d (farmer save_for_execute -> harass~0)"
+              % (diag_max(text, side, "ability-harass"), diag_max(text, side, "execute")))
 
     print("----- jitter breakdown (which key dominates the sum) -----")
     for side in ("R", "D"):
