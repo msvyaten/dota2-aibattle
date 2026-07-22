@@ -82,7 +82,8 @@ end
 
 -- A committed fountain trip restores HP for free in a few seconds, so a consumable spent on
 -- the way is pure waste. The user has now called this out four times across two matches
--- ("пошёл на фонтан и по пути выпил фласку", 8907379308 at 3:40 / 6:10 / 8:40 / 11:00).
+-- ("it walked to the fountain and drank a salve on the way", 8907379308 at 3:40 / 6:10 /
+-- 8:40 / 11:00).
 --
 -- Why here and not in survive.lua: our own consume sites were already guarded (f942b46) and
 -- read consume-blocked=0 for the whole match, while heal-item did not move during the 11:00
