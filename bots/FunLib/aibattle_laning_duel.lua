@@ -137,7 +137,15 @@ end
 function M.PreHeroFreeHit(ctx, enemy, dist, range, key)
 	if enemy == nil or not enemy:IsAlive() then return false end
 	if ((ctx.rules or {}).hero_priority or "default") == "never" then return false end
-	if dist == nil or dist > range then return false end   -- in range already: no step needed
+	-- range + 150, not range. The first attempt required the enemy to be strictly inside attack
+	-- range so that no step was needed at all, and it left the exact case the user reported
+	-- unsolved: 8908439030 t=0-15, both bots motionless 584 apart with a ~500 range -- 84 units
+	-- too far, both refusing to move, staring at each other.
+	-- The overshoot is self-limiting and cannot become a march: Action_AttackUnit closes those
+	-- 84 units, and if the enemy backs off the distance leaves the band immediately and the
+	-- branch stops firing. Maximum pursuit is the 150 itself, which is a fraction of a second
+	-- of walking -- nothing like the river march that 9f6b6cc/4e2dee2 were written against.
+	if dist == nil or dist > range + 150 then return false end
 	if ctx.uphillMiss(enemy) then return false end          -- uphill misses 25%: not free
 	if J.GetHP(ctx.bot) < 0.45 then return false end         -- weakened: spacing owns it
 	if ctx.enemyTowerDanger() ~= nil then return false end
