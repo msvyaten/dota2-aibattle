@@ -61,19 +61,21 @@ function M.PreCreepStandoff(ctx)
 	if hasNearbyLaneCreep(bot, ctx.enemyCreeps, range + 150) then return false end
 	local enemy, dist = ctx.nearestEnemyHero(math.max(900, range + 320))
 	local preMode = (ctx.rules or {}).pregame_behavior or "default"
-	if preMode == "aggressive_mid" and enemy ~= nil and dist <= range + 20
+	local mayEngage = AIBLaneDuel.PreEngageAllowed(ctx.rules)
+	if mayEngage and enemy ~= nil and dist <= range + 20
 		and not ctx.uphillMiss(enemy) and J.GetHP(bot) >= 0.70 then
 		bot:Action_AttackUnit(enemy, false)
 		ctx.diag("precreep-trade")
 		return true
 	end
 	-- Forward trades (contact = hit an enemy in range+120; close = walk to the attack edge)
-	-- are for aggressive_mid ONLY. Once the standoff actually runs (anchor fix 4e2dee2), these
-	-- mode-agnostic branches marched the passive FARMER to the river center to trade and it
-	-- took poke 64->35% before creeps (8905381906: precreep-contact x6, precreep-close x6,
-	-- loc -325,-193 -> -15,37). A passive preset holds its own-highground anchor and only ever
-	-- spaces BACK; it never advances to contest pre-creep.
-	local aggressive = preMode == "aggressive_mid"
+	-- require an explicit licence to engage pre-creep. Fully mode-agnostic they marched the
+	-- passive FARMER to the river center and it took poke 64->35% before creeps (8905381906:
+	-- precreep-contact x6, precreep-close x6, loc -325,-193 -> -15,37) -- a config that asked
+	-- for none of that must still hold its own-highground anchor and only ever space BACK.
+	-- The licence is no longer pregame_behavior alone: hero_priority="always" is an explicit
+	-- "attack the enemy hero whenever you can" and grants it too. See PreEngageAllowed.
+	local aggressive = mayEngage
 	if aggressive and enemy ~= nil and dist <= range + 120
 		and not ctx.uphillMiss(enemy) and J.GetHP(bot) >= 0.55 then
 		bot:Action_AttackUnit(enemy, false)

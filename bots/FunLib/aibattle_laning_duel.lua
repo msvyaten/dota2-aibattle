@@ -122,6 +122,23 @@ local function duelState(ctx, enemy, dist, phase, hpFloor, approachExtra)
 	return false
 end
 
+-- May this config engage the enemy hero before the creeps arrive?
+-- Until now the answer was "only if pregame_behavior == aggressive_mid", which silently
+-- overrode an explicit instruction: hero_priority="always" means "attack the enemy hero
+-- whenever you can", and it was inert for the whole pre-creep phase because these stages
+-- short-circuit before the arbiter that reads the dial. Grok's config in the first
+-- bettability series said "always" and the bot stood still for the entire pregame
+-- (8908439030 t=0-15, motionless 584 apart). User's rule, 22.07: the bot does what its
+-- config says -- if the config says always hit the hero, go and hit the hero.
+-- The engine floors are there to stop a bot killing itself, not to overrule the strategy.
+-- pregame_behavior="aggressive_mid" still enables it as before; "never" still forbids it.
+function M.PreEngageAllowed(rules)
+	rules = rules or {}
+	local prio = rules.hero_priority or "default"
+	if prio == "never" then return false end
+	return (rules.pregame_behavior or "default") == "aggressive_mid" or prio == "always"
+end
+
 -- A stationary free hit before the creeps arrive.
 -- "Do not advance to trade" had been implemented as "do not attack at all". For every
 -- pregame_behavior except aggressive_mid: M.Pregame returns immediately, M.Prewave only ever
@@ -162,7 +179,7 @@ function M.Prewave(ctx)
 	local bot = ctx.bot
 	local range = ctx.attackRange or bot:GetAttackRange()
 	local enemy, dist = ctx.nearestEnemyHero(range + 360)
-	if (rules.pregame_behavior or "default") == "aggressive_mid" then
+	if M.PreEngageAllowed(rules) then
 		return duelState(ctx, enemy, dist, "post_horn", 0.35, 360)
 	end
 	if M.PreHeroFreeHit(ctx, enemy, dist, range, "prewave-free-hit") then return true end
@@ -194,7 +211,7 @@ function M.Pregame(ctx)
 	if (rules.hero_priority or "default") == "never" then return false end
 	local range = ctx.attackRange or ctx.bot:GetAttackRange()
 	local enemy, dist = ctx.nearestEnemyHero(range + 420)
-	if (rules.pregame_behavior or "default") ~= "aggressive_mid" then
+	if not M.PreEngageAllowed(rules) then
 		-- Passive before the horn still means passive about MOVING, not about standing next
 		-- to the enemy doing nothing. See M.PreHeroFreeHit.
 		return M.PreHeroFreeHit(ctx, enemy, dist, range, "pregame-free-hit")
