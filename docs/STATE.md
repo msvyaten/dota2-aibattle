@@ -1,12 +1,35 @@
 # AIBattle State
 
-Last updated: 2026-07-21 (after match 8907379308).
+Last updated: 2026-07-22 (after match 8908439030, bettability series in progress).
 
 ## ▶ NEXT SESSION START HERE (fresh context)
 
-**Bot code in LIVE = HEAD = `90e7ebf`. Matchup R=brawler / D=farmer. Origin in sync.**
-Only `bots/Customize/playstyle_*.lua` are dirty -- that IS the live matchup, do not commit
-them without an explicit order. Never `git add -A` in this repo; name files explicitly.
+**Bot code in LIVE = HEAD = `bfa60b8`. Origin in sync.**
+
+**The live matchup is NOT the canonical presets right now.** A bettability series is running:
+Radiant = Gemini, Dire = Grok, both generated from ONE identical English strategy by two
+different models (product variant 1 of phase 3 -- the non-determinism comes from how the models
+read the same text, not from different strategies). Bot names in `general.lua` were changed to
+match. `playstyle_*.lua` and `general.lua` are dirty on purpose and must NOT be committed
+without an explicit order. Never `git add -A` in this repo; name files explicitly.
+
+To put the canonical matchup back:
+```
+playstyle_radiant.lua -> return require(GetScriptDirectory().."/Customize/canonical_brawler")
+playstyle_dire.lua    -> return require(GetScriptDirectory().."/Customize/canonical_farmer")
+cmd //c "tools\deploy.bat playstyle"
+```
+
+**Bettability is not "someone wins".** Phase 3 defines it as distinguishable agents with a
+NON-deterministic outcome -- 8/8 is predetermined and unbettable; the useful zone is ~5/8-6/8.
+One match says nothing: it needs the same matchup x N runs, with the bot code frozen across
+all of them, and a side swap halfway (Radiant takes ~2x the cs-walk and Dire spends more time
+under 45% HP, so an un-swapped series is confounded by side).
+
+Where the two models diverged, for reference: the dials nearly agreed (max delta 0.10) and all
+the difference landed in three discrete rules -- creep_wave_priority last_hit_only/push,
+hero_priority default/always, deny_policy default/always. Discrete switches carry the variance,
+not the numbers.
 
 **Given a match id, run `python tools/postmatch.py <id>` once** and read `watch: pending batch`
 FIRST (one row per unvalidated commit, ordered by blast radius), then `empty_action by winner`,
@@ -25,15 +48,26 @@ hypothesis; do not commit a fix on an unverified theory.
 **Validation debt** = `git log <build-sha-from-the-match-log>..HEAD`. Do not carry a total
 forward by hand -- a played match clears everything up to its own build.
 
-### Awaiting validation (debt from `c97c618`)
-- `e344e49` -- no salve during a committed fountain trip. The salve is eaten by the VENDOR
-  rule in `ability_item_usage_generic`, not by our sites: `f942b46` guarded ours and read
-  consume-blocked=0 for a whole match. Signature `blocked=heal-item reason=fountain_trip_committed`.
-- `39e3e6b` -- the twitch pair. `fwd-position` bypassed its cooldown entirely past 1600 units
-  (17 -> 109 in 63s) and `hero-prio-chase` had no throttle at all (88 in the first 93s). Both
-  now throttled and wired into Motor; `fwd-position` was the one positioner never in it.
-  Baselines to beat: fwd-position 10.0/min, hero-prio-chase 12.1/min.
-- `90e7ebf` -- tools only.
+### Awaiting validation (debt from `c97c618`) -- NOTHING has been validated since 8908439030
+
+Accepted in 8908439030 (first ACCEPTED scorecard ever; bottle_empty PASS both, 49/46):
+- `39e3e6b` twitch pair -- fwd-position 10.0 -> 0.3-0.4/min, hero-prio-chase 12.1 ->
+  0.0-2.1/min, with fwd-suppressed-motor 57/27. That hold counter is config-independent, so
+  the drop is the fix and not a dial.
+- `e344e49` salve-on-trip -- fountain_trip_committed 3/9.
+
+Shipped SINCE that match, none seen in a game yet:
+- `b6d0642` -- the floor no longer walks the bot home while it holds a flask, a tango or a
+  bottle charge and nothing has hit it for 2s; an already-latched trip is dropped. Below 12%
+  HP the fountain is still right. Signature `blocked=fountain-floor reason=heal_in_hand`;
+  fountain-wait and trip_init should fall hard from 37/60 and 4/6.
+- `2d18627` -- pre-creep free hit widened from `range` to `range + 150`.
+- `bfa60b8` -- `PreEngageAllowed`: an explicit `hero_priority="always"` now licenses pre-creep
+  engagement, not only `pregame_behavior="aggressive_mid"`. This is the one that matters; the
+  two above are patches on the same window that did not reach the cause.
+
+⚠️ The bettability series is therefore back to zero runs. Its discipline requires the bot code
+frozen across all N matches, and three commits landed mid-series.
 
 ### Open, needs a decision before any fix
 1. **Fountain trips at 30-34% HP.** Four of nine trips in 8907379308 were at 15-25% (correct);
@@ -64,6 +98,27 @@ forward by hand -- a played match clears everything up to its own build.
   window (base area, outside the aura, no latch -- usually skipped by TP'ing out) and must NOT
   be treated as an acceptance gate; `power-rune-candidate/no_action_capped` needs the bot to be
   HOLDING an action rune, which SF rarely is.
+
+### Product rules the user has stated -- do not quietly reverse these
+- **The bot does what its config says** (22.07). "If it says always hit the hero, go and hit
+  the hero; if it says retreat, retreat." Engine floors exist to stop a bot killing itself,
+  NOT to overrule a strategy. `bfa60b8` was this rule applied to the pre-creep phase.
+- **No archetypes in the LLM prompt** (21.07). A person types any strategy in their own words
+  and the model reads it; a recipe list is a classifier and collapses distinct prompts into
+  the same few bots.
+- **The model does not know Dota** (21.07) -- explain everything, the way the chess prompt
+  does. Hence THE GAME section and the anchors+COST form of every dial.
+- **A committed fountain floor trip runs to completion** (21.07 rollback) -- it also restores
+  mana and bottle charges, which an HP test cannot see. `b6d0642` is adjacent but distinct: it
+  stops a trip STARTING while the cure is in the bag, it does not abort on recovered HP.
+
+### Method lesson that cost three commits (22.07)
+The pre-creep standoff took three attempts -- `45db02a` (free hit, zero movement), `2d18627`
+(same band +150), `bfa60b8` (the dial was the answer). The first two moved a constant instead
+of asking what the config had told the bot to do. When a bot "does nothing", find WHO OWNS THE
+TICK and what it was told, before touching any threshold. Related: a non-zero signature is not
+a fixed bug -- `prewave-free-hit` read 13/11 while the window the user complained about was
+still broken.
 
 ### Refuted -- do not retry
 - **cs-walk is NOT the root of low farm.** 133 side-matches (`tools/farm_drivers.py`):
