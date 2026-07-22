@@ -31,6 +31,25 @@ local function hasItem(bot, name)
 	return slot >= 0 and bot:GetItemSlotType(slot) == ITEM_SLOT_TYPE_MAIN and bot:GetItemInSlot(slot) ~= nil
 end
 
+-- A consumable that is PAID FOR but has not landed in a main slot yet -- sitting in the stash,
+-- riding the courier -- is sustain the bot is about to have. hasItem() only sees
+-- ITEM_SLOT_TYPE_MAIN, so one tick after the purchase a just-bought salve still reads as an
+-- empty bag. 8908963179 t=88 is that hole end to end: recovery-buy-critical bought salve+tango
+-- at hp=29, both landed in the stash, `noSustain` was still true on the next tick, the extended
+-- floor (hp<0.35) committed a fountain trip, the courier delivered the salve mid-walk, and
+-- e344e49 then refused to let it be drunk (`blocked=heal-item reason=fountain_trip_committed
+-- hp=38`). 200g and 40s of lane time for regen the fountain then handed out for free.
+local function healInFlight(bot)
+	for _, name in ipairs({ "item_flask", "item_tango", "item_tango_single" }) do
+		local slot = bot:FindItemSlot(name)
+		if slot >= 0 and bot:GetItemSlotType(slot) ~= ITEM_SLOT_TYPE_MAIN
+			and bot:GetItemInSlot(slot) ~= nil then
+			return name
+		end
+	end
+	return nil
+end
+
 -- The TP scroll lives in the dedicated TP slot, NOT a main slot, so getItem() -- which filters
 -- on ITEM_SLOT_TYPE_MAIN -- could never see it. Both TP branches in this file were therefore
 -- structurally unreachable and the bot always walked home: fountain-tp-lane=0 and recovery-tp
@@ -196,8 +215,12 @@ end
 local function fountainRecovery(bot)
 	if DotaTime() <= 0 then return false end
 	if bot.aib_fountainTping then
-		if bot:HasModifier("modifier_teleporting") then return true end
-		if DotaTime() - (bot.aib_fountainTpCast or 0) < 1.0 then return true end
+		if bot:HasModifier("modifier_teleporting") then
+			Style.DiagRL(bot, "fountain-tp-hold", 3); return true
+		end
+		if DotaTime() - (bot.aib_fountainTpCast or 0) < 1.0 then
+			Style.DiagRL(bot, "fountain-tp-hold", 3); return true
+		end
 		bot.aib_fountainTping = false
 	end
 	local hp = J.GetHP(bot)
@@ -676,6 +699,10 @@ local function recovery(bot, dials, nEnemyCreeps)
 	if tp and behavior == "tp_fountain" then
 		bot.aib_fountainTrip = true
 		bot.aib_fountainFloorTrip = true
+		-- Same channel claim as the floor branch below: without it fountainRecovery cancels
+		-- this TP with its own move order on the next tick.
+		bot.aib_fountainTping = true
+		bot.aib_fountainTpCast = DotaTime()
 		recoveryPlan(bot, "tp_fountain", "critical", string.format("hp=%.0f", hp*100), 2.0)
 		Style.Diag(bot, "recovery-tp"); bot:Action_UseAbility(tp); return true
 	end
@@ -754,14 +781,26 @@ local function recovery(bot, dials, nEnemyCreeps)
 	local heldHeal = hasItem(bot, "item_flask")
 		or hasItem(bot, "item_tango") or hasItem(bot, "item_tango_single")
 		or (fcharges ~= nil and fcharges > 0)
-	local canHealHere = heldHeal
+	-- Sustain in transit counts as sustain: the bot paid for it, so the answer to "can I heal
+	-- where I stand" is yes, in a few seconds. Bounded on purpose -- an item nobody is
+	-- delivering (no courier, courier dead) must not suppress the floor forever, so the
+	-- suppression expires and the bot goes home the moment delivery stops being plausible.
+	local inFlight = healInFlight(bot)
+	if inFlight == nil then
+		bot.aib_healFlightSince = nil
+	elseif bot.aib_healFlightSince == nil then
+		bot.aib_healFlightSince = DotaTime()
+	end
+	local flightFresh = inFlight ~= nil and DotaTime() - (bot.aib_healFlightSince or 0) < 25.0
+	local canHealHere = (heldHeal or flightFresh)
 		and not bot:WasRecentlyDamagedByAnyHero(2.0)
 		and not bot:HasModifier("modifier_flask_healing")
 		and not bot:HasModifier("modifier_tango_heal")
 	if canHealHere and hp >= 0.12 then
 		-- Below 0.12 the walk itself is in doubt and the fountain is still the right answer.
-		Style.Blocked(bot, "fountain-floor", "heal_in_hand",
-			string.format("hp=%.0f flask=%s", hp*100, tostring(hasItem(bot, "item_flask"))), 5.0)
+		Style.Blocked(bot, "fountain-floor", heldHeal and "heal_in_hand" or "heal_in_flight",
+			string.format("hp=%.0f flask=%s inflight=%s", hp*100,
+				tostring(hasItem(bot, "item_flask")), tostring(inFlight)), 5.0)
 		bot.aib_fountainTrip = false
 		bot.aib_fountainFloorTrip = false
 	end
@@ -771,6 +810,15 @@ local function recovery(bot, dials, nEnemyCreeps)
 		if tpFloor ~= nil and not bot:WasRecentlyDamagedByAnyHero(1.5) then
 			bot.aib_fountainTrip = true
 			bot.aib_fountainFloorTrip = true
+			-- Claim the channel. fountainRecovery() runs BEFORE recovery() (:832 vs :835) and,
+			-- once the trip is latched, re-issues Action_MoveToLocation(fountain) every second
+			-- -- which cancels this very TP one tick after it is cast. That is why 8908963179
+			-- shows recovery-tp=1, recovery-walk=0, fountain-wait=10 and a 30s march home on
+			-- foot: the floor teleported, and the trip-walker immediately un-teleported it.
+			-- The channel guard at the top of fountainRecovery already handles this; it was
+			-- simply never armed from here (only the TP-back-to-lane branch :278 armed it).
+			bot.aib_fountainTping = true
+			bot.aib_fountainTpCast = DotaTime()
 			recoveryPlan(bot, "tp_fountain", floorReason, string.format("hp=%.0f", hp*100), 2.0)
 			Style.Diag(bot, "recovery-tp")
 			bot:Action_UseAbility(tpFloor)
