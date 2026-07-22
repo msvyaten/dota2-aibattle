@@ -122,6 +122,30 @@ local function duelState(ctx, enemy, dist, phase, hpFloor, approachExtra)
 	return false
 end
 
+-- A stationary free hit before the creeps arrive.
+-- "Do not advance to trade" had been implemented as "do not attack at all". For every
+-- pregame_behavior except aggressive_mid: M.Pregame returns immediately, M.Prewave only ever
+-- gives ground, and PreCreepStandoff gates each of its attack branches on aggressive too --
+-- so a passive preset stands facing the enemy and never swings, even when he is already
+-- inside its attack range and hitting it. Both configs in the first bettability series chose
+-- "default" and the two bots stood staring at each other (user, 21.07). hero_priority="always"
+-- cannot rescue it either: these three stages run BEFORE the laning arbiter and short-circuit
+-- it, so the dial never gets a tick.
+-- The gate that was over-applied is about ADVANCING. This branch issues no movement at all --
+-- it only swings when the enemy is already within attack range -- so it cannot turn a passive
+-- preset into an advancing one, which is the whole point of the aggressive gate.
+function M.PreHeroFreeHit(ctx, enemy, dist, range, key)
+	if enemy == nil or not enemy:IsAlive() then return false end
+	if ((ctx.rules or {}).hero_priority or "default") == "never" then return false end
+	if dist == nil or dist > range then return false end   -- in range already: no step needed
+	if ctx.uphillMiss(enemy) then return false end          -- uphill misses 25%: not free
+	if J.GetHP(ctx.bot) < 0.45 then return false end         -- weakened: spacing owns it
+	if ctx.enemyTowerDanger() ~= nil then return false end
+	ctx.bot:Action_AttackUnit(enemy, false)
+	ctx.diag(key)
+	return true
+end
+
 function M.Prewave(ctx)
 	local now = DotaTime()
 	if now < 0 or now > 45 then return false end
@@ -133,6 +157,7 @@ function M.Prewave(ctx)
 	if (rules.pregame_behavior or "default") == "aggressive_mid" then
 		return duelState(ctx, enemy, dist, "post_horn", 0.35, 360)
 	end
+	if M.PreHeroFreeHit(ctx, enemy, dist, range, "prewave-free-hit") then return true end
 	-- Passive prewave defend (non-aggressive_mid presets never enter the duel above): give
 	-- ground to an aggressive pre-creep poker BEFORE dropping low, instead of standing on the
 	-- contested line and walking into the lane phase at 36-42% HP (8903907295 W1: 14 one-sided
@@ -159,9 +184,13 @@ end
 function M.Pregame(ctx)
 	local rules = ctx.rules or {}
 	if (rules.hero_priority or "default") == "never" then return false end
-	if (rules.pregame_behavior or "default") ~= "aggressive_mid" then return false end
 	local range = ctx.attackRange or ctx.bot:GetAttackRange()
 	local enemy, dist = ctx.nearestEnemyHero(range + 420)
+	if (rules.pregame_behavior or "default") ~= "aggressive_mid" then
+		-- Passive before the horn still means passive about MOVING, not about standing next
+		-- to the enemy doing nothing. See M.PreHeroFreeHit.
+		return M.PreHeroFreeHit(ctx, enemy, dist, range, "pregame-free-hit")
+	end
 	return duelState(ctx, enemy, dist, "pregame", 0.42, 420)
 end
 

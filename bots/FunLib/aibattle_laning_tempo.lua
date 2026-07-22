@@ -4,6 +4,7 @@ local M = {}
 
 local J = require(GetScriptDirectory()..'/FunLib/jmz_func')
 local Style = require(GetScriptDirectory()..'/FunLib/aibattle_style')
+local AIBLaneDuel = require(GetScriptDirectory()..'/FunLib/aibattle_laning_duel')
 
 local function attackRange(ctx)
 	return ctx.attackRange or ctx.bot:GetAttackRange()
@@ -91,6 +92,12 @@ function M.PreCreepStandoff(ctx)
 		end
 		if aggressive and ctx.moveToAttackEdge(enemy, "precreep-close", 0) then return true end
 	end
+
+	-- Placed AFTER the space-back above so a weakened bot still gives ground first; this only
+	-- covers the case where the enemy is already inside attack range and the bot would
+	-- otherwise just stand there. Shared with the two duel stages -- one implementation, not a
+	-- third fork of the same idea. See AIBLaneDuel.PreHeroFreeHit for why it exists.
+	if AIBLaneDuel.PreHeroFreeHit(ctx, enemy, dist, range, "precreep-free-hit") then return true end
 
 	local anchor, totalDist, dirX, dirY = towerLineAnchor(ctx, preMode)
 	if anchor ~= nil then
