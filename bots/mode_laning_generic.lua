@@ -399,6 +399,19 @@ local function ThinkAnnounce(dials)
 		tostring(r.ability_timing or "on_cooldown"),
 		tostring(r.pregame_behavior or "default"),
 		tostring(r.tower_aggression or "default")), true)
+	-- Third line, not a longer second one: the two above already sit near Dota's ~160-char
+	-- chat limit, which silently drops anything longer (phase-16). These four were missing
+	-- from the announce entirely, so the log could not say which config a match was played
+	-- with -- and hero_priority/deny_policy/creep_wave_priority are exactly the three knobs
+	-- the two models diverged on in the 21.07 series. A result without its config is not
+	-- comparable to anything, which is the whole point of docs/match_log.md.
+	bot:ActionImmediate_Chat(string.format(
+		"AIB[%s] hero=%s deny=%s lowhp=%s respawn=%s",
+		AIB_SIDE,
+		tostring(r.hero_priority or "default"),
+		tostring(r.deny_policy or "default"),
+		tostring(r.low_hp_behavior or "regen_lane"),
+		tostring(r.respawn_behavior or "tp_to_lane")), true)
 end
 
 local function AIB_TowerActuallyThreatening(twr)
