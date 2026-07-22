@@ -739,8 +739,34 @@ local function recovery(bot, dials, nEnemyCreeps)
 		and not bot:HasModifier("modifier_tango_heal")
 		and not hasItem(bot, "item_flask")
 		and cannotBuyFlask
+	-- A trip is a ~60 second round trip. It is only worth it when the bot genuinely cannot heal
+	-- where it stands. Holding a flask while walking home is the worst of both -- and that is
+	-- exactly what 8908439030 produced twice (user: "he did not need to go, he has two flasks
+	-- and the wave is under his own tower"): the extended floor fired at hp~26 with an empty
+	-- bag, the trip latched, recovery-buy then bought a flask at hp=31 (its own guard only
+	-- covers hp<0.22, so it does not know the floor reaches 0.35), and e344e49 then refused to
+	-- let that flask be drunk because a trip was committed. Net result: 110g spent, flask
+	-- carried home unused, 60 seconds of lane time gone.
+	-- So: if the bot can heal itself right here and nothing is hitting it, it must not walk.
+	-- This is narrow on purpose and does NOT reopen the 21.07 rollback, which was about
+	-- aborting a trip because passive regen happened to top the bar back up. Here the bot is
+	-- holding the cure and being told to walk past it.
+	local heldHeal = hasItem(bot, "item_flask")
+		or hasItem(bot, "item_tango") or hasItem(bot, "item_tango_single")
+		or (fcharges ~= nil and fcharges > 0)
+	local canHealHere = heldHeal
+		and not bot:WasRecentlyDamagedByAnyHero(2.0)
+		and not bot:HasModifier("modifier_flask_healing")
+		and not bot:HasModifier("modifier_tango_heal")
+	if canHealHere and hp >= 0.12 then
+		-- Below 0.12 the walk itself is in doubt and the fountain is still the right answer.
+		Style.Blocked(bot, "fountain-floor", "heal_in_hand",
+			string.format("hp=%.0f flask=%s", hp*100, tostring(hasItem(bot, "item_flask"))), 5.0)
+		bot.aib_fountainTrip = false
+		bot.aib_fountainFloorTrip = false
+	end
 	local floorReason = hp < 0.22 and "regen_lane_floor" or "no_sustain_floor"
-	if hp < 0.22 or (hp < 0.35 and noSustain) then
+	if not canHealHere and (hp < 0.22 or (hp < 0.35 and noSustain)) then
 		local tpFloor = getTpScroll(bot)
 		if tpFloor ~= nil and not bot:WasRecentlyDamagedByAnyHero(1.5) then
 			bot.aib_fountainTrip = true
