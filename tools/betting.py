@@ -67,18 +67,36 @@ TELEMETRY_RE = (
 # ---------------------------------------------------------------- parsing
 
 def extract_telemetry(text):
-    """Periodic AIB reports per side, time-sorted."""
+    """Periodic AIB reports per side, time-sorted.
+
+    `gold` in the telemetry is CURRENT (unspent) gold, which is not advantage: a bot
+    that just bought a bottle reads 600 gold poorer than one saving up, while being
+    the stronger hero. Purchases up to 892g were observed in 8909533277, larger than
+    that match's entire final "margin" of 545 -- so a lead curve built on current gold
+    is mostly a plot of who shopped most recently.
+
+    `earned` fixes it without new telemetry: the cumulative sum of POSITIVE dg, i.e.
+    gold acquired. Spending never enters it. Passive income is identical on both sides
+    and cancels in the difference, so what remains is last hits, denies and kills --
+    which is what "who is ahead" means. Ground truth check on 8909533277: final earned
+    lead tracks net_worth (3886 vs 4072) instead of the -545 current-gold artefact.
+    """
     telemetry = {"R": [], "D": []}
-    for side, t, hp, gold, x, y, dist, lh, _dn, _dg, _dlh, _bottle in re.findall(TELEMETRY_RE, text):
+    for side, t, hp, gold, x, y, dist, lh, _dn, dg, _dlh, _bottle in re.findall(TELEMETRY_RE, text):
         telemetry[side].append({
             "t": float(t),
             "hp": float(hp),
             "gold": int(gold),
+            "dg": int(dg) if dg else 0,
             "enemy_dist": float(dist) if dist else None,
             "lh": int(lh) if lh else None,
         })
     for samples in telemetry.values():
         samples.sort(key=lambda p: p["t"])
+        earned = 0
+        for s in samples:
+            earned += max(s["dg"], 0)
+            s["earned"] = earned
     return telemetry
 
 
@@ -99,7 +117,11 @@ def pair_streams(telemetry, tolerance=PAIR_TOLERANCE_S):
             lh_lead = r["lh"] - d["lh"]
         pairs.append({
             "t": r["t"],
-            "gold_lead": r["gold"] - d["gold"],
+            # Advantage, not wallet contents -- see extract_telemetry. The key keeps its
+            # name so every downstream metric (decided_at, amplitude, in-play table)
+            # switches over with it.
+            "gold_lead": r["earned"] - d["earned"],
+            "cash_lead": r["gold"] - d["gold"],
             "lh_lead": lh_lead,
             "hp_r": r["hp"],
             "hp_d": d["hp"],
@@ -202,15 +224,29 @@ def first_event(pairs, deaths):
     return min(candidates) if candidates else None
 
 
-def infer_winner(pairs, deaths):
-    """Winner and how it was won, as far as telemetry can tell.
+def signout_result(text):
+    """Authoritative K/D from the end-of-match signout block. Team 0 = Radiant.
 
-    Kills are authoritative here (2 deaths ends the match). Tower damage and the
-    100-last-hit tiebreak are not in telemetry -- for those, read match_stats.py.
+    Telemetry cannot be trusted for deaths: the bot's Think does not run while it is
+    dead, so hp=0 samples are emitted only sometimes. Both matches replayed on 23.07
+    were won by kills and hp-transition counting saw R=1 D=0 and R=1 D=1 -- so the
+    method-of-victory market line read "tower/last-hits" on 2 of 2 kill wins. The
+    signout block is written once per match and is exact; hp transitions stay as the
+    fallback for a log that was cut before signout.
     """
-    if len(deaths["D"]) >= 2:
+    kda = re.findall(r"KDA: (\d+) / (\d+) / \d+", text)
+    if len(kda) < 2:
+        return None
+    return {"R": {"k": int(kda[0][0]), "d": int(kda[0][1])},
+            "D": {"k": int(kda[1][0]), "d": int(kda[1][1])}}
+
+
+def infer_winner(pairs, deaths, result=None):
+    """Winner and how it was won. Prefers the signout block over hp transitions."""
+    kills = result or {s: {"d": len(deaths[s])} for s in ("R", "D")}
+    if kills["D"]["d"] >= 2:
         return "R", "kills"
-    if len(deaths["R"]) >= 2:
+    if kills["R"]["d"] >= 2:
         return "D", "kills"
     if not pairs:
         return None, "unknown"
@@ -227,10 +263,14 @@ def analyse(text):
     if not pairs:
         return None
     deaths = deaths_from_hp(telemetry)
-    winner, method = infer_winner(pairs, deaths)
+    result = signout_result(text)
+    winner, method = infer_winner(pairs, deaths, result)
     decided_at, dead_tail = decided_point(pairs)
     final = pairs[-1]
+    build = re.search(r"AIB\[[RD]\] build=(\S+?)'", text)
     return {
+        "build": build.group(1) if build else None,
+        "deaths_official": {s: result[s]["d"] for s in ("R", "D")} if result else None,
         "samples": len(pairs),
         "duration": final["t"],
         "winner": winner,
@@ -257,8 +297,10 @@ def _fmt(v, suffix="", nd=1):
 def report_one(label, m):
     print(f"\n=== {label} ===")
     print(f"  duration          {m['duration']:.0f}s ({m['duration']/60:.1f} min), {m['samples']} paired samples")
+    d = m["deaths_official"] or m["deaths"]
+    src = "" if m["deaths_official"] else " (from hp, no signout block)"
     print(f"  winner            {m['winner'] or '?'} by {m['method']}  "
-          f"(deaths R={m['deaths']['R']} D={m['deaths']['D']})")
+          f"(deaths R={d['R']} D={d['D']}){src}")
     print(f"  first_event       {_fmt(m['first_event'], 's', 0)}   <- earlier is better, the match gets going")
     print(f"  decided_at        {_fmt(m['decided_at'], 's', 0)}   <- later is better, tension holds")
     print(f"  dead_tail         {_fmt(m['dead_tail'], '%')}   <- share of match already decided")
@@ -279,7 +321,30 @@ def _line(values, nd=0):
             f"max {max(values):.{nd}f}")
 
 
+def check_frozen_build(results):
+    """A series is only a series if every match ran the same bot.
+
+    This is the one corruption that leaves no trace in the numbers: matches on
+    different builds aggregate into clean-looking market lines for a player that
+    never existed. Everything else in a botched series is visible by eye; this is not.
+    Refuse rather than warn -- a warning above 40 lines of output gets scrolled past.
+    """
+    builds = {}
+    for label, m in results:
+        builds.setdefault(m.get("build") or "unknown", []).append(label)
+    if len(builds) <= 1:
+        return True
+    print("\nREFUSED: these matches did not run the same bot build.\n")
+    for sha, labels in sorted(builds.items()):
+        print("  %-10s %s" % (sha, ", ".join(labels)))
+    print("\nA betting series requires frozen code -- market lines across builds price")
+    print("a player that never existed. Re-run the series, or pass only one build's ids.")
+    return False
+
+
 def report_series(results):
+    if not check_frozen_build(results):
+        return
     print("\n=== series ===")
     header = (f"{'match':<13}{'win':>5}{'dur':>7}{'1st ev':>8}{'decided':>9}"
               f"{'dead%':>7}{'flips':>6}{'comeback':>10}{'margin':>9}")
@@ -371,7 +436,16 @@ def find_log(arg):
     if os.path.isfile(arg):
         return arg
     name = arg if arg.startswith("console.") else f"console.{arg}.log"
-    for root in (".", "logs", os.environ.get("AIB_LOGDIR", "")):
+    # scorecard.DOTA_LOG_DIR is where every other tool in tools/ resolves logs; without
+    # it a bare match id only worked with AIB_LOGDIR exported by hand.
+    roots = [".", "logs", os.environ.get("AIB_LOGDIR", "")]
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import scorecard
+        roots.append(str(scorecard.DOTA_LOG_DIR))
+    except Exception:
+        pass
+    for root in roots:
         if root and os.path.isfile(os.path.join(root, name)):
             return os.path.join(root, name)
     return None
