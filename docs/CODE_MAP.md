@@ -1,6 +1,8 @@
 # CODE MAP — карта проекта (что где, сколько строк, кто владелец)
 
-> Навигационная карта для передачи проекта. Обновлено 2026-07-06 (HEAD ~fdaf108).
+> Навигационная карта для передачи проекта. Обновлено 2026-07-23 (HEAD `bdc7527`).
+> ⚠️ Цифры строк ИЗМЕРЕНЫ, не переписаны: между 06.07 и 23.07 наш слой вырос
+> 5 435 → 6863 строк, и старая таблица врала почти по каждому модулю.
 > Пары к этому файлу: `ARCHITECTURE.md` (философия/владение), `HANDOFF_PACKAGE.md`
 > (продукт + пайплайн тика), `SPECS.md` (незакрытые работы), `CURRENT.md` (детали тика).
 
@@ -15,20 +17,21 @@ Fiend / nevermore). База — OpenHyperAI (OHA), форк движка бот
 
 | | строк | % | трогаем? |
 |---|---:|---:|---|
-| **Наш слой `aibattle_*`** (поведение) | **5 435** | 2.7% | ✅ ДА — здесь вся логика |
-| Конфиги `Customize/` | 489 | — | ✅ ДА — пресеты архетипов |
-| Гибрид entry-points (мы правили) | ~11 000 | — | ⚠️ осторожно (см. §3) |
-| Вендор OHA (FunLib/BotLib/mode_*) | ~180 000 | 96% | ❌ НЕТ — база, синк сверху |
-| Tools (Python) | 2 638 | — | ✅ ДА |
-| Backend (LLM-генератор) | 320 | — | ✅ ДА |
-| Docs | 2 607 | — | ✅ ДА |
+| **Наш слой `aibattle_*`** (поведение) | **6863** | 3.4% | ✅ ДА — здесь вся логика |
+| Конфиги `Customize/` | 684 | — | ✅ ДА — пресеты архетипов |
+| **Наши патчи ВНУТРИ вендорных файлов** | **217** | — | ⚠️ 21 файл, см. §3 |
+| Вендор OHA (всё остальное в `bots/`) | ~191484 | 96% | ❌ НЕТ — база, синк сверху |
+| Tools (Python) | 4216 | — | ✅ ДА |
+| Docs | 4200 | — | ✅ ДА |
 
-**Вывод для новых технарей:** не пугайтесь 197k строк Lua. **Учить надо ~5.4k** — слой
+**Итого Lua в `bots/`: 199031 строк.** Наших из них — 7764 (3.9%), считая патчи в вендоре.
+
+**Вывод для новых технарей:** не пугайтесь 197k строк Lua. **Учить надо ~6.9k** — слой
 `aibattle_*` + конфиги. Остальное — движок OHA, его читают по необходимости, не рефакторят.
 
 ---
 
-## 1. Слой AIBattle — наш код (`bots/FunLib/aibattle_*.lua`, 5 435 строк, 22 файла)
+## 1. Слой AIBattle — наш код (`bots/FunLib/aibattle_*.lua`, 6863 строк, 22 файла)
 
 Здесь живёт ВСЁ поведение. Хорошо разложено: один файл — одна ответственность.
 
@@ -36,12 +39,12 @@ Fiend / nevermore). База — OpenHyperAI (OHA), форк движка бот
 
 | Файл | строк | Роль |
 |---|---:|---|
-| `aibattle_style.lua` | 996 | **Центр**: загрузка конфига (rules/dials), item/skill build, ability-harass config; телеметрия `Style.Intent/Diag/TickOwner/Blocked`. Всё зовёт его. |
+| `aibattle_style.lua` | 1174 | **Центр**: загрузка конфига (rules/dials), item/skill build, ability-harass config; телеметрия `Style.Intent/Diag/TickOwner/Blocked`. Всё зовёт его. |
 | `aibattle_engine.lua` | 250 | Раннер стадий и интентов: `Stage/Intent/Resolve`, `KillWindow`, `RecoveryPolicy`, `PowerRuneState`, `RuneUsePolicy`. |
-| `aibattle_laning_policy.lua` | 279 | **Скоринг десиров**: `Safety/PowerRune/Fight/Recover/Siege` → score; HP-банды, пороги, no-action-капы (П4). |
-| `aibattle_laning_arbiter.lua` | 103 | **Top-desire арбитр**: `Run/Candidate` — гистерезис победителя, tick-owner. Сердце выбора. |
+| `aibattle_laning_policy.lua` | 345 | **Скоринг десиров**: `Safety/PowerRune/Fight/Recover/Siege` → score; HP-банды, пороги, no-action-капы (П4). |
+| `aibattle_laning_arbiter.lua` | 132 | **Top-desire арбитр**: `Run/Candidate` — гистерезис победителя, tick-owner. Сердце выбора. |
 | `aibattle_constants.lua` | 51 | Инженерные пороги (дистанции, кулдауны, HP-банды) — не LLM-facing. |
-| `aibattle_motor.lua` | 47 | Владение движением `Claim/Active/Release` (v1). Retire в П1-C. |
+| `aibattle_motor.lua` | 45 | Владение движением `Claim/Active/Release` (v1). Retire в П1-C. |
 | `aibattle_intents.lua` / `_laning_context.lua` | 73 / 37 | Хелперы интентов + билдер контекста тика. |
 | `aibattle_build.lua` | 4 | Штамп sha (перезаписывается деплоем). |
 
@@ -49,19 +52,19 @@ Fiend / nevermore). База — OpenHyperAI (OHA), форк движка бот
 
 | Файл | строк | Роль |
 |---|---:|---|
-| `aibattle_survive.lua` | 657 | **Хил/реген low-HP**: `fountainRecovery`, `defensiveHeal`, `regenLane`, `recovery` (бутылка/фласка/танго/руна + fallback-цепь, buy-escape). |
-| `aibattle_runes.lua` | 582 | **Руны**: `SeekBottleRune`, `FindWaterRecoveryRune`, стейджинг/пикап, bottle-fill транзакция. |
-| `aibattle_laning_safety.lua` | 428 | `CreepHitReact`, `DamageUnstuck`, `RangedMeleePackSpacing`, `LastHitWatchdog`, visual-hold/AFK anti-idle. |
-| `aibattle_laning_combat.lua` | 313 | `HarassAndChase`, `ContactHero`, `AbilityPressure`, `RunePowerPressure`, `UphillReposition`, `EmergencyKillPriority`, `AbilityHarass`. |
-| `aibattle_laning_tempo.lua` | 286 | `Pregame`, `DivePolicy`, `DeathWindow`, `PreCreepStandoff` (стадии-гарды). |
-| `aibattle_laning_recovery.lua` | 285 | **Low-HP владельцы** (цель П3): `ThinkIfAllowed`, `CriticalLock`, `ActiveLowHp`, `EmergencyRetreat`, `ForwardLowHpPullback`, `LowHpHoldState`. |
-| `aibattle_laning_creeps.lua` | 210 | `GetBestLastHitCreep`, `GetBestDenyCreep`, `HandleCreepWork`. |
-| `aibattle_laning_trade.lua` | 183 | `KillLock`, `HealInterrupt`, `PassingHeroTrade` (урджент-размены). |
-| `aibattle_laning_siege.lua` | 173 | Осада вышки / siege-commit. |
-| `aibattle_laning_duel.lua` | 135 | `Prewave`, `Pregame` дуэль. |
-| `aibattle_item_policy.lua` | 129 | `ShouldUseMango`, `ShouldDelaySpareTpPurchase`. |
-| `aibattle_utils.lua` | 117 | `SafeRetreatTowerLoc`, `ForwardSurvivingTowerLoc`, `EnemyTowerDanger`, `UphillMiss`, `IsTowerActuallyThreatening`. |
-| `aibattle_laning_survival.lua` | 97 | `CreepAggroRelief`. |
+| `aibattle_survive.lua` | 1005 | **Хил/реген low-HP**: `fountainRecovery`, `defensiveHeal`, `regenLane`, `recovery` (бутылка/фласка/танго/руна + fallback-цепь, buy-escape). |
+| `aibattle_runes.lua` | 631 | **Руны**: `SeekBottleRune`, `FindWaterRecoveryRune`, стейджинг/пикап, bottle-fill транзакция. |
+| `aibattle_laning_safety.lua` | 576 | `CreepHitReact`, `DamageUnstuck`, `RangedMeleePackSpacing`, `LastHitWatchdog`, visual-hold/AFK anti-idle. |
+| `aibattle_laning_combat.lua` | 413 | `HarassAndChase`, `ContactHero`, `AbilityPressure`, `RunePowerPressure`, `UphillReposition`, `EmergencyKillPriority`, `AbilityHarass`. |
+| `aibattle_laning_tempo.lua` | 334 | `Pregame`, `DivePolicy`, `DeathWindow`, `PreCreepStandoff` (стадии-гарды). |
+| `aibattle_laning_recovery.lua` | 405 | **Low-HP владельцы** (цель П3): `ThinkIfAllowed`, `CriticalLock`, `ActiveLowHp`, `EmergencyRetreat`, `ForwardLowHpPullback`, `LowHpHoldState`. |
+| `aibattle_laning_creeps.lua` | 236 | `GetBestLastHitCreep`, `GetBestDenyCreep`, `HandleCreepWork`. |
+| `aibattle_laning_trade.lua` | 185 | `KillLock`, `HealInterrupt`, `PassingHeroTrade` (урджент-размены). |
+| `aibattle_laning_siege.lua` | 301 | Осада вышки / siege-commit. |
+| `aibattle_laning_duel.lua` | 228 | `Prewave`, `Pregame` дуэль. |
+| `aibattle_item_policy.lua` | 173 | `ShouldUseMango`, `ShouldDelaySpareTpPurchase`. |
+| `aibattle_utils.lua` | 171 | `SafeRetreatTowerLoc`, `ForwardSurvivingTowerLoc`, `EnemyTowerDanger`, `UphillMiss`, `IsTowerActuallyThreatening`. |
+| `aibattle_laning_survival.lua` | 94 | `CreepAggroRelief`. |
 
 ---
 
@@ -90,21 +93,43 @@ Fiend / nevermore). База — OpenHyperAI (OHA), форк движка бот
 
 ---
 
-## 3. Entry-points — гибрид (Dota вызывает; мы правили частично)
+## 3. Entry-points и патчи в вендоре (Dota вызывает; мы правили частично)
 
-| Файл | строк | Наше / OHA |
-|---|---:|---|
-| `bots/mode_laning_generic.lua` | 1262 | **НАШ оркестратор** — главный владелец лейнинг-тика. |
-| `bots/item_purchase_generic.lua` | 1395 | OHA + наш override билда (`Style.GetItemBuild`) + AIB recovery-покупки. |
-| `bots/ability_item_usage_generic.lua` | 8473 | **В основном OHA** (способности/предметы/курьер). Мы трогали курьер/глиф. Курьер-гейт база-трипа живёт тут (:720). |
-| `bots/hero_selection.lua` | 1127 | OHA, пик героя. |
-| `bots/mode_*.lua` (прочие режимы) | 9642 | OHA-режимы (retreat/roam/farm/rune/push…). В 1v1 mid активен почти только laning. |
+**Это самая важная таблица карты.** Каждая строка — место, где наш код живёт внутри чужого.
+При обновлении базы OHA конфликты будут ровно здесь и больше нигде. Считано по `AIB`-маркерам,
+поэтому вставка БЕЗ маркера этому аудиту невидима — маркер это не стиль, а способ мерить границу.
+
+| Файл | всего строк | наших | доля |
+|---|---:|---:|---:|
+| `bots/mode_laning_generic.lua` | 1580 | 61 | 3% |
+| `bots/mode_roam_generic.lua` | 2210 | 38 | 1% |
+| `bots/ability_item_usage_generic.lua` | 8483 | 19 | 0% |
+| `bots/mode_retreat_generic.lua` | 857 | 15 | 1% |
+| `bots/item_purchase_generic.lua` | 1404 | 12 | 0% |
+| `bots/mode_push_tower_bot_generic.lua` | 39 | 9 | 23% |
+| `bots/mode_push_tower_mid_generic.lua` | 35 | 8 | 22% |
+| `bots/mode_push_tower_top_generic.lua` | 35 | 8 | 22% |
+| `bots/mode_roshan_generic.lua` | 190 | 6 | 3% |
+| `bots/mode_rune_generic.lua` | 864 | 6 | 0% |
+| `bots/FretBots/SettingsDefault.lua` | 443 | 6 | 1% |
+| `bots/mode_team_roam_generic.lua` | 1719 | 5 | 0% |
+| `bots/mode_ward_generic.lua` | 212 | 4 | 1% |
+| `bots/FunLib/jmz_func.lua` | 6758 | 4 | 0% |
+| `bots/mode_defend_tower_bot_generic.lua` | 18 | 3 | 16% |
+| `bots/mode_defend_tower_mid_generic.lua` | 16 | 3 | 18% |
+| `bots/mode_defend_tower_top_generic.lua` | 18 | 3 | 16% |
+| `bots/BotLib/hero_sniper.lua` | 708 | 3 | 0% |
+| `bots/hero_selection.lua` | 1128 | 2 | 0% |
+| `bots/FunLib/aba_defend.lua` | 1410 | 1 | 0% |
+| `bots/FunLib/aba_role.lua` | 437 | 1 | 0% |
+
+Всего **21 вендорных файлов** несут **217 наших строк**.
 
 ⚠️ **Правило:** в вендорные файлы лезть только точечно и по нужде (риск слияния сверху).
 
 ---
 
-## 4. Конфиги (`bots/Customize/`, 489 строк) — зона Claude
+## 4. Конфиги (`bots/Customize/`, 684 строк) — зона Claude
 
 | Файл | строк | Роль |
 |---|---:|---|
