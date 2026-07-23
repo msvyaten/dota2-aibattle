@@ -43,7 +43,13 @@ local function duelState(ctx, enemy, dist, phase, hpFloor, approachExtra)
 		ctx.blocked("prewave-duel", "tower", string.format("phase=%s dist=%.0f", phase, dist), 3.0)
 		return false
 	end
-	if dist > range and AIBUtils.UphillMiss(bot, enemy) then
+	-- Same exception as hero-prio-always in combat.lua: an enemy that is hitting us has
+	-- already opened the trade, so the uphill miss chance is a cost of answering, not a
+	-- reason to decline. 8909602648 pre-horn: Radiant took free hits with
+	-- `blocked=prewave-duel reason=uphill` x15 and `prewave-duel-uphill-back` x23 --
+	-- config `hero_priority="always"`, and terrain silently overruled it.
+	local hitRightNow = bot:WasRecentlyDamagedByAnyHero(2.0) and dist <= range + 150
+	if dist > range and AIBUtils.UphillMiss(bot, enemy) and not hitRightNow then
 		ctx.blocked("prewave-duel", "uphill", string.format("phase=%s dist=%.0f", phase, dist), 3.0)
 		local now = DotaTime()
 		if bot.aib_preDuelBackUntil ~= nil and now < bot.aib_preDuelBackUntil then

@@ -118,9 +118,23 @@ function M.Think(ctx)
 		end
 	end
 
+	-- The commit latch must not outlive the creeps that justified it. It was set while a
+	-- wave was tanking the tower, and then kept walking the bot into tower range after the
+	-- wave died: 8909602648 [D] logs `phase=terminal wave=1` at 4:22 and `phase=commit
+	-- wave=0` three seconds later, tower damage 319 = 18% of everything that bot took, and
+	-- the user watched it eat four tower shots and lose the game on it. Same shape as the
+	-- recovery-wait latch in b4b24af -- a latch re-evaluated on time alone while the world
+	-- it was latched against moved on. Dropping the latch falls through to the wave/default
+	-- branches below, which do their own gating, so no tick is burned.
 	if bot.aib_siegeCommitUntil ~= nil and now <= bot.aib_siegeCommitUntil then
-		ctx.towerOpportunity(twrDist <= attackRange + 180 and "hit" or "step", string.format("phase=commit wave=%d tower=%.0f", waveCount, twrDist), 2.0)
-		return AIBEngine.AttackOrMoveToBand(ctx, twr, "siege-commit-tower", 30)
+		if not waveAtTower and twrDist <= attackRange + 260 then
+			bot.aib_siegeCommitUntil = nil
+			ctx.towerOpportunity("blocked_wave_gone", string.format("wave=%d tower=%.0f", waveCount, twrDist), 4.0)
+			ctx.diag("siege-commit-wave-gone")
+		else
+			ctx.towerOpportunity(twrDist <= attackRange + 180 and "hit" or "step", string.format("phase=commit wave=%d tower=%.0f", waveCount, twrDist), 2.0)
+			return AIBEngine.AttackOrMoveToBand(ctx, twr, "siege-commit-tower", 30)
+		end
 	end
 
 	if strongWaveAtTower and (cwp == "push" or ctx.enemyDeadRecently() or enemyFarOrWeak) then

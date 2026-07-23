@@ -268,8 +268,20 @@ function M.HarassAndChase(ctx)
 	-- (how Radiant lost a duel it should have won, 8883124473) yield the tick to lane
 	-- work / farming until the enemy comes down. Melee (range<=300) never misses
 	-- uphill, so it keeps attacking.
+	-- Being hit right now voids the uphill argument. The 25% whiff is a reason to prefer
+	-- not to OPEN a trade up the ramp; it was never a reason to stand still and be
+	-- free-hit, which is what the bot did for a whole minute in 8909602648 (user: "Radiant
+	-- does NOTHING while it is simply being beaten and losing health"). 75% of your damage
+	-- beats 0% of it, and the alternative the comment below assumes -- yield the tick to
+	-- lane work -- is empty when there is no creep to work: that match logged creep-work
+	-- winning the arbiter on identical coordinates for 8 seconds straight.
+	local function beingHitBy(enemy)
+		return enemy ~= nil and bot:WasRecentlyDamagedByAnyHero(2.0)
+			and GetUnitToUnitDistance(bot, enemy) <= range + 120
+	end
 	local function uphillWhiff(enemy)
 		return range > 300 and ctx.uphillMiss(enemy) and ctx.enemyTowerDanger() == nil
+			and not beingHitBy(enemy)
 	end
 	if atkHero and #atkHero > 0 and atkHero[1]:IsAlive() then
 		if heroPrio == "always" then
