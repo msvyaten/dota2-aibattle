@@ -34,7 +34,11 @@ function M.ThinkIfAllowed(ctx, hpThreshold, diagKey)
 	local bot = ctx.bot
 	local hp = J.GetHP(bot)
 	if hp >= hpThreshold then return false end
-	if diagKey == "lane-low" and hp >= 0.45
+	-- 3b (23.07): this band IS what rules.low_hp_hold declares -- "the HP at which recovery
+	-- holds position instead of stepping" -- so it reads the threshold rather than a literal
+	-- that only matched it at the neutral retreat_caution of 0.5. Grok and DeepSeek ask for
+	-- 0.44, Gemini for 0.46, and every one of them was silently given 0.45.
+	if diagKey == "lane-low" and hp >= Style.LowHpHoldThreshold()
 		and not bot:WasRecentlyDamagedByAnyHero(2.0)
 		and not bot:WasRecentlyDamagedByCreep(1.2) then
 		local range = attackRange(ctx)
@@ -57,7 +61,10 @@ function M.ThinkIfAllowed(ctx, hpThreshold, diagKey)
 	if diagKey == "lane-low" then
 		return M.ActiveLowHp(ctx, hpThreshold, true)
 	end
-	if hp < 0.45 then return M.ActiveLowHp(ctx, 0.45, true) end
+	-- Passing 0.45 explicitly OVERRODE the config: ActiveLowHp already falls back to
+	-- Style.LowHpHoldThreshold() when given no override, and handing it a literal was the one
+	-- thing that guaranteed the dial could not be heard here. Pass nothing.
+	if hp < Style.LowHpHoldThreshold() then return M.ActiveLowHp(ctx, nil, true) end
 	return false
 end
 

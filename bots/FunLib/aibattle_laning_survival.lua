@@ -63,7 +63,9 @@ function M.CreepAggroRelief(ctx)
 	end
 
 	local cen = AIBUtils.EnemyCreepCentroid(enemyCreeps)
-	if hp >= 0.74 and not repeatedDamage then
+	-- 0.74 was the only place this threshold existed; the creep_aggro_relief_hp rule that
+	-- is supposed to own it went unread since it was added. See Style.CreepAggroReliefThreshold.
+	if hp >= Style.CreepAggroReliefThreshold() and not repeatedDamage then
 		return Engine.Blocked("creep-aggro", 10, "chip_ignored",
 			string.format("hp=%.0f hits=%d", hp * 100, bot.aib_creepDmgCount or 0))
 	end

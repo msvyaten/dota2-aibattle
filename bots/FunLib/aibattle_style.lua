@@ -187,7 +187,10 @@ local DEFAULT_RUNE_USE_POLICY = {
 
 local RULE_NUMBERS = {
     low_hp_hold = { default = 0.45, min = 0.25, max = 0.70 },
-    creep_aggro_relief_hp = { default = 0.55, min = 0.45, max = 0.90 },
+    -- Default corrected 0.55 -> 0.74 on 23.07: 0.55 was never the threshold the engine
+    -- used. The real one is the "ignore creep chip above this" test in
+    -- laning_survival, which was the literal 0.74, and nothing read this rule at all.
+    creep_aggro_relief_hp = { default = 0.74, min = 0.45, max = 0.90 },
 }
 
 local function clamp01(x)
@@ -390,6 +393,7 @@ local function buildStyle(raw)
     -- tell "explicitly tuned" from "left alone" and derive from retreat_caution instead.
     local low_hp_hold_set = rawRules.low_hp_hold ~= nil
     local creep_aggro_relief_hp = ruleNumber(rawRules, "creep_aggro_relief_hp")
+    local creep_aggro_relief_hp_set = rawRules.creep_aggro_relief_hp ~= nil
 
     -- Debug-only switches for isolating AFK/jitter. These are deliberately not LLM-visible
     -- style rules; set them by hand in playstyle_*.lua for one diagnostic match.
@@ -407,6 +411,7 @@ local function buildStyle(raw)
         low_hp_hold = low_hp_hold,
         low_hp_hold_set = low_hp_hold_set,
         creep_aggro_relief_hp = creep_aggro_relief_hp,
+        creep_aggro_relief_hp_set = creep_aggro_relief_hp_set,
         debug_disable_forwardness_fallbacks = debug_disable_forwardness_fallbacks,
         debug_skeleton_laning = debug_skeleton_laning,
     }, item_build = items, skill_build = skills, item_rules = item_rules }
@@ -638,6 +643,21 @@ function M.LowHpHoldThreshold()
     if r.low_hp_hold_set and type(r.low_hp_hold) == "number" then return r.low_hp_hold end
     local caution = (st.dials or {}).retreat_caution or 0.5
     return 0.35 + 0.20 * caution
+end
+
+-- creep_aggro_relief_hp: above this the bot shrugs off creep chip damage; below it, it
+-- steps out of the wave. The rule was parsed, validated, stored -- and read by NOBODY,
+-- while laning_survival used the bare literal 0.74. So a config could set it and nothing
+-- whatsoever happened, which is worse than an absent knob: the schema promised a fork the
+-- engine did not have. Found by binding.py's audit, 23.07.
+-- Same discipline as LowHpHoldThreshold: an explicit config value wins, otherwise return
+-- the historical constant, so every config in the repo today behaves exactly as before.
+function M.CreepAggroReliefThreshold()
+    local r = M.Get().rules or {}
+    if r.creep_aggro_relief_hp_set and type(r.creep_aggro_relief_hp) == "number" then
+        return r.creep_aggro_relief_hp
+    end
+    return 0.74
 end
 
 function M.MayDive(bot)
