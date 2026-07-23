@@ -199,6 +199,17 @@ def report(match_id):
 
     # Damage attribution (21.07). Cumulative, so take the LAST line per side. creep/tower/hero
     # are lower bounds -- ticks with two live sources land in `mixed` rather than being split.
+    # Tower pokes were endemic -- 14 of 16 sides in the era took tower damage, and the siege
+    # loop owned the windows where it grew. This line is the acceptance for the backoff: the
+    # signature must be non-zero AND the tower share must fall.
+    print("----- watch: tower pokes (siege backoff) -----")
+    for side in ("R", "D"):
+        print("  [%s] backoff=%d aggro-drop=%d no-dive=%d | siege commit=%d terminal=%d"
+              % (side, diag_max(text, side, "siege-tower-backoff"),
+                 diag_max(text, side, "tower-aggro-drop"), diag_max(text, side, "no-dive"),
+                 diag_max(text, side, "siege-commit-tower"),
+                 diag_max(text, side, "siege-terminal-tower")))
+
     print("----- watch: damage by source (lower bounds; mixed = ambiguous) -----")
     for side in ("R", "D"):
         hits = re.findall(
