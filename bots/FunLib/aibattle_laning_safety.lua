@@ -104,6 +104,38 @@ function M.VisualAFK(ctx)
 	return true
 end
 
+-- How far ahead of our own ranged creep a ranged hero may stand, measured along the lane.
+-- Our ranged creep is the rear unit of the wave; standing in front of it is what puts the
+-- hero in the enemy melee pack and in the enemy's harass window for nothing. Standard lane
+-- rule, and it did not exist anywhere in this codebase: 3e64ecb taught the bot to yield
+-- INSIDE an enemy melee pack, but nothing ever measured position against our OWN wave.
+-- User, 8909602648: "the Dire bot constantly stands in the creeps AHEAD of the ranged one".
+local OWN_RANGED_LEAD = 120
+
+-- Signed lane-axis offset of `loc` relative to our ranged creep: positive = further toward
+-- the enemy than it is. Returns nil when we have no ranged creep nearby (early wave, or it
+-- is already dead) -- with no reference unit there is no rule to apply.
+local function aheadOfOwnRanged(ctx, loc)
+	local bot = ctx.bot
+	local enemyT1 = GetTower(GetOpposingTeam(), TOWER_MID_1)
+	if enemyT1 == nil then return nil end
+	local ranged, best = nil, math.huge
+	for _, c in pairs(ctx.allyCreeps or {}) do
+		-- Ranged creeps outrange melee ones by a wide margin; 350 separates them cleanly
+		-- and matches the melee/ranged split already used for the hero at :111.
+		if J.IsValid(c) and c:IsAlive() and c:GetAttackRange() > 350 then
+			local d = GetUnitToUnitDistance(bot, c)
+			if d < best then ranged, best = c, d end
+		end
+	end
+	if ranged == nil then return nil end
+	local rl, el = ranged:GetLocation(), enemyT1:GetLocation()
+	local ax, ay = el.x - rl.x, el.y - rl.y
+	local n = math.sqrt(ax * ax + ay * ay)
+	if n < 1 then return nil end
+	return ((loc.x - rl.x) * ax + (loc.y - rl.y) * ay) / n
+end
+
 function M.RangedMeleePackSpacing(ctx)
 	local bot = ctx.bot
 	local now = DotaTime()
@@ -134,6 +166,22 @@ function M.RangedMeleePackSpacing(ctx)
 		if hitCreep ~= nil and GetUnitToUnitDistance(bot, hitCreep) <= range then return false end
 		local foes = bot:GetNearbyHeroes(range + 100, true, BOT_MODE_NONE)
 		if foes ~= nil and #foes > 0 and foes[1]:IsAlive() then return false end
+		-- "At the safe edge" is measured against the ENEMY pack only, so the edge can still
+		-- sit in front of our own ranged creep -- and then this branch HOLDS the hero there,
+		-- which is the reported behaviour. Step back behind the ranged creep instead; the
+		-- CS and hero yields above still run first, so this cannot cost a last hit or refuse
+		-- a fight. Throttled with the same timer as the step-out below.
+		local lead = aheadOfOwnRanged(ctx, bot:GetLocation())
+		if lead ~= nil and lead > OWN_RANGED_LEAD then
+			if bot.aib_meleeSpaceLast ~= nil and now - bot.aib_meleeSpaceLast < 1.4 then return true end
+			bot.aib_meleeSpaceLast = now
+			local back = AIBUtils.MoveAwayFrom(bot:GetLocation(), cen,
+				math.min(lead - OWN_RANGED_LEAD + 60, 400))
+			Style.Intent(bot, "own-ranged-lead", string.format("lead=%.0f count=%d", lead, count), 1.5)
+			ctx.diag("own-ranged-stepback")
+			bot:Action_MoveToLocation(back)
+			return true
+		end
 		Style.DiagRL(bot, "melee-pack-hold", 5)
 		return true
 	end
