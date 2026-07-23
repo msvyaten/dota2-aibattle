@@ -86,7 +86,9 @@ function M.KillLock(ctx)
 	local reason = win.mutualLow and "mutual_low_finish" or "killable_enemy"
 	local priority = win.mutualLow and 145 or (win.inRange and 135 or 125)
 	return Engine.Intent("kill-lock", priority, reason, function()
-		if Style.AbilityExecute(bot, enemy) then return end
+		-- Was AbilityExecute only, which is why a bot locked onto a killable enemy never
+		-- razed. See Style.FightAbilities.
+		if Style.FightAbilities(bot, enemy) then return end
 		if win.dist <= range + 80 then
 			bot:Action_AttackUnit(enemy, true)
 			Style.Diag(bot, win.mutualLow and "mutual-low-finish-atk" or "kill-lock-atk")

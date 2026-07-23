@@ -196,7 +196,7 @@ function M.HeroOverCreep(ctx)
 		and J.GetHP(atkHero[1]) <= math.min(0.65, heroOverCreepHp)
 		and ctx.enemyTowerDanger() == nil
 		and not ctx.uphillMiss(atkHero[1]) then
-		if Style.AbilityExecute(bot, atkHero[1]) then return true end
+		if Style.FightAbilities(bot, atkHero[1]) then return true end
 		bot:Action_AttackUnit(atkHero[1], false)
 		ctx.diag("hero-over-creep")
 		return true
@@ -211,6 +211,8 @@ function M.EmergencyKillPriority(ctx)
 	if atkHero and #atkHero > 0 then
 		local enemy = atkHero[1]
 		if enemy:IsAlive() and J.GetHP(enemy) < ctx.dials.execute_threshold then
+			-- This owner asked for NO ability at all before right-clicking.
+			if Style.FightAbilities(bot, enemy) then return true end
 			bot:Action_AttackUnit(enemy, true)
 			ctx.diag("kill-priority")
 			return true

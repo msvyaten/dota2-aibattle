@@ -1082,6 +1082,27 @@ function M.AbilityHarass(bot, enemy)
 end
 
 -- AbilityExecute: cast the hero's execute ability when enemy HP < execute_threshold dial.
+-- One question, asked the same way by every fight owner: "before I right-click, is there a
+-- spell for this?" It exists because the answer used to depend on WHICH owner won the tick,
+-- and the highest-priority owners were the ones that never asked -- so the more committed the
+-- bot was to a fight, the less it cast. Exactly backwards.
+--
+-- 8909768486 is the cost. Dire spent the first 40 seconds inside kill-lock (its
+-- execute_threshold of 0.60 means "killable" covers most of a trade) and kill-lock tried only
+-- AbilityExecute before falling to auto-attack. Result: ability-harass = 0 for Dire across
+-- those 40 seconds while Radiant, whose kill-lock happened to be blocked by uphill and so fell
+-- through to the harass owner, cast 77 times. Dire stood on one spot from t=0 to t=36 losing
+-- 92% -> 35% HP -- the user saw "took damage and did nothing about it".
+--
+-- Execute first, then harass: an execute is a kill, a harass is chip, and spending the kill
+-- spell as chip is the one ordering mistake that matters.
+function M.FightAbilities(bot, enemy)
+    if bot == nil or enemy == nil or not enemy:IsAlive() then return false end
+    if M.AbilityExecute(bot, enemy) then return true end
+    if M.AbilityHarass(bot, enemy) then return true end
+    return false
+end
+
 -- Handles unit/point/no_target types. For no_target executes (SF Requiem, Zeus ult):
 -- if enemy is beyond max_range, moves closer WITHOUT returning true, so other laning
 -- logic can still fire on the same tick.
