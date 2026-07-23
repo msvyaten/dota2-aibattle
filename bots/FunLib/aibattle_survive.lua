@@ -124,6 +124,94 @@ local function bottleCharges(bot)
 	return bottle:GetCurrentCharges()
 end
 
+-- ============================ FOUNTAIN TRIP: ONE OWNER ============================
+-- The latch had thirteen write sites across six functions and no owner, which is why every
+-- fix to it has been a patch on one path while the same hole stayed open on the others:
+-- e344e49 guarded the vendor salve, 3a93287 the floor's own decision, 4dd47d5 the bottle,
+-- and each time the next match found another route in. Worse, the release logic b6d0642
+-- added lived in recovery() -- FOURTH in M.Think, behind fountainRecovery() -- so from the
+-- day it was written a latched trip made it unreachable: fountainRecovery returns true every
+-- tick and nothing below it ever runs again. 8909768486 [D] is that in one trace:
+-- `blocked=fountain-floor reason=heal_in_hand` at t=41 and t=46, then the trip latches and
+-- the line never appears again while the bot walks 9245 -> 102 units with tangos in the bag,
+-- regenerating 16% -> 50% on the way and arriving at 81%. Thirty-five seconds of lane and
+-- the whole XP lead, for the last stretch of a bar that was filling itself.
+--
+-- So: every release condition lives HERE, and reviewFountainTrip runs at the top of Think
+-- before any handler can claim the tick. Adding a new reason to abandon a trip means adding
+-- one clause to one function, and it cannot be shadowed by ordering.
+
+-- Above this the bot is out of every recovery band, so a trip has nothing left to fix.
+-- Same number as AIBLanePolicy.Hp.softRecovery; kept local to avoid a require cycle.
+local TRIP_DONE_HP = 0.55
+
+local function releaseFountainTrip(bot, reason, detail)
+	-- All three fields, always. b4b24af was caused by a release site that cleared one of
+	-- three and left the others to reanimate the behaviour a tick later.
+	bot.aib_fountainTrip = false
+	bot.aib_fountainFloorTrip = false
+	bot.aib_fountainFullSince = nil
+	Style.DiagRL(bot, "fountain-trip-release", 3)
+	Style.Blocked(bot, "fountain-floor", reason, detail or "", 5.0)
+end
+
+-- Returns a reason string when a committed trip should be abandoned, nil to keep walking.
+-- Pure: reads state, issues no actions, so it is safe to call before the handler chain.
+local function fountainTripDoneReason(bot, hp, charges, inFlight, flightFresh)
+	local healing = bot:HasModifier("modifier_flask_healing")
+		or bot:HasModifier("modifier_tango_heal")
+	local hitRecently = bot:WasRecentlyDamagedByAnyHero(2.0)
+	-- Below 12% the walk itself is in doubt; the fountain stays the right answer whatever
+	-- else is true.
+	if hp < 0.12 then return nil end
+
+	-- 1. The cure is in the bag (b6d0642), or paid for and arriving (3a93287).
+	local heldHeal = hasItem(bot, "item_flask")
+		or hasItem(bot, "item_tango") or hasItem(bot, "item_tango_single")
+		or (charges ~= nil and charges > 0)
+	if (heldHeal or flightFresh) and not hitRecently and not healing then
+		return heldHeal and "heal_in_hand" or "heal_in_flight",
+			string.format("hp=%.0f inflight=%s", hp * 100, tostring(inFlight))
+	end
+
+	-- 2. The bar filled itself on the way. This does NOT reopen the user's 21.07 rollback:
+	-- its stated reason was that a trip also restores MANA and BOTTLE CHARGES, which an HP
+	-- test cannot see -- so this clause fires only when there is nothing else to collect.
+	local maxMana = bot:GetMaxMana()
+	local mana = maxMana > 0 and (bot:GetMana() / maxMana) or 1.0
+	if hp >= TRIP_DONE_HP and (charges == nil or charges >= 3) and mana >= 0.50
+		and not hitRecently then
+		return "recovered_en_route",
+			string.format("hp=%.0f mana=%.0f bottle=%s", hp * 100, mana * 100, tostring(charges))
+	end
+
+	-- 3. A rune is nearly up and closer than home (4b). Releasing is enough -- the floor
+	-- re-decides next tick and its rune branch takes over from there.
+	local runeEta, _, runeDist = AIBRunes.NextSpawnEta(bot, DotaTime())
+	if hp >= 0.22 and runeEta ~= nil and runeEta <= 25.0 and runeEta > -10.0
+		and runeDist < bot:DistanceFromFountain() then
+		return "rune_due", string.format("hp=%.0f eta=%.0f rune=%.0f", hp * 100, runeEta, runeDist)
+	end
+	return nil
+end
+
+local function reviewFountainTrip(bot)
+	if not (bot.aib_fountainTrip or bot.aib_fountainFloorTrip) then return end
+	if hasFountainAura(bot) then return end          -- already there; let it top off
+	if bot.aib_fountainTping then return end         -- mid-channel, do not disturb
+	local hp = J.GetHP(bot)
+	local inFlight = healInFlight(bot)
+	if inFlight == nil then
+		bot.aib_healFlightSince = nil
+	elseif bot.aib_healFlightSince == nil then
+		bot.aib_healFlightSince = DotaTime()
+	end
+	local flightFresh = inFlight ~= nil and DotaTime() - (bot.aib_healFlightSince or 0) < 25.0
+	local reason, detail = fountainTripDoneReason(bot, hp, bottleCharges(bot), inFlight, flightFresh)
+	if reason ~= nil then releaseFountainTrip(bot, reason, detail) end
+end
+-- =================================================================================
+
 local function recoveryPlan(bot, action, reason, detail, sec)
 	local text = "action=" .. tostring(action) .. " reason=" .. tostring(reason)
 	if detail ~= nil and detail ~= "" then text = text .. " " .. detail end
@@ -797,12 +885,12 @@ local function recovery(bot, dials, nEnemyCreeps)
 		and not bot:HasModifier("modifier_flask_healing")
 		and not bot:HasModifier("modifier_tango_heal")
 	if canHealHere and hp >= 0.12 then
-		-- Below 0.12 the walk itself is in doubt and the fountain is still the right answer.
-		Style.Blocked(bot, "fountain-floor", heldHeal and "heal_in_hand" or "heal_in_flight",
+		-- Entry guard only: this decides whether to START a trip. Abandoning one already
+		-- running belongs to reviewFountainTrip, which runs before the chain and therefore
+		-- cannot be shadowed by an owner above it.
+		releaseFountainTrip(bot, heldHeal and "heal_in_hand" or "heal_in_flight",
 			string.format("hp=%.0f flask=%s inflight=%s", hp*100,
-				tostring(hasItem(bot, "item_flask")), tostring(inFlight)), 5.0)
-		bot.aib_fountainTrip = false
-		bot.aib_fountainFloorTrip = false
+				tostring(hasItem(bot, "item_flask")), tostring(inFlight)))
 	end
 	-- 4b (user's deferred call, 21.07 -> chosen 23.07): before spending 60 seconds walking
 	-- home, look at the rune clock. A rune that is nearly up and closer than the fountain
@@ -817,11 +905,9 @@ local function recovery(bot, dials, nEnemyCreeps)
 	local runeEta, runeLoc, runeDist = AIBRunes.NextSpawnEta(bot, DotaTime())
 	if hp >= 0.22 and runeEta ~= nil and runeEta <= 25.0 and runeEta > -10.0
 		and runeDist < bot:DistanceFromFountain() then
-		Style.Blocked(bot, "fountain-floor", "rune_due",
+		releaseFountainTrip(bot, "rune_due",
 			string.format("hp=%.0f eta=%.0f rune=%.0f home=%.0f",
-				hp * 100, runeEta, runeDist, bot:DistanceFromFountain()), 5.0)
-		bot.aib_fountainTrip = false
-		bot.aib_fountainFloorTrip = false
+				hp * 100, runeEta, runeDist, bot:DistanceFromFountain()))
 		if bot.aib_recMoveLast == nil or DotaTime() - bot.aib_recMoveLast >= 2.0 then
 			bot.aib_recMoveLast = DotaTime()
 			recoveryPlan(bot, "rune_stage", "floor_deferred",
@@ -905,6 +991,10 @@ end
 --
 
 function M.Think(bot, dials, nEnemyCreeps)
+	-- BEFORE the chain, not inside it. Any release condition placed after fountainRecovery is
+	-- unreachable the moment a trip latches, which is exactly how b6d0642's guard spent its
+	-- whole life dead. See the FOUNTAIN TRIP: ONE OWNER block at the top of this file.
+	reviewFountainTrip(bot)
 	if fountainRecovery(bot)              then return true end
 	if defensiveHeal(bot, dials)           then return true end
 	if regenLane(bot, dials, nEnemyCreeps) then return true end
