@@ -1071,11 +1071,26 @@ local function AIB_BuildDesireCandidates(dials, rules, runtimeCtx, intentCtx)
 	do
 		local lhCreep, lhSoon = GetBestLastHitCreep(nEnemyCreeps)
 		local siegeCommitted = bot.aib_siegeCommitUntil ~= nil and DotaTime() < bot.aib_siegeCommitUntil
+		-- farm_focus reaches last-hitting HERE, and until 23.07 it reached it nowhere at all:
+		-- binding.py measured r=-0.01 between the dial and lh/min across a 0.15-0.72 spread,
+		-- and reading its consumers explained why -- two `< 0.25` booleans, rune creep
+		-- pressure, and a hero-seek gate. Nothing touched CS. The dial that names the farmer
+		-- archetype had no farming mechanism behind it.
+		-- Two gates now scale with it: how hurt the bot will still stop to secure a last hit,
+		-- and how far it will reach for one. Both are CENTRED so farm_focus = 0.5 reproduces
+		-- the old constants exactly (0.32 and +40) -- a config that does not ask for this
+		-- cannot be blamed for a regression from it.
+		-- The candidate's own score stays at 140 on purpose: it exists because aggressive
+		-- configs starved CS entirely (LH ~0 for 90s), and scaling it down for a brawler
+		-- would walk straight back into that.
+		local farm = dials.farm_focus or 0.5
+		local lhHpGate = 0.38 - 0.12 * farm
+		local lhReach = botAttackRange + 20 + 40 * farm
 		if lhCreep ~= nil and not lhSoon
 			and not siegeCommitted  -- yield to an active tower siege so pushers keep advancing
-			and J.GetHP(bot) >= 0.32
+			and J.GetHP(bot) >= lhHpGate
 			and AIBUtils.EnemyTowerDanger(bot) == nil
-			and GetUnitToUnitDistance(bot, lhCreep) <= botAttackRange + 40 then
+			and GetUnitToUnitDistance(bot, lhCreep) <= lhReach then
 			candidates[#candidates + 1] = AIBTopArbiter.Candidate("last-hit", 140, "killable_creep",
 				string.format("dist=%.0f", GetUnitToUnitDistance(bot, lhCreep)),
 				function()
@@ -1314,7 +1329,14 @@ local function ThinkLaningCore(dials, rules)
 	tail("uphill", 43, "lanework", "ready", function() return AIBLaneCombat.UphillReposition(runtimeCtx) end)
 	tail("ranged-spacing", 41, "lanework", "ready", function() return AIBLaneSafety.RangedMeleePackSpacing(runtimeCtx) end)
 	tail("harass", 40, "lanework", "ready", function() return AIBLaneCombat.HarassAndChase(runtimeCtx) end)
-	tail("creep-work", 38, "lanework", "ready", function()
+	-- Third path from farm_focus to farming: how creep work ranks against harass when both
+	-- are available. That contest is the dial's plain meaning -- does my attention go to the
+	-- wave or to the hero -- and it was decided by two fixed constants. Centred on 0.5 = 38,
+	-- the historical value, and deliberately kept inside the 36..40 band so it can never
+	-- outbid ranged-spacing (41), which is a safety mechanism, nor fall under ability-harass
+	-- (36) and silently reorder a third pair.
+	local farmFocusScore = math.max(36.4, math.min(39.6, 38 + 4 * ((dials.farm_focus or 0.5) - 0.5)))
+	tail("creep-work", farmFocusScore, "lanework", "ready", function()
 		return AIBLaneCreeps.HandleCreepWork({
 			bot = bot,
 			rules = rules,
