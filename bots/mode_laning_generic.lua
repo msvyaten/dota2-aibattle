@@ -51,6 +51,7 @@ local AIBLaneDuel = require(GetScriptDirectory()..'/FunLib/aibattle_laning_duel'
 local AIBLaneCreeps = require(GetScriptDirectory()..'/FunLib/aibattle_laning_creeps')
 local AIBLaneSafety = require(GetScriptDirectory()..'/FunLib/aibattle_laning_safety')
 local AIBLaneRecovery = require(GetScriptDirectory()..'/FunLib/aibattle_laning_recovery')
+local AIBItemPolicy = require(GetScriptDirectory()..'/FunLib/aibattle_item_policy')
 local AIBLaneCombat = require(GetScriptDirectory()..'/FunLib/aibattle_laning_combat')
 local AIBLaneTempo = require(GetScriptDirectory()..'/FunLib/aibattle_laning_tempo')
 local AIBTopArbiter = require(GetScriptDirectory()..'/FunLib/aibattle_laning_arbiter')
@@ -492,6 +493,20 @@ local function AIB_BottleIfUseful(hpLimit, manaLimit, diagKey)
 	-- and could fire a second bottle a tick after survive.lua's sip, cutting the
 	-- 3s regen tail short (observed: bottle pressed twice, HP heal wasted).
 	if bot:HasModifier("modifier_bottle_regeneration") then return false end
+	-- A committed fountain trip refills the bottle to 3 charges for free on arrival, so a sip
+	-- taken en route is a charge burned to arrive full -- the same trade e344e49 blocked for
+	-- the salve. It was never applied here because this site lives in the laning tier, which
+	-- runs whether or not survive.Think claimed the tick: 8909533277 [D] logged
+	-- `blocked=heal-item reason=fountain_trip_committed` (vendor salve correctly refused) and
+	-- then healed 12%->45% two seconds later, 4600 units from home, off low-hp-bottle -- which
+	-- fired 163 times that match. This is the single chokepoint for all three bottle callers
+	-- (critical-recover / low-hp / damage-unstuck), so guarding it here covers them all.
+	-- Below 15% hp AIBItemPolicy lets the sip through: surviving the walk beats saving a charge.
+	if AIBItemPolicy.SkipConsumableForFountainTrip(bot) then
+		Style.Blocked(bot, "bottle-sip", "fountain_trip_committed",
+			string.format("hp=%.0f", J.GetHP(bot) * 100), 8.0)
+		return false
+	end
 	local maxMana = bot:GetMaxMana()
 	local mana = maxMana > 0 and (bot:GetMana() / maxMana) or 1.0
 	if J.GetHP(bot) > hpLimit and mana > manaLimit then return false end
