@@ -864,11 +864,27 @@ end
 -- (2) A FIXED 0.3s FLAG WINDOW. The sampler runs on the laning tick, not on a timer, so
 -- whenever two samples fell more than 0.3s apart the flags had already lapsed and the delta
 -- landed in `other`. Size the window from the real gap between samples instead.
+-- Probe v3 (23.07): v2 still printed other=17-46% in every match, i.e. UNTRUSTED, i.e. no
+-- statement about who damaged whom was safe to make. Three causes, all structural, none of
+-- them "the flags are unreliable":
+-- (1) THE SAMPLER WAS IN STAGE 4. It sat inside AIB_BuildDesireCandidates, reached only via
+--     ThinkLaningCore -- the LAST of the four laning stages. Every tick that pregame, dive
+--     or death-window claimed took no sample at all, and AIB_HandleRespawn returns from
+--     Think even earlier. Damage taken across those gaps arrived at the next sample with its
+--     flags long expired. It now runs from Think itself, before the stages.
+-- (2) THE WINDOW WAS CLAMPED BELOW THE GAP. `min(1.0, gap + 0.15)` means a 3-second gap was
+--     asked about with a 1-second question, so two of those seconds were unattributable by
+--     construction. Engine flags do not reach back far anyway, which is the point of (3).
+-- (3) `other` CONFLATED TWO DIFFERENT THINGS: "damage with no flag" (a real finding -- self
+--     damage, neutrals, something we do not model) and "gap too wide to ask about" (a
+--     measurement artefact). They now have separate buckets, so the readout says which it is
+--     instead of averaging them into one useless number.
+local DMG_FLAG_REACH = 1.2   -- how far back the engine's WasRecentlyDamagedBy* can be trusted
 local function AIB_SampleDamageBySource()
 	local now = DotaTime()
 	local gap = (bot.aib_dmgSampleLast ~= nil) and (now - bot.aib_dmgSampleLast) or 0.3
 	bot.aib_dmgSampleLast = now
-	local window = math.max(0.3, math.min(1.0, gap + 0.15))
+	local window = math.max(0.3, math.min(DMG_FLAG_REACH, gap + 0.15))
 	local alive = bot:IsAlive()
 	local hpNow = alive and bot:GetHealth() or 0
 	local prev = bot.aib_dmgHpPrev
@@ -877,6 +893,11 @@ local function AIB_SampleDamageBySource()
 		local d = prev - hpNow
 		if not alive then
 			bot.aib_dmgDeath = (bot.aib_dmgDeath or 0) + d
+		elseif gap > DMG_FLAG_REACH then
+			-- Honest about our own blind spot: nothing can be attributed across a gap wider
+			-- than the flags reach, so do not pretend and do not pollute `other` with it.
+			bot.aib_dmgStale = (bot.aib_dmgStale or 0) + d
+			bot.aib_dmgStaleN = (bot.aib_dmgStaleN or 0) + 1
 		else
 			local c = bot:WasRecentlyDamagedByCreep(window)
 			local t = bot:WasRecentlyDamagedByTower(window)
@@ -896,15 +917,15 @@ local function AIB_SampleDamageBySource()
 	if bot.aib_dmgLogLast == nil or now - bot.aib_dmgLogLast >= 15.0 then
 		bot.aib_dmgLogLast = now
 		Style.Intent(bot, "damage-by-source", string.format(
-			"creep=%d tower=%d hero=%d mixed=%d death=%d other=%d",
+			"creep=%d tower=%d hero=%d mixed=%d death=%d other=%d stale=%d gaps=%d",
 			bot.aib_dmgCreep or 0, bot.aib_dmgTower or 0, bot.aib_dmgHero or 0,
-			bot.aib_dmgMixed or 0, bot.aib_dmgDeath or 0, bot.aib_dmgOther or 0), 1.0)
+			bot.aib_dmgMixed or 0, bot.aib_dmgDeath or 0, bot.aib_dmgOther or 0,
+			bot.aib_dmgStale or 0, bot.aib_dmgStaleN or 0), 1.0)
 	end
 end
 
 local function AIB_BuildDesireCandidates(dials, rules, runtimeCtx, intentCtx)
 	local hp = J.GetHP(bot)
-	AIB_SampleDamageBySource()
 	local range = botAttackRange or bot:GetAttackRange()
 	local enemy, enemyDist = AIB_NearestEnemyHero(AIBLanePolicy.EnemyScanRange(range))
 	local enemyHp = enemy ~= nil and J.GetHP(enemy) or 1.0
@@ -1470,6 +1491,8 @@ function Think()
 
 	ThinkAnnounce(ctx.dials)
 	ThinkLocationReport()
+	-- Before the stages, not inside the last one: see probe v3 note at AIB_SampleDamageBySource.
+	AIB_SampleDamageBySource()
 	local ok, err = pcall(function() AIBEngine.Run(LANING_STAGES, ctx) end)
 	if not ok then
 		local side = bot:GetTeam() == TEAM_RADIANT and "R" or "D"

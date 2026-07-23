@@ -203,19 +203,27 @@ def report(match_id):
     for side in ("R", "D"):
         hits = re.findall(
             r"AIB\[%s\] intent=damage-by-source[^']*?creep=(\d+) tower=(\d+) hero=(\d+) mixed=(\d+)"
-            r"(?: death=(\d+))? other=(\d+)" % side, text)
+            r"(?: death=(\d+))? other=(\d+)(?: stale=(\d+) gaps=(\d+))?" % side, text)
         if not hits:
             print("  [%s] (no samples -- probe not in this build)" % side)
             continue
-        c, t, h, m, dth, o = (int(x or 0) for x in hits[-1])
-        tot = c + t + h + m + dth + o
+        c, t, h, m, dth, o, st, gaps = (int(x or 0) for x in hits[-1])
+        tot = c + t + h + m + dth + o + st
         pct = lambda v: (100 * v // tot) if tot else 0
-        # other should now be small: probe v2 split deaths out and sized the flag window from
-        # the real sample gap. If other is still >15%, the attribution is not to be trusted.
+        # v3 splits the old `other` in two, because they call for opposite responses:
+        #   other = damage that arrived with NO flag -> a real gap in what we model
+        #   stale = sample gap wider than the flags reach -> our own measurement blind spot
+        # Averaging them into one number is what made v1/v2 unreadable. Verdict now names
+        # whichever one is actually spoiling the readout.
+        note = ""
+        if pct(st) > 10:
+            note = "  <-- SAMPLING GAPS, stale=%d%% over %d gaps" % (pct(st), gaps)
+        elif pct(o) > 15:
+            note = "  <-- UNTRUSTED, other>15%"
         print("  [%s] total=%d | creep=%d(%d%%) tower=%d(%d%%) hero=%d(%d%%) mixed=%d(%d%%) "
-              "death=%d(%d%%) other=%d(%d%%)%s"
-              % (side, tot, c, pct(c), t, pct(t), h, pct(h), m, pct(m), dth, pct(dth), o, pct(o),
-                 "  <-- UNTRUSTED, other>15%" if pct(o) > 15 else ""))
+              "death=%d(%d%%) other=%d(%d%%) stale=%d(%d%%)%s"
+              % (side, tot, c, pct(c), t, pct(t), h, pct(h), m, pct(m), dth, pct(dth),
+                 o, pct(o), st, pct(st), note))
 
     # Farm drivers. The cs-walk buckets are kept as ACTIVITY telemetry, not as a farm
     # diagnosis: across 133 side-matches (tools/farm_drivers.py) cs-walk/min correlates
