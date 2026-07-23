@@ -52,7 +52,16 @@ function M.Think(ctx)
 	local twrDist = GetUnitToUnitDistance(bot, twr)
 	local alliedTank = false
 	local target = twr:GetAttackTarget()
-	if target ~= nil and target:GetTeam() == GetTeam() then alliedTank = true end
+	-- "Something of OURS is soaking the tower" -- and a hero is not that something. The team
+	-- test alone counted the bot ITSELF: while the tower was shooting the hero, the hero
+	-- concluded it had tank cover and kept sieging, which is self-reinforcing -- the longer it
+	-- stands there the longer the tower keeps targeting it and the longer it believes it is
+	-- covered. 8909602648 [D] took 319 tower damage, 18% of everything it received, and lost
+	-- the game on it; bee3dd8 fixed the commit latch that carried it in, this is why it thought
+	-- it was safe once there. Only a non-hero unit can tank, which in a 1v1 lane means a creep.
+	if target ~= nil and target:GetTeam() == GetTeam() and not target:IsHero() then
+		alliedTank = true
+	end
 	if not alliedTank then
 		for _, creep in pairs(ctx.allyCreeps or {}) do
 			if J.IsValid(creep) and GetUnitToUnitDistance(creep, twr) <= twr:GetAttackRange() + 120 then
@@ -223,7 +232,16 @@ function M.CanAct(ctx)
 	local twrDist = GetUnitToUnitDistance(bot, twr)
 	local alliedTank = false
 	local target = twr:GetAttackTarget()
-	if target ~= nil and target:GetTeam() == GetTeam() then alliedTank = true end
+	-- "Something of OURS is soaking the tower" -- and a hero is not that something. The team
+	-- test alone counted the bot ITSELF: while the tower was shooting the hero, the hero
+	-- concluded it had tank cover and kept sieging, which is self-reinforcing -- the longer it
+	-- stands there the longer the tower keeps targeting it and the longer it believes it is
+	-- covered. 8909602648 [D] took 319 tower damage, 18% of everything it received, and lost
+	-- the game on it; bee3dd8 fixed the commit latch that carried it in, this is why it thought
+	-- it was safe once there. Only a non-hero unit can tank, which in a 1v1 lane means a creep.
+	if target ~= nil and target:GetTeam() == GetTeam() and not target:IsHero() then
+		alliedTank = true
+	end
 	if not alliedTank then
 		for _, creep in pairs(ctx.allyCreeps or {}) do
 			if J.IsValid(creep) and GetUnitToUnitDistance(creep, twr) <= twr:GetAttackRange() + 120 then
