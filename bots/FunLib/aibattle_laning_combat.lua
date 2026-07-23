@@ -263,6 +263,21 @@ function M.HarassAndChase(ctx)
 		ctx.blocked("harass", "concede_lane", "", 4.0)
 		return false
 	end
+	-- Do not START a trade while our own salve is ticking: any damage cancels it, so the
+	-- 110g buys a fraction of its healing and the trade is paid for twice. The codebase
+	-- already knew this shape -- trade.lua uses exactly these modifiers to decide when to
+	-- interrupt the ENEMY's heal -- and simply never applied it to our own. User's rule,
+	-- open since 21.07.
+	-- INITIATE is the operative word: if the enemy is already hitting us the salve is
+	-- cancelled either way, and refusing to answer would just be the uphill mistake in a new
+	-- costume. Same escape hatch as there.
+	if (bot:HasModifier("modifier_flask_healing")
+		or bot:HasModifier("modifier_bottle_regeneration")
+		or bot:HasModifier("modifier_clarity_potion"))
+		and not bot:WasRecentlyDamagedByAnyHero(2.0) then
+		ctx.blocked("harass", "own_heal_running", "", 4.0)
+		return false
+	end
 	-- Uphill awareness: a ranged hero attacking uphill misses 25%. Climbing the ramp
 	-- to level ground is a bad dive for SF, so instead of standing and feeding whiffs
 	-- (how Radiant lost a duel it should have won, 8883124473) yield the tick to lane

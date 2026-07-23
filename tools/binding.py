@@ -70,7 +70,13 @@ MIN_SPREAD = 0.15
 # failing tells us nothing about the knob.
 BINDINGS = [
     ("harass_desire",       "dial", "ability-harass",   +1, "harass pressure on the hero"),
-    ("harass_desire",       "dial", "hero-contact-atk", +1, "auto-attacks on the hero"),
+    # Re-declared 23.07. The first run read this CONTRADICTED at r=-0.36, and the binding was
+    # simply wrong: a high-harass config spends its pressure on ABILITIES (ability-harass is
+    # BOUND at +0.52 on the same rows), which leaves fewer plain auto-attacks on the hero, not
+    # more. Substitution between two channels of the same intent, not a broken dial. The honest
+    # observable for "harass pressure" is the two summed, which the metric layer cannot express
+    # yet -- so the naive line is retired rather than left to generate a false alarm every run.
+    ("harass_desire",       "dial", "hero-contact-chase", +1, "chasing the hero is harass intent that abilities cannot substitute for"),
     # farm_focus is declared twice on purpose. The first line is what the dial's NAME and the
     # generator prompt promise; the second is what the code actually implements. Every consumer
     # of farm_focus is either a `< 0.25` boolean, rune creep-pressure, or `math.random() >
