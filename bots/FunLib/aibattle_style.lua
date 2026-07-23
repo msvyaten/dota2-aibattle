@@ -709,7 +709,7 @@ local function antiIdleCombat(bot, lowHp)
     -- MoveToUnit leg made anti-idle a de-facto chaser that bypassed every discipline gate
     -- (hpBehind / concede / uphill / tower). Approaching a hero is fight/harass work, with
     -- their gates -- not the last-resort idle watchdog.
-    if hpFrac(bot) < 0.45 then return false end
+    if hpFrac(bot) < M.LowHpHoldThreshold() then return false end
     if GetUnitToUnitDistance(bot, e) > bot:GetAttackRange() + 100 then return false end
     if AIBUtils.UphillMiss(bot, e) then return false end
     bot:Action_AttackUnit(e, true)
@@ -774,7 +774,7 @@ local function antiIdleLane(bot, lane, lowHp)
     -- it lost 14% HP and walked straight back -- 2012u of path, 17u of net displacement, no
     -- last hit. anti-idle-lane went 4->11 across that window, i.e. it owned most of it.
     -- Same two gates its siblings already carry: not while hurt, and not to the front line.
-    if lowHp or hpFrac(bot) < 0.45 then return false end
+    if lowHp or hpFrac(bot) < M.LowHpHoldThreshold() then return false end
     local dest = GetLaneFrontLocation(bot:GetTeam(), lane, -400)
     if dest ~= nil and GetUnitToLocationDistance(bot, dest) > 150 then
         bot:Action_MoveToLocation(dest)
@@ -788,7 +788,7 @@ local function antiIdlePush(bot, lane, lowHp)
     if lowHp then return false end
     -- P1-C C.1: pushing the tower from the idle watchdog bypassed the siege gates. Only a
     -- healthy bot whose config allows tower aggression pushes here.
-    if hpFrac(bot) < 0.45 then return false end
+    if hpFrac(bot) < M.LowHpHoldThreshold() then return false end
     if ((M.Get().rules or {}).tower_aggression or "default") == "never" then return false end
     local enmT1 = GetTower(GetOpposingTeam(), TOWER_MID_1)
     if enmT1 == nil or not enmT1:IsAlive() then return false end
@@ -808,6 +808,66 @@ local function antiIdlePush(bot, lane, lowHp)
     return false
 end
 
+-- Below the low-HP band every leg above declines and the watchdog has nothing left: combat,
+-- lane and push all gate on that same band, assist needs an ally that does not exist in a
+-- 1v1, and creep needs BOTH cwp=="push" and a creep already inside range+150. In
+-- 8909602648 that intersection was empty for eight seconds and the bot simply stood on
+-- byte-identical coordinates (pre-aig +7, idle +7 in the minute). The risk was written down
+-- when 70999f0 added those gates; the user has now watched it.
+--
+-- Product call by the user, 23.07: "the bot's goal is to win, and winning means trying to
+-- find solutions -- just standing is a poor solution." So a hurt bot still acts. It acts
+-- DEFENSIVELY, which is the part that keeps this from reopening the survival balance:
+--   1. a last hit already in range -- progress that costs no ground and cannot push the
+--      wave, so it stays legal under last_hit_only;
+--   2. a killable creep just out of range, but only if reaching it does not take us past
+--      the safe line -- farm is the productive thing to do while regening;
+--   3. otherwise the safe XP spot BEHIND our own line. Deliberately the opposite direction
+--      from the 70999f0 bug, which walked a 44%-HP bot to lane-front offset 0: this offset
+--      scales the other way, sitting deeper the more hurt we are, and stays inside XP range
+--      (1500) so the bot keeps levelling instead of freezing.
+local function antiIdleLowHp(bot, lane)
+    local hp = hpFrac(bot)
+    local band = M.LowHpHoldThreshold()
+    if hp >= band then return false end
+
+    -- -700 at the band edge, deepening to -1300 by 0.20 and below.
+    local offset = -700 - (band - math.max(hp, 0.20)) * 2400
+    local safeLine = GetLaneFrontLocation(bot:GetTeam(), lane, offset)
+    local range = bot:GetAttackRange()
+    local dmg = bot:GetAttackDamage()
+
+    local reach = nil
+    for _, c in ipairs(bot:GetNearbyCreeps(range + 300, true) or {}) do
+        if c:IsAlive() and c:GetHealth() <= dmg then
+            local d = GetUnitToUnitDistance(bot, c)
+            if d <= range then
+                bot:Action_AttackUnit(c, true)
+                M.Diag(bot, "anti-idle-lowhp-cs")
+                return true
+            end
+            -- Only worth stepping to if it is not deeper into the lane than we may stand.
+            if reach == nil and safeLine ~= nil
+                and GetUnitToLocationDistance(bot, safeLine)
+                   >= GetUnitToLocationDistance(c, safeLine) then
+                reach = c
+            end
+        end
+    end
+    if reach ~= nil then
+        bot:Action_MoveToUnit(reach)
+        M.DiagRL(bot, "anti-idle-lowhp-step", 3)
+        return true
+    end
+
+    if safeLine ~= nil and GetUnitToLocationDistance(bot, safeLine) > 200 then
+        bot:Action_MoveToLocation(safeLine)
+        M.DiagRL(bot, "anti-idle-lowhp-back", 5)
+        return true
+    end
+    return false
+end
+
 -- Anti-idle global fallback: call at the END of any mode's Think() as a last resort.
 -- No meaningful-action gate: caller must place this after all normal mode logic.
 function M.AntiIdleGlobal(bot)
@@ -820,6 +880,7 @@ function M.AntiIdleGlobal(bot)
     if antiIdleCreep(bot) then return true end
     if antiIdleLane(bot, lane, lowHp) then return true end
     if antiIdlePush(bot, lane, lowHp) then return true end
+    if antiIdleLowHp(bot, lane) then return true end
 
     M.DiagRL(bot, "idle", 3)
     return false
