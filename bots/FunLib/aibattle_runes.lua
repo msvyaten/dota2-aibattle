@@ -200,6 +200,24 @@ function M.Reset(bot)
 	bot.aib_emptyBottleSince = nil
 end
 
+-- Rune clock for callers OUTSIDE the rune machinery. Returns seconds until the next bottle
+-- rune spawns, plus the nearest spot and its distance -- nil when there is no spot to speak of.
+--
+-- It exists for the fountain floor. A floor trip is a ~60 second round trip that ends in a
+-- full bar; a rune is a few seconds of walking that ends in a full bar AND bottle charges
+-- AND map presence. When the rune is nearly up and closer than home, walking home is simply
+-- the worse of two available answers -- the user flagged three such trips at 30-34% HP in
+-- 8907379308 as "almost full / no idea why it went", and deferred the fix to the rune timer
+-- rather than to narrowing the floor band, precisely because the timer is the real reason.
+function M.NextSpawnEta(bot, now)
+	if bot == nil or now == nil then return nil end
+	local nextSpawnAt, spawnKind = nextBottleRuneSpawn(now)
+	if nextSpawnAt == nil then return nil end
+	local _, loc, dist = nearestRuneSpot(bot, now, spawnKind == "water")
+	if loc == nil then return nil end
+	return nextSpawnAt - now, loc, dist
+end
+
 function M.FindWaterRecoveryRune(bot, hp, mana, now)
 	local bestRune, bestLoc, bestDist = nil, nil, math.huge
 	for _, runeId in ipairs({ RUNE_POWERUP_1, RUNE_POWERUP_2 }) do

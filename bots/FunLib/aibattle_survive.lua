@@ -804,6 +804,34 @@ local function recovery(bot, dials, nEnemyCreeps)
 		bot.aib_fountainTrip = false
 		bot.aib_fountainFloorTrip = false
 	end
+	-- 4b (user's deferred call, 21.07 -> chosen 23.07): before spending 60 seconds walking
+	-- home, look at the rune clock. A rune that is nearly up and closer than the fountain
+	-- gives the same full bar plus bottle charges plus map presence, for a few seconds of
+	-- walking. Three of the nine trips in 8907379308 fired at 30-34% HP and the user marked
+	-- all three "almost full / no idea why it went"; the fix he picked was this, not
+	-- narrowing the floor band, because the timer is the actual reason those trips were wrong.
+	--
+	-- Deliberately NOT applied below 22%: there the fountain is still the right answer and a
+	-- rune is a gamble the bot may not survive. And it only DEFERS -- the floor still owns the
+	-- decision on the next tick once the window passes, so this cannot strand a bot in lane.
+	local runeEta, runeLoc, runeDist = AIBRunes.NextSpawnEta(bot, DotaTime())
+	if hp >= 0.22 and runeEta ~= nil and runeEta <= 25.0 and runeEta > -10.0
+		and runeDist < bot:DistanceFromFountain() then
+		Style.Blocked(bot, "fountain-floor", "rune_due",
+			string.format("hp=%.0f eta=%.0f rune=%.0f home=%.0f",
+				hp * 100, runeEta, runeDist, bot:DistanceFromFountain()), 5.0)
+		bot.aib_fountainTrip = false
+		bot.aib_fountainFloorTrip = false
+		if bot.aib_recMoveLast == nil or DotaTime() - bot.aib_recMoveLast >= 2.0 then
+			bot.aib_recMoveLast = DotaTime()
+			recoveryPlan(bot, "rune_stage", "floor_deferred",
+				string.format("hp=%.0f eta=%.0f", hp * 100, runeEta), 2.0)
+			Style.Diag(bot, "floor-rune-defer")
+			bot:Action_MoveToLocation(runeLoc)
+		end
+		return true
+	end
+
 	local floorReason = hp < 0.22 and "regen_lane_floor" or "no_sustain_floor"
 	if not canHealHere and (hp < 0.22 or (hp < 0.35 and noSustain)) then
 		local tpFloor = getTpScroll(bot)
