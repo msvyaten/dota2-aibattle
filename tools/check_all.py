@@ -58,6 +58,9 @@ LIVE_PLAYSTYLE_FILES = [
     "Customize/canonical_farmer.lua",
     "Customize/canonical_pusher.lua",
     "Customize/canonical_ganker.lua",
+    "Customize/canonical_grok.lua",
+    "Customize/canonical_gemini.lua",
+    "Customize/canonical_deepseek.lua",
     "Customize/playstyle_radiant.lua",
     "Customize/playstyle_dire.lua",
 ]

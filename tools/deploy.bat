@@ -90,6 +90,9 @@ if "%DO_PLAYSTYLE%"=="1" (
 	call :copyfile "Customize\canonical_farmer.lua" || exit /b 1
 	call :copyfile "Customize\canonical_pusher.lua" || exit /b 1
 	call :copyfile "Customize\canonical_ganker.lua" || exit /b 1
+	call :copyfile "Customize\canonical_grok.lua" || exit /b 1
+	call :copyfile "Customize\canonical_gemini.lua" || exit /b 1
+	call :copyfile "Customize\canonical_deepseek.lua" || exit /b 1
 	call :copyfile "Customize\playstyle_radiant.lua" || exit /b 1
 	call :copyfile "Customize\playstyle_dire.lua" || exit /b 1
 	echo.
