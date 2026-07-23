@@ -97,7 +97,11 @@ function M.KillWindow(ctx)
 			local dist = GetUnitToUnitDistance(bot, enemy)
 			local exec = dials.execute_threshold or 0
 			local attackKill = enemy:GetHealth() <= bot:GetAttackDamage() * (ctx.attackDamageMult or 3.0)
+			-- An HP number alone is not a kill window: see Style.ExecuteReady. Without the
+			-- readiness test this leg made every enemy under execute_threshold permanently
+			-- "killable" and handed the tick to a 1045-unit chase, starving last-hits.
 			local execute = exec > 0 and ehp <= math.max(exec, ctx.minExecuteHp or Const.Fight.minExecuteHp)
+				and Style.ExecuteReady(bot, enemy)
 			local mutualLow = ehp <= (ctx.mutualEnemyHp or Const.Fight.mutualEnemyHp)
 				and hp <= (ctx.mutualSelfHp or Const.Fight.mutualSelfHp)
 				and hp >= (ctx.minSelfHp or Const.Fight.minSelfHp)

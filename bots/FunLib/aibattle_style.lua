@@ -1103,6 +1103,40 @@ function M.FightAbilities(bot, enemy)
     return false
 end
 
+-- "Can I actually execute this enemy right now?" -- as opposed to "is their HP bar below a
+-- number I typed in a config".
+--
+-- KillWindow's `execute` leg was the second form: `ehp <= execute_threshold` and nothing else.
+-- It never asked whether the hero HAS an execute, whether it is off cooldown, whether there is
+-- mana for it, or whether the enemy is anywhere near its range. With Gemini's threshold of 0.60
+-- that made almost every enemy in the lane permanently "killable", and kill-lock sits in the
+-- URGENT arbiter at priority 125-145 -- above last-hit's 140 -- so it took the tick and chased,
+-- to a maximum of range+520 = 1045 units.
+--
+-- 8909828583 is the bill: Dire logged `exec=true` at dist=1021 with `atk=false` (our attack
+-- would not kill), chased 22 times a minute, and finished the first two minutes with ZERO last
+-- hits. It only surfaced now because eea208a stopped Dire walking to the fountain -- the bot
+-- that used to be absent from the lane is now present in it, and this was waiting.
+--
+-- Closing distance to land an execute is legitimate, so range gets slack; being on cooldown or
+-- out of mana is not, so castability is required. attackKill / mutualLow / hpAdv keep their own
+-- legs in KillWindow, which is where genuine right-click kill windows live.
+local EXECUTE_CLOSE_SLACK = 300
+function M.ExecuteReady(bot, enemy)
+    if bot == nil or enemy == nil then return false end
+    if M.Get().rules.ability_timing == "harass_only" then return false end
+    local cfg = M.HeroAbilityConfig[bot:GetUnitName()]
+    if not cfg or not cfg.execute then return false end
+    local ab = bot:GetAbilityByName(cfg.execute.name)
+    if not ab or not ab:IsFullyCastable() then return false end
+    local maxRange = cfg.execute.max_range
+    if maxRange ~= nil
+        and GetUnitToUnitDistance(bot, enemy) > maxRange + EXECUTE_CLOSE_SLACK then
+        return false
+    end
+    return true
+end
+
 -- Handles unit/point/no_target types. For no_target executes (SF Requiem, Zeus ult):
 -- if enemy is beyond max_range, moves closer WITHOUT returning true, so other laning
 -- logic can still fire on the same tick.
