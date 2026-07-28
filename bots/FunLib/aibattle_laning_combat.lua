@@ -241,8 +241,25 @@ function M.UphillReposition(ctx)
 			bot.aib_uphillRepoLast = DotaTime()
 			-- Claim the motor so the opposite puller (lane-line-fallback) yields for 1.5s
 			-- instead of dragging the bot forward next tick = the forward<->back twitch.
+			--
+			-- Step OFF the ramp, do not trek home. highPos is our own T1: walking the whole way
+			-- there is a ~2000-unit round trip that abandons the wave, and the 1.5s claim expires
+			-- long before that walk ends -- so lane-line-fallback grabs the bot mid-way and drags
+			-- it forward again. That is the forward<->back walk the user watched at 2:20 in
+			-- 8914820239 ("stepped back with a creep right there to last-hit"), and
+			-- uphill-reposition was 16 of the 20 jitter episodes on the Radiant side -- the only
+			-- side that fights uphill in mid, which is why only Radiant showed it. Clearing the
+			-- low ground does not require going home, so cap the move: the claim now covers the
+			-- whole (short) walk instead of a fraction of it.
+			local bl = bot:GetLocation()
+			local dxr, dyr = highPos.x - bl.x, highPos.y - bl.y
+			local dr = math.sqrt(dxr * dxr + dyr * dyr)
+			local repoDest = highPos
+			if dr > 400 then
+				repoDest = Vector(bl.x + dxr / dr * 400, bl.y + dyr / dr * 400, bl.z)
+			end
 			Motor.Claim(bot, "uphill-repo", 20, 1.5)
-			bot:Action_MoveToLocation(highPos + RandomVector(50))
+			bot:Action_MoveToLocation(repoDest + RandomVector(50))
 			ctx.diag("uphill-reposition")
 			return true
 		end
