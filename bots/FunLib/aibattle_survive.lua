@@ -169,7 +169,12 @@ local function fountainTripDoneReason(bot, hp, charges, inFlight, flightFresh)
 	local heldHeal = hasItem(bot, "item_flask")
 		or hasItem(bot, "item_tango") or hasItem(bot, "item_tango_single")
 		or (charges ~= nil and charges > 0)
-	if (heldHeal or flightFresh) and not hitRecently and not healing then
+	-- ...but only while a consumable can still do the job. At 16-20% HP it cannot: a tango is
+	-- ~130 HP over 16 seconds, spent standing in the lane in front of a healthy enemy, whereas the
+	-- walk home returns a full bar. 8918007804 released the trip at hp=34, 20 and 16 and the user
+	-- watched the bot leave for the fountain and come back still hurt -- "it needed to go one way
+	-- or the other". Below this the fountain is simply the right answer, so the trip runs.
+	if (heldHeal or flightFresh) and hp >= 0.25 and not hitRecently and not healing then
 		return heldHeal and "heal_in_hand" or "heal_in_flight",
 			string.format("hp=%.0f inflight=%s", hp * 100, tostring(inFlight))
 	end
@@ -187,10 +192,19 @@ local function fountainTripDoneReason(bot, hp, charges, inFlight, flightFresh)
 
 	-- 3. A rune is nearly up and closer than home (4b). Releasing is enough -- the floor
 	-- re-decides next tick and its rune branch takes over from there.
+	-- The 0.22 floor was far too low and there was no threat test at all: 8918007804 turned this
+	-- trip around at hp 32, 29, 26 and 22, and one of those turns is the death the user watched at
+	-- ~4:00 -- the bot abandoned the walk home at a quarter of its health, headed for the river
+	-- with a healthy enemy still in the lane, and was finished on the way. A rune is regen worth
+	-- detouring for only if the detour is survivable, so it now needs enough health to eat a hit
+	-- en route, no damage in the last two seconds, and no living enemy hero in sight.
 	local runeEta, _, runeDist = AIBRunes.NextSpawnEta(bot, DotaTime())
-	if hp >= 0.22 and runeEta ~= nil and runeEta <= 25.0 and runeEta > -10.0
+	if hp >= 0.35 and not hitRecently and runeEta ~= nil and runeEta <= 25.0 and runeEta > -10.0
 		and runeDist < bot:DistanceFromFountain() then
-		return "rune_due", string.format("hp=%.0f eta=%.0f rune=%.0f", hp * 100, runeEta, runeDist)
+		local foes = bot:GetNearbyHeroes(1200, true, BOT_MODE_NONE)
+		if foes == nil or #foes == 0 or not foes[1]:IsAlive() then
+			return "rune_due", string.format("hp=%.0f eta=%.0f rune=%.0f", hp * 100, runeEta, runeDist)
+		end
 	end
 	return nil
 end

@@ -16,6 +16,16 @@ local function duelState(ctx, enemy, dist, phase, hpFloor, approachExtra)
 	local keyPrefix = (phase == "pregame") and "pg-duel" or "prewave-duel"
 	ctx.state("prewave-duel", string.format("ttl=2 phase=%s dist=%.0f hp=%.0f", phase, dist, hp * 100), 2.0)
 
+	-- An enemy who is hitting us has already opened the trade, so the uphill miss chance is the
+	-- cost of answering, not a reason to decline. bee3dd8 established this, but only at the uphill
+	-- CHECK below -- while the disengage latch that the same check arms sits ABOVE it and returns
+	-- early, so the exception was unreachable for the 6s the latch lasts. 8918007804 t=0-11:
+	-- `reason=uphill` at 3s arms it, then `reason=uphill_disengage` at 4s and 7s while Radiant is
+	-- beaten from 100% to 61% without swinging back -- and by 7s the enemy is at dist=553, well
+	-- inside range+150, so the exception WOULD have fired had it been reachable. This is the same
+	-- class the project keeps paying for: an engine floor silently outranking hero_priority="always".
+	local hitRightNow = bot:WasRecentlyDamagedByAnyHero(2.0) and dist <= range + 150
+
 	-- Concede-when-losing (engine robustness for aggressive_mid): don't re-enter the duel
 	-- right after a death, and don't keep trading when clearly behind. Feeds the same
 	-- laning-core-holds-the-safe-line path as the uphill disengage below.
@@ -30,7 +40,7 @@ local function duelState(ctx, enemy, dist, phase, hpFloor, approachExtra)
 	-- Yield to laning-core so the bot settles at the (downhill) creep line and last-hits
 	-- instead of being stepped back 300u every second by the unwinnable uphill duel.
 	if phase ~= "pregame" and bot.aib_phDisengageUntil ~= nil
-		and DotaTime() < bot.aib_phDisengageUntil then
+		and DotaTime() < bot.aib_phDisengageUntil and not hitRightNow then
 		ctx.blocked("prewave-duel", "uphill_disengage", string.format("dist=%.0f", dist), 3.0)
 		return false
 	end
@@ -48,7 +58,6 @@ local function duelState(ctx, enemy, dist, phase, hpFloor, approachExtra)
 	-- reason to decline. 8909602648 pre-horn: Radiant took free hits with
 	-- `blocked=prewave-duel reason=uphill` x15 and `prewave-duel-uphill-back` x23 --
 	-- config `hero_priority="always"`, and terrain silently overruled it.
-	local hitRightNow = bot:WasRecentlyDamagedByAnyHero(2.0) and dist <= range + 150
 	if dist > range and AIBUtils.UphillMiss(bot, enemy) and not hitRightNow then
 		ctx.blocked("prewave-duel", "uphill", string.format("phase=%s dist=%.0f", phase, dist), 3.0)
 		local now = DotaTime()
