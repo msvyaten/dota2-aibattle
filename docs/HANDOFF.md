@@ -1,8 +1,8 @@
 # HANDOFF — AIBattle × Dota 2
 
-> CURRENT SHORT DOC: `docs/CURRENT.md` is the active quick reference for current laning order,
-> diag keys, regression signals, and pre-match commands. Use it first; this HANDOFF keeps
-> broader history and older context.
+> COLD START: `docs/STATE.md` first, then `docs/CODE_MAP.md` (what lives where).
+> This HANDOFF is the operational reference: paths, deploy, diag counters, match_stats.
+> Product concept, config schema, tick pipeline, scorecard: `docs/HANDOFF_PACKAGE.md`.
 
 > Единственная точка входа. Обновлять ЕГО, новых доков не плодить.
 > Последнее обновление: 2026-06-20 (Codex phase-24: small decision engine, safe deploy profiles, canonical configs).
