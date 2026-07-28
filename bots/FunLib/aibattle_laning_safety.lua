@@ -141,16 +141,23 @@ function M.RangedMeleePackSpacing(ctx)
 	local now = DotaTime()
 	local range = attackRange(ctx)
 	if now <= 0 or range <= 350 then return false end
-	-- Detect the melee pack a bit further out (was 300) so a ranged hero holds the edge
-	-- before it is standing deep inside the creeps, not only once already surrounded.
-	local cen, count = ctx.meleeCreepCentroid(ctx.enemyCreeps, 380)
+	local safe = math.max(360, range - 90)
+	-- HYSTERESIS. The scan must still see the pack while we are standing at the safe edge,
+	-- otherwise this function switches itself off at the exact moment it succeeds. Detection was a
+	-- flat 380 while the edge sits at `safe` (410 for SF), so on arrival the melee creeps fell
+	-- outside the scan, `cen` went nil, the tick was released -- and creep-work/lane-line walked
+	-- the hero straight back into the pack, after which spacing pushed out again. That is the
+	-- walk-in/walk-out the user watched at 2:55, 3:25 and 4:48 in 8917982691: melee-pack-space
+	-- fired 44 times in 6 minutes (~every 8s) and lane-line episodes went 7 -> 18 per side.
+	-- The at-edge branch below is written to OWN the tick; it simply never got the chance. Scanning
+	-- past the edge we aim for is what lets it hold, so the walk-in never gets a turn.
+	local cen, count = ctx.meleeCreepCentroid(ctx.enemyCreeps, safe + 160)
 	if cen == nil or count < 2 then return false end
 	local ownT1 = GetTower(GetTeam(), TOWER_MID_1)
 	local away = ownT1 ~= nil and ownT1:GetLocation() or bot:GetLocation()
 	local dx, dy = away.x - cen.x, away.y - cen.y
 	local d = math.sqrt(dx * dx + dy * dy)
 	if d < 1 then return false end
-	local safe = math.max(360, range - 90)
 	local dest = Vector(cen.x + (dx / d) * safe, cen.y + (dy / d) * safe, cen.z)
 
 	-- At the safe edge: OWN the tick instead of releasing it. Releasing here let creep-work
