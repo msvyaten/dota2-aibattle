@@ -234,6 +234,27 @@ function M.UphillReposition(ctx)
 	local uphEnemy = bot:GetNearbyHeroes(1200, true, BOT_MODE_NONE)
 	if uphEnemy and #uphEnemy > 0 and uphEnemy[1]:IsAlive()
 		and ctx.uphillMiss(uphEnemy[1]) then
+		-- ROOT of "it twitches while standing in the creeps" (user, 8917945764). The gate above
+		-- asks "is a hero within 1200 and uphill" and never "am I fighting him". In mid the enemy
+		-- is across the ramp essentially all the time, so this fired every 6s forever -- including
+		-- while the bot was farming -- and each firing claims the motor for 1.5s and pulls it off
+		-- the creep line. It was 14 of Radiant's 21 jitter episodes (3.3/min, up from 2.0/min:
+		-- capping the step in a235833 cut the amplitude but RAISED the frequency, because the bot
+		-- now returns to the ramp inside the 6s cooldown instead of trekking home).
+		-- The uphill miss chance is a cost of SWINGING AT THE HERO. It does nothing to a last-hit,
+		-- so farming is not a reason to reposition at all.
+		local atkTgt = bot:GetAttackTarget()
+		local trading = bot:WasRecentlyDamagedByAnyHero(2.0)
+			or (atkTgt ~= nil and atkTgt == uphEnemy[1])
+		if not trading then
+			ctx.blocked("uphill-repo", "not_trading", "", 4.0)
+			return false
+		end
+		-- Never walk away from a last-hit that is already in range.
+		if ctx.csAllowed and not ctx.needMove then
+			ctx.blocked("uphill-repo", "last_hit_ready", "", 4.0)
+			return false
+		end
 		local ownT1uph = GetTower(GetTeam(), TOWER_MID_1)
 		local highPos = (ownT1uph ~= nil and ownT1uph:IsAlive()) and ownT1uph:GetLocation()
 			or ctx.forwardSurvivingTowerLoc()

@@ -72,8 +72,20 @@ local function waterRuneEmergency(bot, hp, mana, dist, spawnKind, forceEmptyBott
 	return forceEmptyBottle or hp < 0.65 or mana < 0.35 or emptyFor >= 20.0
 end
 
+-- 1v1 MID RUNE SCHEDULE (authoritative, user 28.07). This mode is NOT 5v5:
+--   0:00 and 2:00 -- NO runes at all (unlike 5v5, which has bounty/water there).
+--   4:00          -- WATER runes at BOTH river spots.
+--   every 2 min after (6:00, 8:00, ...) -- ONE power rune at one of the two spots.
+-- The old model started the grid at 2:00 and called both 2:00 and 4:00 "water". That first window
+-- is fiction, and staging is built to ARRIVE EARLY, so the bot walked onto an empty spot at
+-- 1:55-1:58 in 8917945764 and paid farm time for a spawn that cannot happen. (The 3:48 trip in the
+-- same match was staging for the 4:00 water spawn -- that one is correct play and stays.)
+-- "Both spots" at 4:00 is also what makes the avoid-contested pick sound: at a water window the
+-- uncontested spot is a guaranteed fill, whereas at a power window only one spot has anything.
+local FIRST_RUNE_SPAWN = 240
+
 local function bottleSpawnKindAt(t)
-	if t == 120 or t == 240 then return "water" end
+	if t == FIRST_RUNE_SPAWN then return "water" end
 	return "power"
 end
 
@@ -85,11 +97,11 @@ local function nextBottleRuneSpawn(now)
 	-- is unreachable: the bot staged perfectly, then "forgot" why it was standing
 	-- there and walked off with no_close_rune - filled=0 in every match.
 	local prev = math.floor(now / 120) * 120
-	if prev >= 120 and now - prev <= 12.0 then
+	if prev >= FIRST_RUNE_SPAWN and now - prev <= 12.0 then
 		return prev, bottleSpawnKindAt(prev)
 	end
 	local nxt = prev + 120
-	if nxt < 120 then nxt = 120 end
+	if nxt < FIRST_RUNE_SPAWN then nxt = FIRST_RUNE_SPAWN end
 	return nxt, bottleSpawnKindAt(nxt)
 end
 
@@ -209,8 +221,62 @@ end
 -- the worse of two available answers -- the user flagged three such trips at 30-34% HP in
 -- 8907379308 as "almost full / no idea why it went", and deferred the fix to the rune timer
 -- rather than to narrowing the floor band, precisely because the timer is the real reason.
+-- ================== GROUND TRUTH: WHEN DO RUNES ACTUALLY APPEAR? ==================
+-- The machinery in this file only ever looked at the rune spots when it already wanted a bottle
+-- (empty bottle AND low hp/mana). So "no rune seen in the log" proves only that the bot did not
+-- LOOK -- not that no rune spawned. Two matches of that non-evidence nearly convinced me to delete
+-- staging outright; it is not evidence and must not be used as such.
+--
+-- What IS established: nextBottleRuneSpawn puts the first window at 2:00, and 1v1 mid has no rune
+-- at 0:00 or 2:00 (user, 28.07). Staging is built to ARRIVE EARLY, so a fictional window becomes a
+-- real walk onto an empty spot -- 1:55-1:58 and 3:48 in 8917945764, paid for in farm time.
+--
+-- Staging itself is worth KEEPING: arriving a few seconds before the spawn is how the spot is
+-- actually contested, and it reads as the bot understanding the game. The defect is the CLOCK.
+-- So: sample the truth every tick (unconditionally, unlike everything above), and let the bot
+-- correct itself inside the match -- if the first modelled window comes and goes with no rune ever
+-- observed, the clock is fiction in this mode and staging stops for the rest of the match. One
+-- match now also prints the real schedule, so the model can be fixed from data instead of guesses.
+function M.Observe(bot, now)
+	if bot == nil or now == nil or now < -30.0 then return end
+	bot.aib_runeSeenStatus = bot.aib_runeSeenStatus or {}
+	local anyUp = false
+	for _, id in ipairs({ RUNE_POWERUP_1, RUNE_POWERUP_2 }) do
+		local st = GetRuneStatus(id)
+		if st == RUNE_STATUS_AVAILABLE then anyUp = true end
+		if bot.aib_runeSeenStatus[id] ~= st then
+			bot.aib_runeSeenStatus[id] = st
+			Style.Intent(bot, "rune-ground-truth",
+				string.format("id=%s status=%s t=%.0f", tostring(id), tostring(st), now), 0)
+		end
+	end
+	if anyUp then
+		bot.aib_runeEverSeenUp = true
+		bot.aib_runeClockDead = nil            -- a real rune re-validates the clock
+		return
+	end
+	-- Judge a modelled window a few seconds AFTER it should have produced something.
+	-- Must start at FIRST_RUNE_SPAWN, not at 120: 2:00 legitimately has no rune in this mode, so
+	-- judging it would declare the clock dead at ~2:06 and switch off staging for the real 4:00
+	-- water window -- the safety net would have destroyed the behaviour it exists to protect.
+	local w = math.floor(now / 120) * 120
+	if w >= FIRST_RUNE_SPAWN and now - w >= 6.0 and now - w <= 8.0
+		and not bot.aib_runeEverSeenUp and not bot.aib_runeClockDead then
+		bot.aib_runeClockDead = true
+		Style.Intent(bot, "rune-clock-dead", string.format("window=%.0f", w), 0)
+	end
+end
+
+-- True once a modelled window has passed with no rune ever observed: the schedule this file
+-- models is not this mode's schedule, so stop travelling on it. Travel toward a rune that is
+-- actually on the ground is unaffected -- that path never consults the clock.
+function M.ClockDead(bot)
+	return bot ~= nil and bot.aib_runeClockDead == true
+end
+
 function M.NextSpawnEta(bot, now)
 	if bot == nil or now == nil then return nil end
+	if M.ClockDead(bot) then return nil end   -- do not let callers defer on a fictional spawn
 	local nextSpawnAt, spawnKind = nextBottleRuneSpawn(now)
 	if nextSpawnAt == nil then return nil end
 	local _, loc, dist = nearestRuneSpot(bot, now, spawnKind == "water")

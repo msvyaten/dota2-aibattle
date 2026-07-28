@@ -52,6 +52,7 @@ local AIBLaneCreeps = require(GetScriptDirectory()..'/FunLib/aibattle_laning_cre
 local AIBLaneSafety = require(GetScriptDirectory()..'/FunLib/aibattle_laning_safety')
 local AIBLaneRecovery = require(GetScriptDirectory()..'/FunLib/aibattle_laning_recovery')
 local AIBItemPolicy = require(GetScriptDirectory()..'/FunLib/aibattle_item_policy')
+local AIBRunes = require(GetScriptDirectory()..'/FunLib/aibattle_runes')
 local AIBLaneCombat = require(GetScriptDirectory()..'/FunLib/aibattle_laning_combat')
 local AIBLaneTempo = require(GetScriptDirectory()..'/FunLib/aibattle_laning_tempo')
 local AIBTopArbiter = require(GetScriptDirectory()..'/FunLib/aibattle_laning_arbiter')
@@ -1513,6 +1514,10 @@ function Think()
 
 	ThinkAnnounce(ctx.dials)
 	ThinkLocationReport()
+	-- Unconditional rune sampling. Everything inside the rune module only looks at the spots when
+	-- it already wants a bottle, so its silence never told us whether a rune spawned -- see the
+	-- GROUND TRUTH block in aibattle_runes.lua.
+	AIBRunes.Observe(bot, DotaTime())
 	-- Before the stages, not inside the last one: see probe v3 note at AIB_SampleDamageBySource.
 	AIB_SampleDamageBySource()
 	local ok, err = pcall(function() AIBEngine.Run(LANING_STAGES, ctx) end)
