@@ -145,6 +145,15 @@ end
 -- Same number as AIBLanePolicy.Hp.softRecovery; kept local to avoid a require cycle.
 local TRIP_DONE_HP = 0.55
 
+-- Below this a held consumable is NOT a substitute for the fountain, so neither the entry guard
+-- nor the abort clause may use one to keep the bot out in the lane. A tango is ~130 HP over 16
+-- seconds spent standing in front of a healthy enemy; the walk home returns a full bar.
+-- ONE constant for BOTH sites on purpose: the rule lived twice, with two different floors (abort
+-- at 0.25 after the first fix, entry still at 0.12), and 8918941695 released the trip at hp=13
+-- through the site that had not been changed. Same shape as the salve/flask/bottle chase --
+-- fixing the path whose signature you happened to be looking at is not fixing the rule.
+local HEAL_INSTEAD_OF_FOUNTAIN_HP = 0.25
+
 local function releaseFountainTrip(bot, reason, detail)
 	-- All three fields, always. b4b24af was caused by a release site that cleared one of
 	-- three and left the others to reanimate the behaviour a tick later.
@@ -174,7 +183,7 @@ local function fountainTripDoneReason(bot, hp, charges, inFlight, flightFresh)
 	-- walk home returns a full bar. 8918007804 released the trip at hp=34, 20 and 16 and the user
 	-- watched the bot leave for the fountain and come back still hurt -- "it needed to go one way
 	-- or the other". Below this the fountain is simply the right answer, so the trip runs.
-	if (heldHeal or flightFresh) and hp >= 0.25 and not hitRecently and not healing then
+	if (heldHeal or flightFresh) and hp >= HEAL_INSTEAD_OF_FOUNTAIN_HP and not hitRecently and not healing then
 		return heldHeal and "heal_in_hand" or "heal_in_flight",
 			string.format("hp=%.0f inflight=%s", hp * 100, tostring(inFlight))
 	end
@@ -898,7 +907,7 @@ local function recovery(bot, dials, nEnemyCreeps)
 		and not bot:WasRecentlyDamagedByAnyHero(2.0)
 		and not bot:HasModifier("modifier_flask_healing")
 		and not bot:HasModifier("modifier_tango_heal")
-	if canHealHere and hp >= 0.12 then
+	if canHealHere and hp >= HEAL_INSTEAD_OF_FOUNTAIN_HP then
 		-- Entry guard only: this decides whether to START a trip. Abandoning one already
 		-- running belongs to reviewFountainTrip, which runs before the chain and therefore
 		-- cannot be shadowed by an owner above it.
