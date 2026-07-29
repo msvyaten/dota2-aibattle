@@ -1029,9 +1029,19 @@ local function AIB_BuildDesireCandidates(dials, rules, runtimeCtx, intentCtx)
 	-- if that threshold moves, this moves.
 	local recoverFallbackHp = 0.20 + 0.20 * (dials.retreat_caution or 0.5)
 		+ (GetHeroDeaths(bot:GetPlayerID()) >= 1 and 0.08 or 0.0)
+	-- The damage leg must use the threshold the ACTION uses, not a lower one of its own.
+	-- ActiveLowHp retreats up to Style.LowHpHoldThreshold() (0.44 at retreat_caution=0.45), but
+	-- this probe only admitted "can act" below recoverFallbackHp (0.29) -- so between 35% and 44%,
+	-- with the bot actively being hit and a retreat leg that would have fired, the probe reported
+	-- false, the score was capped to 44 and the candidate was vetoed out of the election entirely
+	-- (`blocked=recover-candidate reason=no_action_capped hp=39` in 8918007804). Below 35% the
+	-- early-low head guard runs pre-arbiter, so the hole was exactly 35-44: the bot had no
+	-- defensive response there at all and twice fell 68->18 and 59->20 in seconds while farming.
+	-- This is a probe correction, not a balance choice: a canAct probe that under-reports what
+	-- its own action would do is simply wrong. The max() keeps the post-death widening.
 	local recoverCanAct = AIB_HasRecoveryResources()
 		or ((bot:WasRecentlyDamagedByAnyHero(2.0) or bot:WasRecentlyDamagedByCreep(2.0))
-			and hp < recoverFallbackHp)
+			and hp < math.max(recoverFallbackHp, Style.LowHpHoldThreshold()))
 		or (hp < AIBLanePolicy.Hp.danger
 			and not AIBUtils.IsCloserToFountain(bot, AIBUtils.SafeRetreatTowerLoc(bot)))
 	-- canAct probe for the siege desire: true only when the siege module would ACT this
