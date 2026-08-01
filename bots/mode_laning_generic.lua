@@ -459,8 +459,23 @@ local function ThinkLocationReport()
 	-- with optional groups, so a new field inserted before lh= would not fail loudly -- it would
 	-- silently stop matching lh/dn/dg/dlh/bottle in every tool that shares the regex.
 	local okLvl, lvl = pcall(function() return bot:GetLevel() end)
-	local statSuffix = string.format(" lh=%d dn=%d dg=%+d dlh=%+d bottle=%d lvl=%d",
-		lh or -1, dn or -1, dg, dlh, bottleCharges, (okLvl and lvl) or -1)
+	-- Lane equilibrium, as one scalar: how far our wave front stands from our own fountain.
+	-- Who holds the wave decides under whose tower creeps die, who farms safely and who gets
+	-- free XP -- and it was never recorded, so every read of it so far has been inferred from
+	-- side evidence ("R was sieging, therefore the wave was on D's side") rather than measured.
+	local frontDist = -1
+	local okFront, frontLoc = pcall(function() return GetLaneFrontLocation(GetTeam(), LANE_MID, 0) end)
+	if okFront and frontLoc ~= nil then
+		frontDist = GetUnitToLocationDistance(bot, J.GetTeamFountain()) > 0
+			and math.floor(((frontLoc - J.GetTeamFountain()):Length2D()) + 0.5) or -1
+	end
+	-- Enemy HP on every sample, not only when a fight intent happens to fire. Without it the
+	-- log can say how many abilities we cast but never whether they landed, so 98 casts and 67
+	-- casts read identically no matter what they bought.
+	local ehp = -1
+	if nearby ~= nil and #nearby > 0 and nearby[1]:IsAlive() then ehp = math.floor(J.GetHP(nearby[1]) * 100 + 0.5) end
+	local statSuffix = string.format(" lh=%d dn=%d dg=%+d dlh=%+d bottle=%d lvl=%d front=%d ehp=%d",
+		lh or -1, dn or -1, dg, dlh, bottleCharges, (okLvl and lvl) or -1, frontDist, ehp)
 	if nearby and #nearby > 0 and nearby[1]:IsAlive() then
 		bot:ActionImmediate_Chat(string.format(
 			"AIB[%s] t=%.0fs hp=%.0f%% gold=%d loc=%.0f,%.0f enemy-dist=%.0f%s",

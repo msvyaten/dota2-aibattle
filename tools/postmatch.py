@@ -287,17 +287,26 @@ def report(match_id):
     # unrecorded until c69c279 -- so "why did he lose that exchange five to one" could never be
     # answered with "he was a level down". Prints as a per-minute pair, and "n/a" for logs from
     # before the field existed rather than pretending the gap was zero.
-    print("----- level curve (R vs D, per minute) -----")
+    # front = distance from that side's own fountain to its wave front. Both sides report the
+    # same contested point from opposite ends, so the pair reads as equilibrium: R rising while
+    # D falls means Radiant is pushing. Whoever holds the wave decides under whose tower creeps
+    # die and who farms safely -- until fd6742b this was only ever inferred from side evidence.
+    print("----- level curve and lane equilibrium (per minute) -----")
     lv = {s: dict() for s in ("R", "D")}
+    fr = {s: dict() for s in ("R", "D")}
     for s, t, l in re.findall(r"AIB\[([RD])\] t=(\d+)s[^']*? lvl=(-?\d+)", text):
         lv[s].setdefault(int(t) // 60, int(l))
+    for s, t, f in re.findall(r"AIB\[([RD])\] t=(\d+)s[^']*? front=(-?\d+)", text):
+        fr[s].setdefault(int(t) // 60, int(f))
     if not lv["R"] and not lv["D"]:
-        print("  n/a -- log predates the lvl= field")
+        print("  n/a -- log predates the lvl= / front= fields")
     else:
         mins = sorted(set(lv["R"]) | set(lv["D"]))
-        print("  min: " + " ".join("%2d" % m for m in mins))
+        print("  min:      " + " ".join("%5d" % m for m in mins))
         for s in ("R", "D"):
-            print("  [%s]: " % s + " ".join("%2s" % lv[s].get(m, "-") for m in mins))
+            print("  lvl  [%s]: " % s + " ".join("%5s" % lv[s].get(m, "-") for m in mins))
+        for s in ("R", "D"):
+            print("  front[%s]: " % s + " ".join("%5s" % fr[s].get(m, "-") for m in mins))
 
     print("----- archetype contrast (bind check: R vs D) -----")
     for side in ("R", "D"):
