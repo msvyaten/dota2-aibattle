@@ -1,280 +1,111 @@
-# AIBattle State
+# AIBattle Current State
 
-Last updated: 2026-07-22 (after match 8908439030, bettability series in progress).
+This file contains only the current plan and operating constraints. Historical match
+forensics live in `BACKLOG.md`, design mandates in `SPECS.md`, and commands in `HANDOFF.md`.
 
-## ▶ NEXT SESSION START HERE (fresh context)
+## Start Here
 
-**Bot code in LIVE = HEAD = `bfa60b8`. Origin in sync.**
-
-**The live matchup is NOT the canonical presets right now.** A bettability series is running:
-Radiant = Gemini, Dire = Grok, both generated from ONE identical English strategy by two
-different models (product variant 1 of phase 3 -- the non-determinism comes from how the models
-read the same text, not from different strategies). Bot names in `general.lua` were changed to
-match. `playstyle_*.lua` and `general.lua` are dirty on purpose and must NOT be committed
-without an explicit order. Never `git add -A` in this repo; name files explicitly.
-
-To put the canonical matchup back:
-```
-playstyle_radiant.lua -> return require(GetScriptDirectory().."/Customize/canonical_brawler")
-playstyle_dire.lua    -> return require(GetScriptDirectory().."/Customize/canonical_farmer")
-cmd //c "tools\deploy.bat playstyle"
-```
-
-**Bettability is not "someone wins".** Phase 3 defines it as distinguishable agents with a
-NON-deterministic outcome -- 8/8 is predetermined and unbettable; the useful zone is ~5/8-6/8.
-One match says nothing: it needs the same matchup x N runs, with the bot code frozen across
-all of them, and a side swap halfway (Radiant takes ~2x the cs-walk and Dire spends more time
-under 45% HP, so an un-swapped series is confounded by side).
-
-Where the two models diverged, for reference: the dials nearly agreed (max delta 0.10) and all
-the difference landed in three discrete rules -- creep_wave_priority last_hit_only/push,
-hero_priority default/always, deny_policy default/always. Discrete switches carry the variance,
-not the numbers.
-
-**Given a match id, run `python tools/postmatch.py <id>` once** and read `watch: pending batch`
-FIRST (one row per unvalidated commit, ordered by blast radius), then `empty_action by winner`,
-then `farm drivers`. Then `python tools/pathology.py <id>` for the watchability shapes.
-The scorecard passing does NOT mean healthy: empty/min read 8.4 against a limit of 13 while
-~45% of those ticks were structural no-ops.
-
-**Compare counters PER MINUTE, never raw.** 8907379308 ran 13.7 min against the previous 7.5;
-read raw, `anti-idle-lane` 24 -> 28 looks like a regression when per minute it fell 3.2 -> 2.0.
-
-**Evidence hierarchy (this cost three wrong diagnoses on 21.07):** positions+hp over time
-(`t=..s hp=..% loc=..`) > plain `Style.Diag` counters > `Style.Intent` reason strings, which
-are rate-limited and must be read as a LOWER BOUND only. Mark every claim as proven or
-hypothesis; do not commit a fix on an unverified theory.
-
-**Validation debt** = `git log <build-sha-from-the-match-log>..HEAD`. Do not carry a total
-forward by hand -- a played match clears everything up to its own build.
-
-### Awaiting validation (debt from `c97c618`) -- NOTHING has been validated since 8908439030
-
-Accepted in 8908439030 (first ACCEPTED scorecard ever; bottle_empty PASS both, 49/46):
-- `39e3e6b` twitch pair -- fwd-position 10.0 -> 0.3-0.4/min, hero-prio-chase 12.1 ->
-  0.0-2.1/min, with fwd-suppressed-motor 57/27. That hold counter is config-independent, so
-  the drop is the fix and not a dial.
-- `e344e49` salve-on-trip -- fountain_trip_committed 3/9.
-
-Shipped SINCE that match, none seen in a game yet:
-- `b6d0642` -- the floor no longer walks the bot home while it holds a flask, a tango or a
-  bottle charge and nothing has hit it for 2s; an already-latched trip is dropped. Below 12%
-  HP the fountain is still right. Signature `blocked=fountain-floor reason=heal_in_hand`;
-  fountain-wait and trip_init should fall hard from 37/60 and 4/6.
-- `2d18627` -- pre-creep free hit widened from `range` to `range + 150`.
-- `bfa60b8` -- `PreEngageAllowed`: an explicit `hero_priority="always"` now licenses pre-creep
-  engagement, not only `pregame_behavior="aggressive_mid"`. This is the one that matters; the
-  two above are patches on the same window that did not reach the cause.
-
-⚠️ The bettability series is therefore back to zero runs. Its discipline requires the bot code
-frozen across all N matches, and three commits landed mid-series.
-
-### Open, needs a decision before any fix
-1. **Fountain trips at 30-34% HP.** Four of nine trips in 8907379308 were at 15-25% (correct);
-   three were at 30-34%, all from the extended `no_sustain_floor` that `183a5f7` made reachable
-   after five silent matches. User called those out as "why did it go at all". Two candidate
-   fixes, DEFERRED by the user: raise the floor's band, or teach it the rune timer (a bot with
-   an empty bottle 20s before a rune spawn should take the rune, not walk home).
-   ⚠️ Do NOT re-add a mid-trip abort: the user rolled that back on 21.07 -- a committed floor
-   trip runs to completion because it also restores mana and bottle charges.
-2. **"Started drinking a salve -> do not enter a trade"** (user rule, any trade cancels it).
-   Not implemented.
-3. **Rune spawn inference** -- confirmed in the log (8907379308 t=351-361: staged to dist=0,
-   then `stage_dead_window nearest=inf`, ~15s wasted, rune had spawned at the other side).
-   User parked it as a future item.
-4. **Damage-by-source probe v2 FAILED** -- `death=0` and `other` still 16-24%: the sampler does
-   not run while the bot is dead, so the death bucket never fills. Until this is fixed, any
-   "who is chewing on me" claim is unsupported.
-
-### Diagnosed, ready, no match needed
-- **`trade.lua` forks `moveToAttackEdge`** (`:41`), and its copy is NOT melee-pack aware. Used
-  by the three URGENT-stage handlers (KillLock, HealInterrupt, PassingHeroTrade), which run
-  before the arbiter -- so it undercuts `3e64ecb` on that path. Highest-value dedup left.
-- **`HandleCreepWork` is the only handler built a hand-rolled ctx** (18 keys) instead of
-  `runtimeCtx`, which is why it has no `ctx.blocked` / `ctx.meleeCreepCentroid` and why cs-walk
-  and deny were awkward to instrument.
-- **Three shipped fixes have never shown their signature.** `recovery_commit` was unobservable
-  by construction and is fixed (`604de19`); `fountain-init-skip` has a real but very thin
-  window (base area, outside the aura, no latch -- usually skipped by TP'ing out) and must NOT
-  be treated as an acceptance gate; `power-rune-candidate/no_action_capped` needs the bot to be
-  HOLDING an action rune, which SF rarely is.
-
-### Product rules the user has stated -- do not quietly reverse these
-- **The bot does what its config says** (22.07). "If it says always hit the hero, go and hit
-  the hero; if it says retreat, retreat." Engine floors exist to stop a bot killing itself,
-  NOT to overrule a strategy. `bfa60b8` was this rule applied to the pre-creep phase.
-- **No archetypes in the LLM prompt** (21.07). A person types any strategy in their own words
-  and the model reads it; a recipe list is a classifier and collapses distinct prompts into
-  the same few bots.
-- **The model does not know Dota** (21.07) -- explain everything, the way the chess prompt
-  does. Hence THE GAME section and the anchors+COST form of every dial.
-- **A committed fountain floor trip runs to completion** (21.07 rollback) -- it also restores
-  mana and bottle charges, which an HP test cannot see. `b6d0642` is adjacent but distinct: it
-  stops a trip STARTING while the cure is in the bag, it does not abort on recovered HP.
-
-### Method lesson that cost three commits (22.07)
-The pre-creep standoff took three attempts -- `45db02a` (free hit, zero movement), `2d18627`
-(same band +150), `bfa60b8` (the dial was the answer). The first two moved a constant instead
-of asking what the config had told the bot to do. When a bot "does nothing", find WHO OWNS THE
-TICK and what it was told, before touching any threshold. Related: a non-zero signature is not
-a fixed bug -- `prewave-free-hit` read 13/11 while the window the user complained about was
-still broken.
-
-### Refuted -- do not retry
-- **cs-walk is NOT the root of low farm.** 133 side-matches (`tools/farm_drivers.py`):
-  cs-walk/min correlates **+0.35** with lh/min, i.e. it marks CS activity, not cost. It is
-  SIDE-determined (Radiant 11.7-13.4/min vs Dire 6.3-7.2/min, archetype effect ~0) -- the old
-  "the farmer walks in for every last hit" reading came from matches where the farmer happened
-  to be Radiant. The real predictor is time below 45% HP (**-0.40**).
-- `deny-act` is not an 8% conversion story either -- the probe split it and 75-80% are real
-  swings; the enemy contests the same creep. Same trap cs-walk fell into; do not re-open
-  either without splitting the counter first.
-- "The farmer is not in lane" (87% in lane) and "wave-watch parks it out of range" (13% of
-  holds lead to a cs-walk vs 16% for the brawler).
-
-### LLM experiment -- ready to run, no key needed
-The prompt was rewritten from scratch on 21.07 (`backend/system_prompt.txt`, 306 lines) on two
-user corrections: (1) NO archetypes -- a person types any strategy in their own words and the
-model must read it, not classify it into a preset; a recipe list is a classifier and collapses
-distinct prompts back into the same few bots. (2) The model does NOT know Dota -- explain
-everything, the way this project's chess prompt does. So it now opens with THE GAME (1v1 mid
-mod; win by destroying the tower OR killing the enemy twice, hence one kill is half a win and
-the life budget is two), each dial is anchors-at-0/0.5/1.0 plus what it COSTS, and THE BASELINE
-defines what "play competently with no further instruction" means so that any text -- including
-"try to win" -- yields a real config instead of twelve 0.5s.
-
-Workflow is manual and deliberate: the user pastes the prompt into an LLM themselves and hands
-back the JSON, which goes in via `--radiant-json` / `--dire-json` through the same sanitiser as
-the API path. Writing those files replaces the live matchup, so decide first whether the run is
-LLM vs LLM or LLM vs a canonical preset as a control.
-
-### LLM schema notes
-Schema now matches the engine (`docs/PROMPT_DRIFT.md`, sections A/B/C/E + corrections
-appendix). No API key is involved: the user runs the prompt in an LLM UI and hands the JSON
-back, which goes in via `--radiant-json` / `--dire-json` through the same sanitiser.
-`water_rune` is reachable in the engine but
-deliberately kept out of the generator whitelist until a match tests it.
-⚠️ The schema describes the ENGINE, which also runs 5v5 -- do not delete a dial because it is
-inert in 1v1 mid. ward_desire/roshan_desire were removed on that reasoning and restored.
-
----
-
-Static source of truth before starting a match: stage, next allowed task, what not to
-touch, and P3 baselines. Long design notes live in `docs/SPECS.md`,
-`docs/HANDOFF_PACKAGE.md`, and `docs/BACKLOG.md`.
-
-**Volatile state is not duplicated here** (it drifts). For the live snapshot — HEAD,
-upstream, live marker, live/HEAD match, resolved Radiant/Dire presets, dirty tree —
-run the tool:
+Never trust a SHA, live binding, or dirty-tree statement copied into documentation. Get the
+current snapshot from the repository and live Dota installation:
 
 ```powershell
 python tools\pre_match_state.py
 ```
 
-If `live_matches_head=false`, deploy `HEAD` or explicitly record that the match uses a
-custom live marker. If the tree is dirty, commit configs **only on explicit user
-request** (playstyle/canonical are a living matchup) or record them as a local
-experiment.
+Then run the fast local gate:
 
-## Current Stage
+```powershell
+python tools\check_all.py --skip-live
+```
+
+The live bindings and generated strategies are experiment state. Do not commit these without
+an explicit user command:
+
+- `bots/Customize/general.lua`
+- `bots/Customize/playstyle_radiant.lua`
+- `bots/Customize/playstyle_dire.lua`
+- generated/canonical configs when Claude is currently tuning them
+
+Use named files with `git add`; never stage the whole tree in this repository.
+
+## Product
+
+A prompt is interpreted by an LLM into 12 numeric dials and model-facing rules. The runtime
+must turn that config into distinct, competent, explainable 1v1-mid behavior. The model picks
+strategy; the engine owns mechanics and safety. Engine constants such as distances, rune
+staging windows, AFK timing, and tower leashes must not leak into model-facing rules.
+
+Bettability requires repeated runs with frozen code and a side swap. A single win, or an 8/8
+deterministic stomp, is not enough evidence that two generated agents make a good product.
+
+## Current Architecture Status
 
 Completed:
 
-- Gate 0: technical runtime gate passed.
-- Gate 1: new architecture beat phase-22 comparison.
-- Stage 0.5: watchability package accepted.
-- P3-A slice 1: `Recovery.Owner` skeleton.
-- P3-A slice 2: `EmergencyRetreat` and `ForwardLowHpPullback` register on `Recovery.Owner`.
+- Gate 0 technical runtime gate.
+- Gate 1 comparison against the phase-22 monolith.
+- Stage 0.5 watchability package.
+- P3-A recovery owner skeleton and P3-B.1 episode telemetry.
+- P1-A phase A (`a2bc9a9`): top desires and the old tail participate in one election.
+- Real 1v1 rune schedule, pregame anchor, bounded uphill reposition, tower-range licence,
+  fountain-trip ownership, and recovery `canAct` alignment through current HEAD.
 
-Next structural task:
+Open structural work, in order:
 
-- P3-B: dissolve `ActiveLowHp` / regen-lane / heal-pullback / step-back into
-  `Recovery.Owner` episode actions, and update `postmatch.py` / `scorecard.py` in the
-  same commit so low-HP jitter is counted by episodes.
+1. Validate the current code stack in a match before stacking more gameplay changes.
+2. P1-B: migrate urgent head-of-tick decisions into the same arbiter.
+3. P3-B.2: make recovery destination-aware and remove remaining parallel low-HP movers.
+4. P3-C: windup protection, safe CS in soft recovery, and the remaining rune/recovery semantics.
+5. P1-C: remove duplicated suppression/commit machinery and reduce anti-idle to a watchdog.
 
-Do not start P1 arbiter migration before P3 unless explicitly redirected.
+Do not perform a mechanical file split before these ownership cuts. Moving 500 lines without
+changing who owns a tick makes review harder but does not cure oscillation.
 
-## Cycle Plan — Roles (agreed 2026-07-08)
+## Current Watchlist
 
-One tact = one code owner. Do not edit the same Lua files in parallel.
+- Intentional bottle-rune completion and `rune_control` binding remain weak. Diagnose from
+  complete transaction telemetry, not bottle-empty percentage alone.
+- Recovery can still win while having no useful action; verify `empty_action by winner` and
+  low-HP episode traces after every recovery change.
+- Anti-idle still contains gameplay actions. Its long-term job is detection/escalation only;
+  farm, combat, rune, recovery, and siege owners must provide the actual action.
+- Cross-module `bot.aib_*` state is ownership debt. Run `tools/project_inventory.py` and move
+  writes behind owner APIs when touching those systems.
+- `mode_laning_generic.lua`, `aibattle_style.lua`, and `aibattle_survive.lua` remain large.
+  Shrink them by ownership extraction, not by arbitrary line-count targets.
 
-**Opus (Claude) — owns P3-B implementation.** Strictly per SPECS §2.6 (11 cutover
-points, soft-through-desire, `safetyCanAct` trap). 2–3 slices, max ~6 changes per
-match: first the per-move-diag → episode cutover **plus `postmatch.py`/`scorecard.py`
-in the same commit**, then cut ActiveLowHp's safety leg. One slice — one log
-signature — one match between slices. `pre_match_state.py` before every match.
+## Evidence Rules
 
-**Codex — review + tooling (in parallel, not the same Lua files):**
+Use evidence in this order:
 
-1. Checklist-review of Opus's P3-B diffs against the SPECS §2 mandate: all 11
-   cutover points covered, fight↔safety loop dead, episode diag not re-issued
-   per tick.
-2. **DONE:** `postmatch.py` watch section reports `recovery-owner` episode
-   signatures for P3-B acceptance (plus recover-cap/dive-floor triage signatures;
-   secure-LH v2 retired 19.07 -- structurally shadowed by last-hit-urgent 140).
-3. Do NOT fix bottle/rune-seek point-wise — systemic chain, P3+P1 cure it.
+1. positions, HP, targets, and actions over time;
+2. transaction/episode telemetry and tick owner;
+3. cumulative diag counters;
+4. rate-limited intent strings, which are lower bounds only;
+5. visual observation, tied to a match timestamp.
 
-**Fable high — acceptance only, one pass after the first P3-B match:** re-run the
-updated postmatch on baseline logs `8886935149`/`8886970304` (old jitter proxy vs
-episodes on the same data — honesty check); accept by low-hp-back episodes ↓ without
-regressing errors/LH/empty_action/bottle; watchability judged by eye. Arbitration if
-a cutover spot isn't covered by §2.6.
+Compare rates per minute, not raw counters. Attribute every match to the build SHA written in
+its log. Validation debt is `git log <match-build>..HEAD`; do not carry a hand-written count.
 
-**After P3-B acceptance:** P3-C (windup gate + safe-CS + rune-seek), then P1-A —
-Fable reviews the §3.6–3.7 candidate registry for the eager-diag trap *before*
-implementation starts.
+One behavior batch should have a clear expected signature and a match before another risky
+batch. Tooling, tests, documentation, and behavior-preserving deduplication may be grouped.
 
-## Findings 2026-07-09 (Fable) — P3-B.1 accepted, order revised
+## Toolchain
 
-- **P3-B.1 (`e0bc99f`) ACCEPTED.** Two matches (8888053119, 8888664145): old retreat
-  diags = 0, episodes ≤14/side, empty_action safe, LH ≈ baseline. Honesty check: the
-  old proxy counted 76–123 `low-hp-back` re-issues where the episode counter records
-  ≤14 decisions — ~9× inflation removed by construction.
-- **Rune diagnosis CORRECTION (do NOT patch runes.lua):** in 8888664145 D's bottle-rune
-  window, staging→pickup worked (`pickup_attempt` logged). The rune was lost because
-  `ActiveLowHp mode=back` (SOFT band, threat=false) overrode the committed pickup move
-  on alternating ticks (dist stuck at 91, rune aged out → `gone`). This is a committed-
-  transaction violation in the recovery layer, not a rune-engine bug.
-- **Next fix (Opus): rune-commit yield guard** in `ActiveLowHp` — while a bottle-rune
-  commit window is active (`aib_bottleRuneStarted`, same signal as fwd-suppress) and
-  band is soft/caution and not threatened, positional branches yield so the persisting
-  pickup move completes. Signature: `blocked=recovery-owner reason=rune_commit`.
-  CRITICAL/threatened never yield. This is the §2.2 "rune-seek if reachable" point —
-  a P3-C down-payment, not an ad-hoc patch.
-- **Revised order:** rune guard → P1-A (lane-line-fallback 84/89 is now the dominant
-  jitter key; gated on Fable's §3.6–3.7 registry re-pin — anchors are stale) →
-  P3-B.2 (architecture completion, metric already banked) → P3-C rest. Prewave
-  Farmer/Brawler stays parked (config-level, on explicit order only).
-- **09.07 late (Fable):** registry re-pin DONE (SPECS §3.6.1). Rune guard deployed+pushed
-  (`3957992`). Match 8888743934 forensics: siege desire has NO canAct cap (P4 hole) —
-  siege empty-wins pace at the tower; the cap is folded INTO P1-A phase A as part of its
-  intended change (SPECS §3.6.1 addendum) — do NOT ship it as a separate fix. Prewave
-  verdict: `canonical_farmer` runs `pregame_behavior="aggressive_mid"` — config bug, the
-  farmer must decline early duels; engine already gates duel by config + hpFloor.
-  Creep-aggro disengage in the duel module = small backlog guard after P1-A.
-  Pipeline: farmer config edit → match on 3957992 (validates rune-guard + config, captures
-  phase-A baseline greps) → Opus implements phase A per §3.6.1 → match → Fable acceptance.
+- `tools/postmatch.py <matchid>`: main post-match report.
+- `tools/pathology.py <matchid>`: movement/watchability shapes.
+- `tools/betting.py <matchid>`: betting/product metrics.
+- `tools/binding.py`: prove that config knobs reach behavior.
+- `tools/project_inventory.py`: current sizes, direct action surface, shared state writers,
+  and dead local helpers.
+- `tools/run_tests.py`: dependency-free Python test runner.
+- `tools/check_schema_contract.py`: Python/Lua/prompt/config schema agreement.
+- `tools/check_all.py --skip-live`: local pre-deploy gate.
+- `tools/deploy.bat [code|playstyle|all|general|check]`: explicit deployment profiles.
 
-**Routine (Opus fast / Sonnet):** swaps, deploy (cp + sha stamp), git batches on
-command, per-match postmatch runs. Watchlist items (P4 empty_action, mutual gambles)
-stay parked unless explicitly ordered.
+## Collaboration
 
-## P3 Baseline
-
-Baselines are static snapshots — pinned on the **current fix stack** (code `c1cd4e4`) so
-P3's delta is attributable and not conflated with intervening fixes. Both are short,
-P3-dominant matches (jitter driven by `low-hp-back`), which is exactly the signal P3
-targets.
-
-| Match | Len | Matchup / Result | Runtime | Empty Action | Jitter/Min | Bottle Empty |
-| --- | --- | --- | --- | --- | --- | --- |
-| `8886935149` | 5.9m | R=brawler D=farmer · Dire won | R=0/D=0 | R=63 D=63 | R=26.8 D=19.7 | R=80% D=80% |
-| `8886970304` | 6.6m | R=farmer D=brawler · Dire won | R=0/D=0 | R=79 D=55 | R=27.4 D=13.1 | R=76% D=52% |
-
-Dominant jitter key both matches: `low-hp-back` (123/69 in 8886970304; 76/64 in
-8886935149), `lane-line-fallback` secondary. Watch item: `critical-recover-hold`
-spiked to R=14 D=35 in 8886970304 — legit safe-regen (D won, nobody died standing),
-but judge watchability by eye.
-
-P3 should cut low-HP jitter (`low-hp-back` episodes) without regressing runtime errors,
-LH, empty_action, or bottle.
+Claude may edit the project in parallel. Before every edit, commit, or deploy, re-read
+`git status` and the touched diff. Work with concurrent changes; never revert them implicitly.
+Runtime/tooling is normally Codex-owned. Live strategy/config tuning is normally Claude-owned,
+but the user's newest instruction always wins.

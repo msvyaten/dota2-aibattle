@@ -1,11 +1,12 @@
 # HANDOFF — AIBattle × Dota 2
 
-> COLD START: `docs/STATE.md` first, then `docs/CODE_MAP.md` (what lives where).
+> COLD START: `docs/STATE.md` first, then run `python tools\pre_match_state.py`, then
+> `docs/CODE_MAP.md` (what lives where).
 > This HANDOFF is the operational reference: paths, deploy, diag counters, match_stats.
 > Product concept, config schema, tick pipeline, scorecard: `docs/HANDOFF_PACKAGE.md`.
 
-> Единственная точка входа. Обновлять ЕГО, новых доков не плодить.
-> Последнее обновление: 2026-06-20 (Codex phase-24: small decision engine, safe deploy profiles, canonical configs).
+> Операционный справочник, не снимок текущего HEAD/LIVE. Текущий план находится в `STATE.md`.
+> Последнее обновление навигации: 2026-08-01.
 > Полная история сессий — `docs/history/HANDOFF-full-2026-06-09.md`.
 > По-русски. Доказательство = цифра из лога или stат-дампа. «На глаз» не считается.
 
@@ -16,6 +17,8 @@
 - **Репо:** `C:\Users\Shadow\dota2-aibattle` · ветка `phase-2-team-dials` · git-личность: `don / don@users.noreply.github.com`
 - **LIVE (что грузит Dota):** `…\dota 2 beta\game\dota\scripts\vscripts\bots\`
 - **Deploy:** `tools/deploy.bat [code|playstyle|all|general|check]`; default `code`, `general.lua` только явным профилем.
+- **Перенос путей:** `DOTA_LOG_DIR`, `DOTA_BOTS_DIR`, `DOTA_REPLAY_DIR`, `DOTA_ITEMBUILDS_DIR` переопределяют стандартную установку Steam.
+- **Опциональный API-генератор:** модель задаётся `AIBATTLE_OPENAI_MODEL`; основной ручной JSON-путь не требует API-пакета или ключа.
 - **Конфиги:** live bindings = `bots/Customize/playstyle_radiant.lua` / `playstyle_dire.lua`; канон = `bots/Customize/canonical_*.lua`; старые тесты = `archive/dota/legacy_playstyles/`
 - **Логи:** `…\game\dota\console.<matchid>.log` (опция `-condebug`)
 - **Анализ:** `python tools/match_stats.py <id> [id2 …]` — KDA/LH/урон/предметы/диаги по слотам

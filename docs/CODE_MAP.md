@@ -1,8 +1,9 @@
 # CODE MAP — карта проекта (что где, сколько строк, кто владелец)
 
-> Навигационная карта для передачи проекта. Обновлено 2026-07-23 (HEAD `bdc7527`).
-> ⚠️ Цифры строк ИЗМЕРЕНЫ, не переписаны: между 06.07 и 23.07 наш слой вырос
-> 5 435 → 6863 строк, и старая таблица врала почти по каждому модулю.
+> Навигационная карта для передачи проекта. Структура обновлена 2026-08-01.
+> Числа ниже являются снимком, а не источником текущего состояния. Актуальные размеры,
+> прямые action-сайты, shared-state writers и мёртвые локальные функции выдаёт
+> `python tools/project_inventory.py`.
 > Пары к этому файлу: `ARCHITECTURE.md` (философия/владение), `HANDOFF_PACKAGE.md`
 > (продукт + пайплайн тика), `SPECS.md` (незакрытые работы).
 
@@ -17,12 +18,12 @@ Fiend / nevermore). База — OpenHyperAI (OHA), форк движка бот
 
 | | строк | % | трогаем? |
 |---|---:|---:|---|
-| **Наш слой `aibattle_*`** (поведение) | **6863** | 3.4% | ✅ ДА — здесь вся логика |
+| **Наш слой `aibattle_*`** (поведение) | **7171** | — | ✅ ДА — здесь вся логика |
 | Конфиги `Customize/` | 684 | — | ✅ ДА — пресеты архетипов |
 | **Наши патчи ВНУТРИ вендорных файлов** | **217** | — | ⚠️ 21 файл, см. §3 |
 | Вендор OHA (всё остальное в `bots/`) | ~191484 | 96% | ❌ НЕТ — база, синк сверху |
-| Tools (Python) | 4216 | — | ✅ ДА |
-| Docs | 4200 | — | ✅ ДА |
+| Tools (Python) | 4391 | — | ✅ ДА |
+| Docs | измерять утилитой | — | ✅ ДА |
 
 **Итого Lua в `bots/`: 199031 строк.** Наших из них — 7764 (3.9%), считая патчи в вендоре.
 
@@ -31,7 +32,7 @@ Fiend / nevermore). База — OpenHyperAI (OHA), форк движка бот
 
 ---
 
-## 1. Слой AIBattle — наш код (`bots/FunLib/aibattle_*.lua`, 6863 строк, 22 файла)
+## 1. Слой AIBattle — наш код (`bots/FunLib/aibattle_*.lua`, 7171 строк, 22 файла)
 
 Здесь живёт ВСЁ поведение. Хорошо разложено: один файл — одна ответственность.
 
@@ -39,8 +40,8 @@ Fiend / nevermore). База — OpenHyperAI (OHA), форк движка бот
 
 | Файл | строк | Роль |
 |---|---:|---|
-| `aibattle_style.lua` | 1174 | **Центр**: загрузка конфига (rules/dials), item/skill build, ability-harass config; телеметрия `Style.Intent/Diag/TickOwner/Blocked`. Всё зовёт его. |
-| `aibattle_engine.lua` | 250 | Раннер стадий и интентов: `Stage/Intent/Resolve`, `KillWindow`, `RecoveryPolicy`, `PowerRuneState`, `RuneUsePolicy`. |
+| `aibattle_style.lua` | 1208 | **Центр**: загрузка конфига (rules/dials), item/skill build, ability-harass config; телеметрия `Style.Intent/Diag/TickOwner/Blocked`. Всё зовёт его. |
+| `aibattle_engine.lua` | 254 | Раннер стадий и интентов: `Stage/Intent/Resolve`, `KillWindow`, `RecoveryPolicy`, `PowerRuneState`, `RuneUsePolicy`. |
 | `aibattle_laning_policy.lua` | 345 | **Скоринг десиров**: `Safety/PowerRune/Fight/Recover/Siege` → score; HP-банды, пороги, no-action-капы (П4). |
 | `aibattle_laning_arbiter.lua` | 132 | **Top-desire арбитр**: `Run/Candidate` — гистерезис победителя, tick-owner. Сердце выбора. |
 | `aibattle_constants.lua` | 51 | Инженерные пороги (дистанции, кулдауны, HP-банды) — не LLM-facing. |
@@ -52,44 +53,43 @@ Fiend / nevermore). База — OpenHyperAI (OHA), форк движка бот
 
 | Файл | строк | Роль |
 |---|---:|---|
-| `aibattle_survive.lua` | 1005 | **Хил/реген low-HP**: `fountainRecovery`, `defensiveHeal`, `regenLane`, `recovery` (бутылка/фласка/танго/руна + fallback-цепь, buy-escape). |
-| `aibattle_runes.lua` | 631 | **Руны**: `SeekBottleRune`, `FindWaterRecoveryRune`, стейджинг/пикап, bottle-fill транзакция. |
-| `aibattle_laning_safety.lua` | 576 | `CreepHitReact`, `DamageUnstuck`, `RangedMeleePackSpacing`, `LastHitWatchdog`, visual-hold/AFK anti-idle. |
-| `aibattle_laning_combat.lua` | 413 | `HarassAndChase`, `ContactHero`, `AbilityPressure`, `RunePowerPressure`, `UphillReposition`, `EmergencyKillPriority`, `AbilityHarass`. |
-| `aibattle_laning_tempo.lua` | 334 | `Pregame`, `DivePolicy`, `DeathWindow`, `PreCreepStandoff` (стадии-гарды). |
+| `aibattle_survive.lua` | 1028 | **Хил/реген low-HP**: `fountainRecovery`, `defensiveHeal`, `regenLane`, `recovery` (бутылка/фласка/танго/руна + fallback-цепь, buy-escape). |
+| `aibattle_runes.lua` | 697 | **Руны**: `SeekBottleRune`, `FindWaterRecoveryRune`, стейджинг/пикап, bottle-fill транзакция. |
+| `aibattle_laning_safety.lua` | 583 | `CreepHitReact`, `DamageUnstuck`, `RangedMeleePackSpacing`, `LastHitWatchdog`, visual-hold/AFK anti-idle. |
+| `aibattle_laning_combat.lua` | 451 | `HarassAndChase`, `ContactHero`, `AbilityPressure`, `RunePowerPressure`, `UphillReposition`, `EmergencyKillPriority`, `AbilityHarass`. |
+| `aibattle_laning_tempo.lua` | 464 | `Pregame`, `DivePolicy`, `DeathWindow`, `PreCreepStandoff` (стадии-гарды). |
 | `aibattle_laning_recovery.lua` | 405 | **Low-HP владельцы** (цель П3): `ThinkIfAllowed`, `CriticalLock`, `ActiveLowHp`, `EmergencyRetreat`, `ForwardLowHpPullback`, `LowHpHoldState`. |
 | `aibattle_laning_creeps.lua` | 236 | `GetBestLastHitCreep`, `GetBestDenyCreep`, `HandleCreepWork`. |
-| `aibattle_laning_trade.lua` | 185 | `KillLock`, `HealInterrupt`, `PassingHeroTrade` (урджент-размены). |
-| `aibattle_laning_siege.lua` | 301 | Осада вышки / siege-commit. |
-| `aibattle_laning_duel.lua` | 228 | `Prewave`, `Pregame` дуэль. |
+| `aibattle_laning_trade.lua` | 163 | `KillLock`, `HealInterrupt`, `PassingHeroTrade` (урджент-размены). |
+| `aibattle_laning_siege.lua` | 315 | Осада вышки / siege-commit и API владельца latch. |
+| `aibattle_laning_duel.lua` | 237 | `Prewave`, `Pregame` дуэль. |
 | `aibattle_item_policy.lua` | 173 | `ShouldUseMango`, `ShouldDelaySpareTpPurchase`. |
 | `aibattle_utils.lua` | 171 | `SafeRetreatTowerLoc`, `ForwardSurvivingTowerLoc`, `EnemyTowerDanger`, `UphillMiss`, `IsTowerActuallyThreatening`. |
 | `aibattle_laning_survival.lua` | 94 | `CreepAggroRelief`. |
 
 ---
 
-## 2. Как течёт решение (тик) — 13 стадий
+## 2. Как течёт решение (тик)
 
 Оркестратор: `bots/mode_laning_generic.lua`. `GetDesire()` заявляет желание играть лейнинг,
-`Think()` → `ThinkLaningCore()` прогоняет пайплайн. Побеждает первый вернувший `true`.
+`Think()` → `ThinkLaningCore()` прогоняет пайплайн. После P1-A прежний хвост участвует в
+одной election; до неё всё ещё остаётся urgent-голова.
 
 ```
-1-2.  tempo-гарды (respawn / pregame / dive / death-window) + urgent (kill-lock, heal-interrupt)   [tempo, trade]
-3-4.  recovery-гейты + critical-recovery lock                                                       [recovery]
-5.    prewave-дуэль / pre-creep standoff                                                            [duel, tempo]
-6-7.  ★ TOP-DESIRE АРБИТР: last-hit / safety / power-rune / fight / recover / siege                 [policy→arbiter]
-       (скоринг в policy.lua, прогон в arbiter.lua; победитель исполняет; empty → следующий)
-8-10. last-hit, harass, CS-walk, push/deny/siege, uphill, spacing, fwd-position                     [creeps, combat, safety]
-11-13. visual-hold, lane-line-fallback, anti-idle                                                   [safety]
+1. tempo-гарды: respawn / pregame / dive / death-window                                      [tempo]
+2. hard recovery floor + urgent kill/channel interrupt                                       [recovery, trade]
+3. Recovery.Owner + prewave duel / pre-creep standoff                                        [recovery, duel, tempo]
+4. ★ MERGED ELECTION: top desires + lane work + positioning + watchdog/anti-idle candidates  [policy→arbiter]
+5. winner executes lazily; an incapable candidate must report no-action and release the tick
 ```
 
 Каждое решение логируется: `intent=<key>`, `blocked=<key> reason=<why>`, `tick-owner`,
 `top-arbiter winner/losers` → анализируется инструментами (§5).
 
-**Открытый структурный долг (см. SPECS):** арбитр владеет только СЕРЕДИНОЙ тика (стадия 6).
-Осцилляции = пары хэндлеров по разные стороны его границы. **П1** делает арбитр единственным
-владельцем тика; **П3** сводит low-HP в один owner. Это и есть архитектурные улучшения — файл
-`mode_laning_generic` (1262) укоротится за счёт П1.
+**Открытый структурный долг (см. SPECS):** P1-A объединил середину и хвост, но urgent-голова
+ещё short-circuit'ит election (P1-B), а suppress/commit/anti-idle механика всё ещё дублируется
+(P1-C). П3 сводит оставшиеся low-HP движения в один owner. `mode_laning_generic.lua` сейчас
+около 1.6k строк и должен уменьшаться по мере этих ownership-катоверов.
 
 ---
 

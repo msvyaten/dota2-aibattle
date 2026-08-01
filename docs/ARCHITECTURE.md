@@ -1,11 +1,17 @@
 # AIBattle Architecture
 
-Last updated: 2026-07-06.
+Last updated: 2026-08-01.
 
 > This is the **conventions / philosophy** doc (how to add behavior, telemetry rules,
 > decision order). For the **file inventory** (what lives where + line counts + a
 > "where do I change X" guide), see [`CODE_MAP.md`](CODE_MAP.md). For open work with
 > design, see [`SPECS.md`](SPECS.md).
+
+Measured sizes and ownership leaks are generated, not maintained by hand:
+
+```powershell
+python tools\project_inventory.py
+```
 
 ## Product Shape
 
@@ -127,6 +133,10 @@ Every active runtime module must be covered by:
 
 `tools/check_all.py` intentionally fails when a `bots/FunLib/aibattle_*.lua` runtime module is not listed for deploy/check, or when the deploy manifest and check manifest drift.
 When a runtime module is retired, add it to the deploy cleanup and stale-live check. Live Dota must not keep old modules that are no longer part of the engine.
+
+The Python side follows the same contract: telemetry parsing belongs in `tools/aibattle_log.py`,
+and the generator schema belongs in `backend/style_schema.py`. Reports may derive different
+metrics, but they must parse the same source telemetry identically.
 
 Use deploy profiles carefully:
 
