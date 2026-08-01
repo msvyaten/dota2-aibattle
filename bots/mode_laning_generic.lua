@@ -616,6 +616,9 @@ local function AIB_LaningModuleCtx(dials, rules)
 		nearestAttackableEnemyCreep = AIB_NearestAttackableEnemyCreep,
 		nearestEnemyHero = AIB_NearestEnemyHero,
 		moveToAttackEdge = AIB_MoveToAttackEdgeOf,
+		-- Same geometry without the move order, so a handler can ask "is that edge where I am
+		-- already standing?" before spending its tick ordering a walk to its own feet.
+		attackEdgeLocation = AIB_AttackEdgeLocation,
 		towardFountain = AIB_TowardFountainFrom,
 		uphillMiss = AIB_UphillMiss,
 		diag = AIB_Diag,

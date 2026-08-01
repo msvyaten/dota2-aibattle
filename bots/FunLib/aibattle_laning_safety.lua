@@ -559,7 +559,21 @@ function M.VisualHoldHeartbeat(ctx)
 			ctx.diag("visual-hold-creep")
 			return true
 		end
-		return ctx.moveToAttackEdge(creep, "visual-hold-creep-step", 35)
+		-- ...but only when that edge is somewhere we are not already standing. ranged-spacing
+		-- (41) parks the bot at exactly this point and then holds it, so "step to the nearest
+		-- creep's attack edge" resolves to the spot under our feet: the order goes out every
+		-- second and nothing moves. 8924703835 t=56-71, both sides frozen on one coordinate for
+		-- ten seconds with visual-hold logging held=10.3 the whole time -- the user watched it
+		-- and called it AFK, and it was, but not for want of a handler.
+		-- Falling through hands the tick to the weakest-creep branch below, which aims at the
+		-- creep that dies NEXT. That is a real displacement and a useful one: it is the bot
+		-- lining up its next last hit rather than shuffling for the camera. The destination is
+		-- still latched by moveToAttackEdge, so this cannot become the per-tick vibration that
+		-- the RandomVector re-roll used to cause right below here.
+		local edge = ctx.attackEdgeLocation ~= nil and ctx.attackEdgeLocation(creep, 35) or nil
+		if edge == nil or GetUnitToLocationDistance(bot, edge) > Const.Visual.holdDistance then
+			return ctx.moveToAttackEdge(creep, "visual-hold-creep-step", 35)
+		end
 	end
 	if hardHold and (reason == "creep_damage" or reason == "creep_in_range" or reason == "empty") then
 		local weakCreep = ctx.weakestAttackableEnemyCreep(range * 1.8)
