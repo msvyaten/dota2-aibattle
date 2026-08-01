@@ -912,10 +912,15 @@ local function recovery(bot, dials, nEnemyCreeps)
 	local cannotBuyFlask = (bot.aib_recBuyCount or 0) >= 2
 		or gold < itemCost("item_flask")
 		or (wantsBottleFromStyle(bot) and hp >= 0.22)   -- gold is reserved for the bottle
-	local noSustain = (fcharges == nil or fcharges <= 0)
+	-- "Is there a cure in the bag" is holdsHeal, and this test has to use it. It used to check the
+	-- tango MODIFIER (already drinking) but not the tango ITEM, so a bot carrying two tangos
+	-- counted as having no sustain at all. That is the other half of the turn-around loop: the
+	-- extended floor committed the trip at hp<0.35 as "no sustain", and the release side -- which
+	-- does count tangos -- cancelled the same trip as "heal_in_hand" a few seconds later. Two
+	-- tests for one question, disagreeing, on the two ends of one latch.
+	local noSustain = not holdsHeal(bot, fcharges)
 		and not bot:HasModifier("modifier_flask_healing")
 		and not bot:HasModifier("modifier_tango_heal")
-		and not hasItem(bot, "item_flask")
 		and cannotBuyFlask
 	-- A trip is a ~60 second round trip. It is only worth it when the bot genuinely cannot heal
 	-- where it stands. Holding a flask while walking home is the worst of both -- and that is
