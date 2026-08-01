@@ -450,7 +450,17 @@ local function ThinkLocationReport()
 		local bottle = bot:GetItemInSlot(bSlot)
 		if bottle ~= nil then bottleCharges = bottle:GetCurrentCharges() end
 	end
-	local statSuffix = string.format(" lh=%d dn=%d dg=%+d dlh=%+d bottle=%d", lh or -1, dn or -1, dg, dlh, bottleCharges)
+	-- Level. In a 1v1 mid the level gap decides trades harder than gold does, and until now it
+	-- was the one thing about the two heroes we never recorded -- so "why did he lose that
+	-- exchange five to one" (8924633108 [D] at t=56-61 and t=97-102) had no way of being
+	-- answered with "he was a level down". Both sides log their own, so postmatch can pair
+	-- samples and read the gap without depending on the enemy being visible.
+	-- Appended at the END on purpose: aibattle_log.TELEMETRY_RE matches these fields in order
+	-- with optional groups, so a new field inserted before lh= would not fail loudly -- it would
+	-- silently stop matching lh/dn/dg/dlh/bottle in every tool that shares the regex.
+	local okLvl, lvl = pcall(function() return bot:GetLevel() end)
+	local statSuffix = string.format(" lh=%d dn=%d dg=%+d dlh=%+d bottle=%d lvl=%d",
+		lh or -1, dn or -1, dg, dlh, bottleCharges, (okLvl and lvl) or -1)
 	if nearby and #nearby > 0 and nearby[1]:IsAlive() then
 		bot:ActionImmediate_Chat(string.format(
 			"AIB[%s] t=%.0fs hp=%.0f%% gold=%d loc=%.0f,%.0f enemy-dist=%.0f%s",

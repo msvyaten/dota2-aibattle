@@ -19,14 +19,14 @@ TELEMETRY_RE = re.compile(
     r"AIB\[([RD])\]\s+t=([\d.]+)s\s+hp=([\d.]+)%\s+gold=(\d+)\s+"
     r"loc=([-\d.]+),([-\d.]+)(?:\s+enemy-dist=([\d.]+))?"
     r"(?:\s+lh=(-?\d+))?(?:\s+dn=(-?\d+))?(?:\s+dg=([+-]?\d+))?(?:\s+dlh=([+-]?\d+))?"
-    r"(?:\s+bottle=(-?\d+))?"
+    r"(?:\s+bottle=(-?\d+))?(?:\s+lvl=(-?\d+))?"
 )
 
 
 def extract_telemetry(text: str):
     """Return rich, time-sorted periodic reports for both sides."""
     telemetry = {"R": [], "D": []}
-    for side, t, hp, gold, x, y, enemy_dist, lh, dn, dg, dlh, bottle in TELEMETRY_RE.findall(text):
+    for side, t, hp, gold, x, y, enemy_dist, lh, dn, dg, dlh, bottle, lvl in TELEMETRY_RE.findall(text):
         telemetry[side].append({
             "t": float(t),
             "hp": float(hp),
@@ -38,6 +38,7 @@ def extract_telemetry(text: str):
             "dg": int(dg) if dg else None,
             "dlh": int(dlh) if dlh else None,
             "bottle": int(bottle) if bottle else None,
+            "lvl": int(lvl) if lvl else None,
         })
     for samples in telemetry.values():
         samples.sort(key=lambda sample: sample["t"])

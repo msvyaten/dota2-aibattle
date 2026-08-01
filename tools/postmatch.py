@@ -283,6 +283,22 @@ def report(match_id):
             diag_max(text, side, "wave-watch"))
         print("  [%s] %s | lane-line-episodes=%d |%s" % (side, parts, ep, ai))
 
+    # Level over time. In a 1v1 mid the level gap decides trades harder than gold, and it was
+    # unrecorded until c69c279 -- so "why did he lose that exchange five to one" could never be
+    # answered with "he was a level down". Prints as a per-minute pair, and "n/a" for logs from
+    # before the field existed rather than pretending the gap was zero.
+    print("----- level curve (R vs D, per minute) -----")
+    lv = {s: dict() for s in ("R", "D")}
+    for s, t, l in re.findall(r"AIB\[([RD])\] t=(\d+)s[^']*? lvl=(-?\d+)", text):
+        lv[s].setdefault(int(t) // 60, int(l))
+    if not lv["R"] and not lv["D"]:
+        print("  n/a -- log predates the lvl= field")
+    else:
+        mins = sorted(set(lv["R"]) | set(lv["D"]))
+        print("  min: " + " ".join("%2d" % m for m in mins))
+        for s in ("R", "D"):
+            print("  [%s]: " % s + " ".join("%2s" % lv[s].get(m, "-") for m in mins))
+
     print("----- archetype contrast (bind check: R vs D) -----")
     for side in ("R", "D"):
         print("  [%s] lh=%s dn=%s bottle_last=%s last_t=%ss"
