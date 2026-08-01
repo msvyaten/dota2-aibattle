@@ -100,10 +100,23 @@ function M.HealInterrupt(ctx)
 				end, string.format("dist=%.0f hp=%.0f kind=%s", dist, hp*100, channelKey))
 			end
 			local chaseMinHp = isHeal and 0.32 or 0.45
+			-- A CHASE has to ask about the destination, not about where we stand. towerThreat
+			-- reads the current position, so a bot outside the radius always passed it and then
+			-- walked in -- and `isHeal and hp >= 0.45` waived even that. 8924703835 [R] t~340:
+			-- the enemy was healing at 26% HP, channel-interrupt won the urgent arbiter at 138,
+			-- the chase carried the bot to 796 units from the enemy tower, DivePolicy logged
+			-- `blocked=tower-range reason=no_licence` a tick later and tried to walk it back out
+			-- -- two owners pulling opposite ways -- and HP went 91% -> 52% for one denied salve.
+			-- The bypass stays on the in-range branch above on purpose: interrupting from where
+			-- we already stand is exactly the healingSafeHit case DivePolicy itself permits
+			-- (laning_tempo.lua:341). Walking in to do it is not the same transaction.
+			local foeTower = GetTower(GetOpposingTeam(), TOWER_MID_1)
+			local chaseIntoTower = foeTower ~= nil and foeTower:IsAlive()
+				and GetUnitToUnitDistance(enemy, foeTower) <= foeTower:GetAttackRange() + 150
 			if dist <= math.max(isHeal and 1050 or 900, range + (isHeal and 560 or 300))
 				and not AIBUtils.UphillMiss(bot, enemy)
 				and hp >= chaseMinHp
-				and (not towerIsThreat or (isHeal and hp >= 0.45)) then
+				and not towerIsThreat and not chaseIntoTower then
 				return Engine.Intent("channel-interrupt", isHeal and 138 or 118, "enemy_" .. channelKey, function()
 					if ctx.moveToAttackEdge == nil or not ctx.moveToAttackEdge(enemy, nil, 0) then return false end
 					Style.Diag(bot, "channel-interrupt-chase")
