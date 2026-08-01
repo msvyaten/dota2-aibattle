@@ -111,6 +111,15 @@ def report(match_id):
               "latch_drop=%d | logged-reason: no_sustain=%d regen_lane=%d (lower bound)"
               % (side, trip_init, f_wait, f_bottle, f_tp, init_skip,
                  diag_max(text, side, "fountain-latch-drop"), no_sustain, lane_floor))
+        # The turn-around loop of 8924633108 [D]: the floor committed a trip because an enemy was
+        # hitting the bot (a held salve cannot be drunk under fire) and the release fired two
+        # seconds later because walking away had stopped the hitting -- five cycles, three of them
+        # turning at 6251/6201/6252 units from home. break-contact should absorb those, so
+        # heal_in_hand releases go to ~0 while break-contact carries the traffic.
+        rel = re.findall(r"AIB\[%s\][^']*?blocked=fountain-floor reason=(\w+)" % side, text)
+        by_reason = {r: rel.count(r) for r in sorted(set(rel))}
+        print("       break-contact=%d (want UP) | trip releases: %s (heal_in_hand wants 0)"
+              % (diag_max(text, side, "heal-break-contact"), by_reason or "none"))
 
     # 21.07 batch. empty_action was the top blocked reason on both sides (105/65 in
     # 8906632392) and the scorecard did NOT flag it -- empty/min read 8.4/5.2 against a

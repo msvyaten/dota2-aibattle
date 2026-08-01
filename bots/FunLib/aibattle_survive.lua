@@ -154,12 +154,54 @@ local TRIP_DONE_HP = 0.55
 -- fixing the path whose signature you happened to be looking at is not fixing the rule.
 local HEAL_INSTEAD_OF_FOUNTAIN_HP = 0.25
 
+local function holdsHeal(bot, charges)
+	return hasItem(bot, "item_flask")
+		or hasItem(bot, "item_tango") or hasItem(bot, "item_tango_single")
+		or (charges ~= nil and charges > 0)
+end
+
+-- ONE test for "a rune is worth the detour", used by both the release side and the floor.
+-- 434f802 raised this from a bare hp>=0.22 to hp>=0.35 + no damage in 2s + no living enemy in
+-- 1200, after a bot abandoned the walk home at a quarter of its health, headed for the river with
+-- a healthy enemy still in the lane, and was finished on the way. But it only changed the copy
+-- inside fountainTripDoneReason; the floor below kept its own copy and went on deferring at 22%
+-- under fire. Same shape as the heal_in_hand pair (3a73f9c) -- fixing the site whose signature
+-- you happen to be reading is not fixing the rule.
+local function runeBeatsFountain(bot, hp)
+	if hp < 0.35 or bot:WasRecentlyDamagedByAnyHero(2.0) then return nil end
+	local eta, loc, dist = AIBRunes.NextSpawnEta(bot, DotaTime())
+	if eta == nil or eta > 25.0 or eta <= -10.0 then return nil end
+	if dist >= bot:DistanceFromFountain() then return nil end
+	local foes = bot:GetNearbyHeroes(1200, true, BOT_MODE_NONE)
+	if foes ~= nil and #foes > 0 and foes[1]:IsAlive() then return nil end
+	return eta, loc, dist
+end
+
+-- One place to START a trip, mirroring releaseFountainTrip. Until now the latch had a release
+-- owner and five commit sites, which is how the two ends came to test different things: the floor
+-- committed a trip *because* an enemy was hitting the bot (a held salve cannot be drunk under
+-- fire), and the release fired two seconds later *because* walking away had stopped the hitting.
+-- The trip's own success destroyed the condition that started it. 8924633108 [D] ran that loop
+-- five times and turned around at 6251, 6201 and 6252 units from home on three consecutive trips
+-- -- the distance is not a decision, it is however far the bot gets before the 2s damage timer
+-- expires. Recording what it was carrying at commit time lets the release side tell "I bought
+-- sustain while walking" (new information, abort) from "I was already carrying it" (then the trip
+-- should never have started, and reversing it mid-way spends the walk twice).
+local function commitFountainTrip(bot, floor, heldHealNow)
+	if not (bot.aib_fountainTrip or bot.aib_fountainFloorTrip) then
+		bot.aib_fountainTripHeldHeal = (heldHealNow == true)
+	end
+	bot.aib_fountainTrip = true
+	if floor then bot.aib_fountainFloorTrip = true end
+end
+
 local function releaseFountainTrip(bot, reason, detail)
 	-- All three fields, always. b4b24af was caused by a release site that cleared one of
 	-- three and left the others to reanimate the behaviour a tick later.
 	bot.aib_fountainTrip = false
 	bot.aib_fountainFloorTrip = false
 	bot.aib_fountainFullSince = nil
+	bot.aib_fountainTripHeldHeal = nil
 	Style.DiagRL(bot, "fountain-trip-release", 3)
 	Style.Blocked(bot, "fountain-floor", reason, detail or "", 5.0)
 end
@@ -175,16 +217,20 @@ local function fountainTripDoneReason(bot, hp, charges, inFlight, flightFresh)
 	if hp < 0.12 then return nil end
 
 	-- 1. The cure is in the bag (b6d0642), or paid for and arriving (3a93287).
-	local heldHeal = hasItem(bot, "item_flask")
-		or hasItem(bot, "item_tango") or hasItem(bot, "item_tango_single")
-		or (charges ~= nil and charges > 0)
-	-- ...but only while a consumable can still do the job. At 16-20% HP it cannot: a tango is
+	local heldHeal = holdsHeal(bot, charges)
+	-- ...but only when the cure is NEWS. A salve that was already in the bag when the trip was
+	-- committed cannot be a reason to abandon it: if carrying it were sufficient, the trip would
+	-- never have started. This is the user's 21.07 rollback ("a committed floor trip runs to
+	-- COMPLETION") applied to the one input it did not cover -- it forbade turning around because
+	-- passive regen topped the bar up, while the flask test went on turning the bot around anyway.
+	local healIsNews = heldHeal and bot.aib_fountainTripHeldHeal ~= true
+	-- ...and only while a consumable can still do the job. At 16-20% HP it cannot: a tango is
 	-- ~130 HP over 16 seconds, spent standing in the lane in front of a healthy enemy, whereas the
 	-- walk home returns a full bar. 8918007804 released the trip at hp=34, 20 and 16 and the user
 	-- watched the bot leave for the fountain and come back still hurt -- "it needed to go one way
 	-- or the other". Below this the fountain is simply the right answer, so the trip runs.
-	if (heldHeal or flightFresh) and hp >= HEAL_INSTEAD_OF_FOUNTAIN_HP and not hitRecently and not healing then
-		return heldHeal and "heal_in_hand" or "heal_in_flight",
+	if (healIsNews or flightFresh) and hp >= HEAL_INSTEAD_OF_FOUNTAIN_HP and not hitRecently and not healing then
+		return healIsNews and "heal_in_hand" or "heal_in_flight",
 			string.format("hp=%.0f inflight=%s", hp * 100, tostring(inFlight))
 	end
 
@@ -207,13 +253,9 @@ local function fountainTripDoneReason(bot, hp, charges, inFlight, flightFresh)
 	-- with a healthy enemy still in the lane, and was finished on the way. A rune is regen worth
 	-- detouring for only if the detour is survivable, so it now needs enough health to eat a hit
 	-- en route, no damage in the last two seconds, and no living enemy hero in sight.
-	local runeEta, _, runeDist = AIBRunes.NextSpawnEta(bot, DotaTime())
-	if hp >= 0.35 and not hitRecently and runeEta ~= nil and runeEta <= 25.0 and runeEta > -10.0
-		and runeDist < bot:DistanceFromFountain() then
-		local foes = bot:GetNearbyHeroes(1200, true, BOT_MODE_NONE)
-		if foes == nil or #foes == 0 or not foes[1]:IsAlive() then
-			return "rune_due", string.format("hp=%.0f eta=%.0f rune=%.0f", hp * 100, runeEta, runeDist)
-		end
+	local runeEta, _, runeDist = runeBeatsFountain(bot, hp)
+	if runeEta ~= nil then
+		return "rune_due", string.format("hp=%.0f eta=%.0f rune=%.0f", hp * 100, runeEta, runeDist)
 	end
 	return nil
 end
@@ -387,7 +429,7 @@ local function fountainRecovery(bot)
 		bot.aib_fountainFullSince = nil
 		if bot.aib_fountainWaitLast == nil or DotaTime() - bot.aib_fountainWaitLast >= 1.0 then
 			bot.aib_fountainWaitLast = DotaTime()
-			bot.aib_fountainTrip = true
+			commitFountainTrip(bot, false, holdsHeal(bot, charges))
 			Style.DiagRL(bot, "fountain-wait", 3)
 			bot:Action_MoveToLocation(J.GetTeamFountain())
 		end
@@ -808,8 +850,7 @@ local function recovery(bot, dials, nEnemyCreeps)
 	-- walks correctly -- this was the single divergent site. Falls through to (c) below.
 	local tp = getTpScroll(bot)
 	if tp and behavior == "tp_fountain" then
-		bot.aib_fountainTrip = true
-		bot.aib_fountainFloorTrip = true
+		commitFountainTrip(bot, true, holdsHeal(bot, bottleCharges(bot)))
 		-- Same channel claim as the floor branch below: without it fountainRecovery cancels
 		-- this TP with its own move order on the next tick.
 		bot.aib_fountainTping = true
@@ -821,8 +862,7 @@ local function recovery(bot, dials, nEnemyCreeps)
 	-- c. Walk to fountain (walk_fountain, or tp_fountain with no scroll)
 	if behavior == "walk_fountain" or (behavior == "tp_fountain" and not tp) then
 		if bot.aib_recMoveLast == nil or DotaTime() - bot.aib_recMoveLast >= 5.0 then
-			bot.aib_fountainTrip = true
-			bot.aib_fountainFloorTrip = true
+			commitFountainTrip(bot, true, holdsHeal(bot, bottleCharges(bot)))
 			recoveryPlan(bot, "walk_fountain", "no_tp", string.format("hp=%.0f", hp*100), 2.0)
 			bot.aib_recMoveLast = DotaTime(); Style.Diag(bot, "recovery-walk")
 			bot:Action_MoveToLocation(J.GetTeamFountain())
@@ -915,6 +955,34 @@ local function recovery(bot, dials, nEnemyCreeps)
 			string.format("hp=%.0f flask=%s inflight=%s", hp*100,
 				tostring(hasItem(bot, "item_flask")), tostring(inFlight)))
 	end
+
+	-- The bot is holding the cure and the ONLY thing between it and drinking is that something is
+	-- hitting it right now. Walking home does fix that -- which is exactly the trap: contact
+	-- breaks after a few hundred units, canHealHere flips true, and the trip is released four
+	-- thousand units from where the fight was. 8924633108 [D] paid ~30 seconds of lane per cycle
+	-- for a salve it could have drunk one step behind its own creeps, and finished with 13 last
+	-- hits to Radiant's 44. The short version has to be written down, or the fountain keeps
+	-- getting used as a way to break contact.
+	-- Narrow on purpose: only reached with a heal actually in the bag and above the band where a
+	-- consumable can still do the job, so a bot with nothing to drink falls through to the floor
+	-- below unchanged, and one that is already mid-heal is not interrupted.
+	if not canHealHere and (heldHeal or flightFresh) and hp >= HEAL_INSTEAD_OF_FOUNTAIN_HP
+		and not bot:HasModifier("modifier_flask_healing")
+		and not bot:HasModifier("modifier_tango_heal")
+		and not (bot.aib_fountainTrip or bot.aib_fountainFloorTrip) then
+		local away = xpRecoveryLoc(bot, nEnemyCreeps, hp)
+		if away ~= nil then
+			if bot.aib_recMoveLast == nil or DotaTime() - bot.aib_recMoveLast >= 1.5 then
+				bot.aib_recMoveLast = DotaTime()
+				Style.Diag(bot, "heal-break-contact")
+				recoveryPlan(bot, "break_contact", "heal_in_hand",
+					string.format("hp=%.0f", hp * 100), 2.0)
+				bot:Action_MoveToLocation(away)
+			end
+			return true
+		end
+	end
+
 	-- 4b (user's deferred call, 21.07 -> chosen 23.07): before spending 60 seconds walking
 	-- home, look at the rune clock. A rune that is nearly up and closer than the fountain
 	-- gives the same full bar plus bottle charges plus map presence, for a few seconds of
@@ -922,12 +990,12 @@ local function recovery(bot, dials, nEnemyCreeps)
 	-- all three "almost full / no idea why it went"; the fix he picked was this, not
 	-- narrowing the floor band, because the timer is the actual reason those trips were wrong.
 	--
-	-- Deliberately NOT applied below 22%: there the fountain is still the right answer and a
-	-- rune is a gamble the bot may not survive. And it only DEFERS -- the floor still owns the
-	-- decision on the next tick once the window passes, so this cannot strand a bot in lane.
-	local runeEta, runeLoc, runeDist = AIBRunes.NextSpawnEta(bot, DotaTime())
-	if hp >= 0.22 and runeEta ~= nil and runeEta <= 25.0 and runeEta > -10.0
-		and runeDist < bot:DistanceFromFountain() then
+	-- The band and the threat test now come from runeBeatsFountain, shared with the release side.
+	-- This site used to carry its own copy at hp>=0.22 with no threat test at all, so 434f802's
+	-- narrowing never reached it. It only DEFERS -- the floor still owns the decision on the next
+	-- tick once the window passes, so this cannot strand a bot in lane.
+	local runeEta, runeLoc, runeDist = runeBeatsFountain(bot, hp)
+	if runeEta ~= nil then
 		releaseFountainTrip(bot, "rune_due",
 			string.format("hp=%.0f eta=%.0f rune=%.0f home=%.0f",
 				hp * 100, runeEta, runeDist, bot:DistanceFromFountain()))
@@ -945,8 +1013,7 @@ local function recovery(bot, dials, nEnemyCreeps)
 	if not canHealHere and (hp < 0.22 or (hp < 0.35 and noSustain)) then
 		local tpFloor = getTpScroll(bot)
 		if tpFloor ~= nil and not bot:WasRecentlyDamagedByAnyHero(1.5) then
-			bot.aib_fountainTrip = true
-			bot.aib_fountainFloorTrip = true
+			commitFountainTrip(bot, true, heldHeal)
 			-- Claim the channel. fountainRecovery() runs BEFORE recovery() (:832 vs :835) and,
 			-- once the trip is latched, re-issues Action_MoveToLocation(fountain) every second
 			-- -- which cancels this very TP one tick after it is cast. That is why 8908963179
@@ -962,8 +1029,7 @@ local function recovery(bot, dials, nEnemyCreeps)
 			return true
 		end
 		if bot.aib_recMoveLast == nil or DotaTime() - bot.aib_recMoveLast >= 5.0 then
-			bot.aib_fountainTrip = true
-			bot.aib_fountainFloorTrip = true
+			commitFountainTrip(bot, true, heldHeal)
 			recoveryPlan(bot, "walk_fountain", floorReason, string.format("hp=%.0f", hp*100), 2.0)
 			bot.aib_recMoveLast = DotaTime(); Style.Diag(bot, "recovery-walk")
 			bot:Action_MoveToLocation(J.GetTeamFountain())
