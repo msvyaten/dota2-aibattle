@@ -6,9 +6,8 @@ scorecard is ACCEPTED and the fix_candidate list is not worked through.
 """
 import re
 import sys
-from pathlib import Path
 
-DOTA_LOG_DIR = Path(r"C:\Program Files (x86)\Steam\steamapps\common\dota 2 beta\game\dota")
+from aibattle_log import DOTA_LOG_DIR
 
 # diag counters whose per-match MAX approximates movement churn (jitter proxy)
 JITTER_KEYS = ("low-hp-nudge", "low-hp-back", "uphill-reposition")

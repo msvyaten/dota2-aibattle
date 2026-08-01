@@ -3,7 +3,7 @@
 These tools are load-bearing -- every match is read through match_stats -- so the parsing
 and summary helpers added for flow/window/bottle/lua-syntax are pinned here.
 
-Run: python -m pytest tools/test_match_stats.py
+Run: python tools/run_tests.py
 """
 import sys
 from pathlib import Path

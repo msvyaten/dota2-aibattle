@@ -44,6 +44,8 @@ import re
 import statistics
 import sys
 
+from aibattle_log import DOTA_LOG_DIR, extract_telemetry
+
 # A gold lead inside this band counts as "still contested", not a real lead.
 LEAD_BAND_GOLD = 200
 # Max time difference when pairing an R sample with a D sample.
@@ -56,48 +58,7 @@ BUCKET_LABELS = ["D +800", "D +300", "even", "R +300", "R +800"]
 # A win-probability cell needs at least this many samples to mean anything.
 MIN_CELL_SAMPLES = 3
 
-TELEMETRY_RE = (
-    r"AIB\[([RD])\]\s+t=([\d.]+)s\s+hp=([\d.]+)%\s+gold=(\d+)\s+"
-    r"loc=([-\d.]+),([-\d.]+)(?:\s+enemy-dist=([\d.]+))?"
-    r"(?:\s+lh=(-?\d+))?(?:\s+dn=(-?\d+))?(?:\s+dg=([+-]?\d+))?(?:\s+dlh=([+-]?\d+))?"
-    r"(?:\s+bottle=(-?\d+))?"
-)
-
-
 # ---------------------------------------------------------------- parsing
-
-def extract_telemetry(text):
-    """Periodic AIB reports per side, time-sorted.
-
-    `gold` in the telemetry is CURRENT (unspent) gold, which is not advantage: a bot
-    that just bought a bottle reads 600 gold poorer than one saving up, while being
-    the stronger hero. Purchases up to 892g were observed in 8909533277, larger than
-    that match's entire final "margin" of 545 -- so a lead curve built on current gold
-    is mostly a plot of who shopped most recently.
-
-    `earned` fixes it without new telemetry: the cumulative sum of POSITIVE dg, i.e.
-    gold acquired. Spending never enters it. Passive income is identical on both sides
-    and cancels in the difference, so what remains is last hits, denies and kills --
-    which is what "who is ahead" means. Ground truth check on 8909533277: final earned
-    lead tracks net_worth (3886 vs 4072) instead of the -545 current-gold artefact.
-    """
-    telemetry = {"R": [], "D": []}
-    for side, t, hp, gold, x, y, dist, lh, _dn, dg, _dlh, _bottle in re.findall(TELEMETRY_RE, text):
-        telemetry[side].append({
-            "t": float(t),
-            "hp": float(hp),
-            "gold": int(gold),
-            "dg": int(dg) if dg else 0,
-            "enemy_dist": float(dist) if dist else None,
-            "lh": int(lh) if lh else None,
-        })
-    for samples in telemetry.values():
-        samples.sort(key=lambda p: p["t"])
-        earned = 0
-        for s in samples:
-            earned += max(s["dg"], 0)
-            s["earned"] = earned
-    return telemetry
 
 
 def pair_streams(telemetry, tolerance=PAIR_TOLERANCE_S):
@@ -436,15 +397,7 @@ def find_log(arg):
     if os.path.isfile(arg):
         return arg
     name = arg if arg.startswith("console.") else f"console.{arg}.log"
-    # scorecard.DOTA_LOG_DIR is where every other tool in tools/ resolves logs; without
-    # it a bare match id only worked with AIB_LOGDIR exported by hand.
-    roots = [".", "logs", os.environ.get("AIB_LOGDIR", "")]
-    try:
-        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-        import scorecard
-        roots.append(str(scorecard.DOTA_LOG_DIR))
-    except Exception:
-        pass
+    roots = [".", "logs", os.environ.get("AIB_LOGDIR", ""), str(DOTA_LOG_DIR)]
     for root in roots:
         if root and os.path.isfile(os.path.join(root, name)):
             return os.path.join(root, name)

@@ -10,7 +10,11 @@ setlocal EnableExtensions
 ::   check      print the full copy plan without writing
 
 set "DEV=%~dp0..\bots"
-set "DOTA=C:\Program Files (x86)\Steam\steamapps\common\dota 2 beta\game\dota\scripts\vscripts\bots"
+if defined DOTA_BOTS_DIR (
+	set "DOTA=%DOTA_BOTS_DIR%"
+) else (
+	set "DOTA=C:\Program Files (x86)\Steam\steamapps\common\dota 2 beta\game\dota\scripts\vscripts\bots"
+)
 set "PROFILE=%~1"
 if "%PROFILE%"=="" set "PROFILE=code"
 

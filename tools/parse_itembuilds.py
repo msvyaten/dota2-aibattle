@@ -25,9 +25,9 @@ import os
 import re
 from pathlib import Path
 
-ITEMBUILDS_DIR = Path(
-    r"C:/Program Files (x86)/Steam/steamapps/common/dota 2 beta/game/dota/itembuilds"
-)
+from aibattle_log import DOTA_ITEMBUILDS_DIR
+
+ITEMBUILDS_DIR = DOTA_ITEMBUILDS_DIR
 
 SECTION_ORDER = [
     "#DOTA_Item_Build_Starting_Items",

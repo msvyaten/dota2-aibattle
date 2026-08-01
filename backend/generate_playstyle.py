@@ -2,49 +2,22 @@ import os
 import re
 import json
 import argparse
-from openai import OpenAI
 
-MODEL = "gpt-5.5"  # current flagship (June 2026). Switch to "gpt-5.4-mini" for cheaper runs.
+try:
+    from .style_schema import DIAL_KEYS, RULE_VALUES
+except ImportError:
+    from style_schema import DIAL_KEYS, RULE_VALUES
 
-# Full engine schema. Must stay in sync with bots/FunLib/aibattle_style.lua whitelists.
+MODEL = os.environ.get("AIBATTLE_OPENAI_MODEL", "gpt-5.5")
+
+# Full engine schema. Contract-checked against bots/FunLib/aibattle_style.lua.
 # ward_desire / roshan_desire: KEPT. They are inert in 1v1 mid -- verified, not assumed:
 # ward-place is 0 across the last five matches, neither canonical item_build has a ward,
 # and 1v1 mid has no Roshan. They were briefly removed on 21.07 and that was WRONG: the
 # schema describes the engine, which also runs 5v5, where both are real forks. The right
 # handling is to keep them expressible and tell the LLM they do nothing in 1v1 -- see the
 # system prompt. Do not delete them again on 1v1 evidence alone.
-DIAL_KEYS = (
-    "harass_desire", "farm_focus", "forwardness", "retreat_caution",
-    "rune_control", "execute_threshold", "ability_aggro", "gank_desire",
-    "push_desire", "defend_desire", "ward_desire", "roshan_desire",
-)
-# rule -> allowed values. A rule absent from the LLM answer is OMITTED from the
-# output config so the engine falls back to its own default for that rule.
-# Audited against the engine 21.07 (docs/PROMPT_DRIFT.md section E): every value listed
-# here must be branched on somewhere in bots/ AND behave the way the prompt describes it.
-RULE_VALUES = {
-    "respawn_behavior":    ("tp_to_tower", "tp_to_lane", "walk_back"),
-    # "default" = passive prewave (hold own highground, never advance to trade). It was
-    # missing here AND from the engine's PREGAME_VALUES, so the generator could not express
-    # a passive prewave at all -- every non-cowardly prompt landed on aggressive_mid, which
-    # is exactly the "stands in the river taking poke before creeps" symptom.
-    "pregame_behavior":    ("safe_tower", "aggressive_mid", "jungle_pressure", "default"),
-    "dive_policy":         ("never", "finish_only", "when_grouped", "when_ahead", "always"),
-    "low_hp_behavior":     ("tp_fountain", "run_to_tower", "fight_back", "regen_lane", "walk_fountain"),
-    "healing_style":       ("active", "default", "never"),
-    # "basic" removed: style.lua:343 silently rewrites it to "default" (backward compat), so
-    # offering it as a distinct choice just means the LLM picks a value that does nothing.
-    "ability_usage":       ("aggressive", "default"),
-    "ability_timing":      ("on_cooldown", "save_for_execute", "harass_only"),
-    # "freeze" removed: NOT implemented. The engine branches on cwp only for "push" and
-    # "last_hit_only"; freeze falls past the last_hit_only guard in the anti-idle watchdog
-    # (style.lua:705) and ATTACKS enemy creeps -- the opposite of "never touch enemy creeps".
-    # Re-add only once freeze is actually gated at those sites.
-    "creep_wave_priority": ("push", "last_hit_only"),
-    "hero_priority":       ("always", "default", "never"),
-    "deny_policy":         ("always", "default", "never"),
-    "tower_aggression":    ("always", "default", "never"),
-}
+# A rule absent from the LLM answer is omitted so the engine applies its own default.
 DEFAULT_DIAL = 0.5
 
 _client = None
@@ -61,7 +34,7 @@ def _get_client():
 
 def _load_system_prompt():
     here = os.path.dirname(os.path.abspath(__file__))
-    with open(os.path.join(here, "system_prompt.txt"), "r") as f:
+    with open(os.path.join(here, "system_prompt.txt"), "r", encoding="utf-8") as f:
         return f.read()
 
 def _clamp01(x):
@@ -93,7 +66,7 @@ def _sanitize_style(raw: dict) -> dict:
 
 def _parse_llm_json(raw_text: str) -> dict:
     """Extract a JSON object from the LLM response (tolerates ```json fences)."""
-    text = (raw_text or "").strip()
+    text = (raw_text or "").lstrip("\ufeff").strip()
     if text.startswith("```"):
         text = re.sub(r"^```[a-zA-Z]*\n?", "", text)
         text = re.sub(r"\n?```$", "", text).strip()

@@ -5,8 +5,9 @@ from pathlib import Path
 import re
 import subprocess
 
+from aibattle_log import DOTA_BOTS_DIR, live_build_sha
+
 ROOT = Path(__file__).resolve().parents[1]
-DOTA_BOTS_DIR = Path(r"C:\Program Files (x86)\Steam\steamapps\common\dota 2 beta\game\dota\scripts\vscripts\bots")
 
 
 def git(*args):
@@ -23,12 +24,7 @@ def git(*args):
 
 
 def live_build():
-    path = DOTA_BOTS_DIR / "FunLib" / "aibattle_build.lua"
-    if not path.exists():
-        return "missing"
-    text = path.read_text(encoding="utf-8", errors="ignore")
-    match = re.search(r'sha\s*=\s*"([^"]+)"', text)
-    return match.group(1) if match else "unknown"
+    return live_build_sha() or "missing"
 
 
 def playstyle(side):

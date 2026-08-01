@@ -8,8 +8,9 @@ import re
 import subprocess
 import sys
 
+from aibattle_log import DOTA_BOTS_DIR, live_build_sha as shared_live_build_sha
+
 ROOT = Path(__file__).resolve().parents[1]
-DOTA_BOTS_DIR = Path(r"C:\Program Files (x86)\Steam\steamapps\common\dota 2 beta\game\dota\scripts\vscripts\bots")
 
 FORBIDDEN_LANING_KEYS = [
     "fwd-fallback",
@@ -299,6 +300,24 @@ def check_lua_syntax():
     return True
 
 
+def check_python_syntax():
+    """Compile source in memory so syntax checks never create __pycache__ files."""
+    print("[check] python syntax", flush=True)
+    bad = []
+    paths = sorted((ROOT / "tools").glob("*.py")) + sorted((ROOT / "backend").glob("*.py"))
+    for path in paths:
+        try:
+            compile(path.read_text(encoding="utf-8"), str(path), "exec")
+        except (OSError, SyntaxError, UnicodeError) as exc:
+            bad.append(f"{path.relative_to(ROOT)}: {exc}")
+    if bad:
+        print("[fail] python syntax:", flush=True)
+        for problem in bad:
+            print("   ", problem, flush=True)
+        return False
+    return True
+
+
 def git_head():
     result = subprocess.run(
         ["git", "rev-parse", "--short", "HEAD"],
@@ -310,13 +329,7 @@ def git_head():
 
 
 def live_build_sha():
-    path = DOTA_BOTS_DIR / "FunLib" / "aibattle_build.lua"
-    try:
-        text = path.read_text(encoding="utf-8", errors="ignore")
-    except OSError:
-        return None
-    m = re.search(r'sha\s*=\s*"([^"]+)"', text)
-    return m.group(1) if m else None
+    return shared_live_build_sha()
 
 
 def check_live_build():
@@ -371,10 +384,14 @@ def main():
     ok = True
     ok = run_step("text encoding", [sys.executable, "tools/check_text_encoding.py"]) and ok
     ok = check_lua_syntax() and ok
+    ok = check_python_syntax() and ok
     ok = check_forbidden_laning_keys() and ok
     ok = check_deploy_manifest_sync() and ok
     ok = check_aibattle_runtime_modules() and ok
     ok = check_top_desire_policy_boundary() and ok
+    ok = run_step("style schema contract", [sys.executable, "tools/check_schema_contract.py"]) and ok
+    ok = run_step("python tests", [sys.executable, "tools/run_tests.py"]) and ok
+    ok = run_step("project inventory", [sys.executable, "tools/project_inventory.py", "--check"]) and ok
 
     if not args.skip_live:
         ok = check_live_build() and ok

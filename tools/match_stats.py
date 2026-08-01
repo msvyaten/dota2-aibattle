@@ -15,35 +15,12 @@ KDA, last_hits/denies, hero_damage, tower_damage, teleports_used, damage dealt b
 import argparse, math, os, re, sys
 from pathlib import Path
 
-DEFAULT_DIR = r"C:\Program Files (x86)\Steam\steamapps\common\dota 2 beta\game\dota"
-LOG_DIR = os.environ.get("DOTA_LOG_DIR", DEFAULT_DIR)
-DOTA_BOTS_DIR = Path(os.environ.get(
-    "DOTA_BOTS_DIR",
-    r"C:\Program Files (x86)\Steam\steamapps\common\dota 2 beta\game\dota\scripts\vscripts\bots",
-))
+from aibattle_log import DOTA_LOG_DIR, extract_telemetry, latest_match_id, live_build_sha
+
+LOG_DIR = str(DOTA_LOG_DIR)
 
 FIELDS = ["kills", "deaths", "last_hits", "denies", "hero_damage",
           "tower_damage", "teleports_used", "level"]
-
-def live_build_sha():
-    path = DOTA_BOTS_DIR / "FunLib" / "aibattle_build.lua"
-    try:
-        text = path.read_text(encoding="utf-8", errors="ignore")
-    except OSError:
-        return None
-    m = re.search(r'sha\s*=\s*"([^"]+)"', text)
-    return m.group(1) if m else None
-
-def latest_match_id():
-    root = Path(LOG_DIR)
-    candidates = []
-    for path in root.glob("console.*.log"):
-        m = re.fullmatch(r"console\.(\d+)\.log", path.name)
-        if m:
-            candidates.append((path.stat().st_mtime, int(m.group(1))))
-    if not candidates:
-        return None
-    return str(max(candidates)[1])
 
 # Item ID -> short name (parsed from itembuilds broadcaster CSV)
 ITEM_NAMES = {
@@ -122,30 +99,6 @@ def print_dials(dials):
             continue
         row = "  [" + side + "]:    " + "  ".join(f"{dials[side].get(k, '-'):>7}" for k in keys)
         print(row)
-
-def extract_telemetry(text):
-    """Parse periodic AIB location reports separately from action diagnostics."""
-    telemetry = {"R": [], "D": []}
-    pat = (r"AIB\[([RD])\]\s+t=([\d.]+)s\s+hp=([\d.]+)%\s+gold=(\d+)\s+"
-           r"loc=([-\d.]+),([-\d.]+)(?:\s+enemy-dist=([\d.]+))?"
-           r"(?:\s+lh=(-?\d+))?(?:\s+dn=(-?\d+))?(?:\s+dg=([+-]?\d+))?(?:\s+dlh=([+-]?\d+))?"
-           r"(?:\s+bottle=(-?\d+))?")
-    for side, t, hp, gold, x, y, enemy_dist, lh, dn, dg, dlh, bottle in re.findall(pat, text):
-        telemetry[side].append({
-            "t": float(t),
-            "hp": float(hp),
-            "gold": int(gold),
-            "loc": (float(x), float(y)),
-            "enemy_dist": float(enemy_dist) if enemy_dist else None,
-            "lh": int(lh) if lh else None,
-            "dn": int(dn) if dn else None,
-            "dg": int(dg) if dg else None,
-            "dlh": int(dlh) if dlh else None,
-            "bottle": int(bottle) if bottle != "" else None,
-        })
-    for samples in telemetry.values():
-        samples.sort(key=lambda p: p["t"])
-    return telemetry
 
 def bottle_summary(samples):
     """Sustain visibility: how much of the game the bot sat on an empty bottle.

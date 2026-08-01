@@ -27,6 +27,8 @@ import sys, struct, re
 from pathlib import Path
 from collections import defaultdict
 
+from aibattle_log import DOTA_REPLAY_DIR
+
 # ── snappy ────────────────────────────────────────────────────────────────
 def decompress(data):
     try:
@@ -162,7 +164,7 @@ def parse_fileinfo(data):
     return results
 
 # ── Main analysis ──────────────────────────────────────────────────────────
-REPLAY_DIR = Path("C:/Program Files (x86)/Steam/steamapps/common/dota 2 beta/game/dota/replays")
+REPLAY_DIR = DOTA_REPLAY_DIR
 TICK_RATE = 30
 
 def find_demo(match_id):

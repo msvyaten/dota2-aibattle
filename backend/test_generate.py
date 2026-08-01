@@ -1,6 +1,6 @@
-import pytest
 from generate_playstyle import (
-    _sanitize_style, _parse_llm_json, write_playstyle_lua, DIAL_KEYS, RULE_VALUES,
+    _sanitize_style, _parse_llm_json, _load_system_prompt,
+    write_playstyle_lua, DIAL_KEYS, RULE_VALUES,
 )
 
 def test_schema_is_full_engine_surface():
@@ -63,6 +63,15 @@ def test_parse_llm_json_strips_markdown_fences():
     raw = '```json\n{"dials": {"harass_desire": 0.8}, "rules": {}}\n```'
     parsed = _parse_llm_json(raw)
     assert parsed["dials"]["harass_desire"] == 0.8
+
+def test_parse_llm_json_accepts_utf8_bom():
+    parsed = _parse_llm_json('\ufeff{"dials": {}, "rules": {}}')
+    assert parsed == {"dials": {}, "rules": {}}
+
+def test_system_prompt_loads_as_utf8():
+    prompt = _load_system_prompt()
+    assert "AIBattle" in prompt
+    assert "rune_control" in prompt
 
 def test_write_playstyle_lua_creates_nested_file(tmp_path):
     style = {"dials": {"harass_desire": 0.8, "execute_threshold": 0.42},
