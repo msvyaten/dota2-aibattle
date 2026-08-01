@@ -1,4 +1,4 @@
-"""Watchability scorecard: one-command match acceptance (HANDOFF_PACKAGE section 5).
+"""Watchability scorecard: one-command match acceptance.
 
 Usage: python tools/scorecard.py <matchid> [...]
 PASS/FAIL per metric from the console log; process rule: a match that passes the

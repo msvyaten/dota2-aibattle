@@ -83,6 +83,18 @@ STALE_LIVE_FILES = [
     "Customize/playstyle_C_trader.lua",
 ]
 
+ACTIVE_DOC_LIMITS = {
+    "ARCHITECTURE.md": 250,
+    "BACKLOG.md": 150,
+    "CODE_MAP.md": 350,
+    "HANDOFF.md": 180,
+    "SPECS.md": 800,
+    "STATE.md": 150,
+    # Compatibility pointers for old config/code comments. The real content is archived.
+    "llm_system_prompt.md": 10,
+    "match_log.md": 10,
+}
+
 # Files we hand-edit and deploy: a syntax slip here crashes the live match. Mirrors deploy.bat.
 SYNTAX_FILES = LIVE_CODE_FILES + LIVE_PLAYSTYLE_FILES
 
@@ -111,6 +123,29 @@ def check_forbidden_laning_keys():
         print("[fail] forbidden keys in mode_laning_generic.lua:", ", ".join(found), flush=True)
         return False
     return True
+
+
+def check_active_docs():
+    print("[check] active documentation surface", flush=True)
+    docs_dir = ROOT / "docs"
+    actual = {path.name for path in docs_dir.glob("*.md")}
+    expected = set(ACTIVE_DOC_LIMITS)
+    missing = sorted(expected - actual)
+    unexpected = sorted(actual - expected)
+    oversized = []
+    for name, limit in ACTIVE_DOC_LIMITS.items():
+        path = docs_dir / name
+        if path.exists():
+            lines = len(path.read_text(encoding="utf-8", errors="ignore").splitlines())
+            if lines > limit:
+                oversized.append(f"{name}={lines}>{limit}")
+    if missing:
+        print("[fail] missing active docs:", ", ".join(missing), flush=True)
+    if unexpected:
+        print("[fail] unexpected root docs; use docs/history or update the contract:", ", ".join(unexpected), flush=True)
+    if oversized:
+        print("[fail] active docs exceeded review budget:", ", ".join(oversized), flush=True)
+    return not missing and not unexpected and not oversized
 
 
 def _deploy_copyfiles(section_name):
@@ -383,6 +418,7 @@ def main():
 
     ok = True
     ok = run_step("text encoding", [sys.executable, "tools/check_text_encoding.py"]) and ok
+    ok = check_active_docs() and ok
     ok = check_lua_syntax() and ok
     ok = check_python_syntax() and ok
     ok = check_forbidden_laning_keys() and ok

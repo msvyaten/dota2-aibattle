@@ -49,7 +49,11 @@ def build_inventory() -> dict[str, object]:
     aibattle = sorted((ROOT / "bots" / "FunLib").glob("aibattle_*.lua"))
     tools = sorted((ROOT / "tools").glob("*.py"))
     backend = sorted((ROOT / "backend").glob("*.py"))
-    docs = sorted((ROOT / "docs").rglob("*.md"))
+    active_docs = sorted(
+        path for path in (ROOT / "docs").rglob("*.md")
+        if "history" not in path.relative_to(ROOT / "docs").parts
+    )
+    archived_docs = sorted((ROOT / "docs" / "history").rglob("*.md"))
     runtime = runtime_paths()
 
     action_sites = []
@@ -80,7 +84,8 @@ def build_inventory() -> dict[str, object]:
         "runtime_surface": source_stats(runtime),
         "tools_python": source_stats(tools),
         "backend_python": source_stats(backend),
-        "docs": source_stats(docs),
+        "active_docs": source_stats(active_docs),
+        "archived_docs": source_stats(archived_docs),
         "direct_action_sites": len(action_sites),
         "dead_local_helpers": dead_local_helpers,
         "cross_file_state_writers": shared_state,
@@ -88,7 +93,10 @@ def build_inventory() -> dict[str, object]:
 
 
 def print_human(data: dict[str, object]) -> None:
-    for key in ("aibattle_lua", "runtime_surface", "tools_python", "backend_python", "docs"):
+    for key in (
+        "aibattle_lua", "runtime_surface", "tools_python", "backend_python",
+        "active_docs", "archived_docs",
+    ):
         section = data[key]
         print(f"{key}: {section['files']} files, {section['lines']} lines")
         for row in section["largest"][:5]:

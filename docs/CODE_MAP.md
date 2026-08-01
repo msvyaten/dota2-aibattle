@@ -4,8 +4,8 @@
 > Числа ниже являются снимком, а не источником текущего состояния. Актуальные размеры,
 > прямые action-сайты, shared-state writers и мёртвые локальные функции выдаёт
 > `python tools/project_inventory.py`.
-> Пары к этому файлу: `ARCHITECTURE.md` (философия/владение), `HANDOFF_PACKAGE.md`
-> (продукт + пайплайн тика), `SPECS.md` (незакрытые работы).
+> Пары к этому файлу: `ARCHITECTURE.md` (продукт/владение), `HANDOFF.md`
+> (операции), `SPECS.md` (мандаты), `BACKLOG.md` (текущая очередь).
 
 ---
 
@@ -141,7 +141,8 @@ Fiend / nevermore). База — OpenHyperAI (OHA), форк движка бот
 | `playstyle_radiant.lua` / `_dire.lua` | 1 / 2 | **Байндинг**: какой canonical бежит на стороне. Живой матчап. ⚠️ НЕ коммитить без команды. |
 | `general.lua` | 220 | Общие оверрайды/настройки. Синк только LIVE→репо. |
 
-Пресет = таблица `{ dials, rules, item_build, skill_build }`. Схема — в HANDOFF_PACKAGE §2.
+Пресет = таблица `{ dials, rules, item_build, skill_build }`. Model-facing схема — в
+`backend/style_schema.py`, runtime validation — в `aibattle_style.lua`.
 - **dials** — LLM-facing числа 0..1 (harass_desire, farm_focus, forwardness, push_desire…).
 - **rules** — LLM-facing выборы (hero_priority, low_hp_behavior, tower_aggression…).
 - **constants** — инженерные (в `aibattle_constants.lua`), НЕ в конфиге.
@@ -210,26 +211,28 @@ python tools\betting.py --series <id1> <id2> <id3>   # серия + рыночн
 
 ---
 
-## 6. Backend — LLM-генератор (`backend/`, 320 строк)
+## 6. Backend — LLM-генератор
 
 | Файл | строк | Роль |
 |---|---:|---|
-| `generate_playstyle.py` | 145 | Пайплайн: стратегия-текст → LLM → валидный конфиг (12 диалов + 10 rules). |
-| `system_prompt.txt` | 84 | Промпт генератора (под SF). |
-| `test_generate.py` | 96 | Тесты (11/11). Прогон идёт офлайн через `--radiant-json/--dire-json`, ключ не нужен. |
+| `generate_playstyle.py` | 166 | API/offline JSON → проверенный Lua config. |
+| `style_schema.py` | 30 | Единая model-facing схема: 12 dials + 11 rules. |
+| `system_prompt.txt` | 306 | Живой промпт генератора. |
+| `test_generate.py` | 100 | Офлайн-тесты sanitizing/JSON/Lua output; ключ не нужен. |
 
 ---
 
-## 7. Docs (`docs/`, 2 607 строк) — что читать
+## 7. Docs — что читать
 
 | Файл | Когда открывать |
 |---|---|
 | **`CODE_MAP.md`** (этот) | Первый вход: где что лежит. |
-| **`HANDOFF_PACKAGE.md`** | Продукт, схема конфига, пайплайн тика, 4 структурные проблемы (П1-П4), скоркард. |
+| **`STATE.md`** | Текущий этап, ограничения и следующий gate. |
+| **`BACKLOG.md`** | Только актуальная очередь работ. |
 | **`SPECS.md`** | Незакрытые работы с дизайном (П1-мандат, П3, ловушки). Что делать дальше. |
 | `ARCHITECTURE.md` | Философия, владение, слои rules/dials/constants. |
-| `HANDOFF.md` | История сессий/решений. |
-| `llm_system_prompt.md` / `match_log.md` | Промпт генератора / журнал матчей. |
+| `HANDOFF.md` | Короткий операционный справочник. |
+| `history/` | Старые handoff, backlog, prompt drift и ручной журнал матчей. |
 
 ---
 
