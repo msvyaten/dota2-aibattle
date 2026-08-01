@@ -311,8 +311,33 @@ function M.CreepHitReact(ctx)
 
 	local hasted = bot:HasModifier("modifier_rune_haste")
 	local forcedAttackHp = hasted and 0.24 or 0.30
+
+	-- Lane creeps re-acquire the closest valid target every couple of seconds inside roughly
+	-- 500 units, so the only thing that ENDS creep aggro is standing outside that band --
+	-- swinging back never does. Both step branches below used moveToAttackEdge's default
+	-- backoff, which against a melee pack parks a 500-range hero at max(420, range-60) = 440,
+	-- +35 = 475: inside the acquisition band, so the wave kept chewing. 8924633108 [D] took
+	-- 1665 damage from creeps and mixed sources -- 24% of everything it took, against 230 for
+	-- [R] -- with creep-hit-react step=9, nine steps that moved it nowhere.
+	-- extraBack is per-call on purpose and the shared geometry stays untouched: every OTHER
+	-- caller of moveToAttackEdge asks "how close must I be to attack this", and only this one
+	-- asks "how far must I be for the wave to let go". Different questions, different numbers.
+	-- The front creep of a pack sits well inside the centroid, so a 500-range hero still
+	-- last-hits from here -- this buys the aggro drop without giving up the wave.
+	local CREEP_ACQUIRE = 500
+	local aggroStep = math.max(35, (CREEP_ACQUIRE + 60) - math.max(420, range - 60))
+
 	if not insidePack and hp >= forcedAttackHp and repeatedDamage and dist <= range + 110 and ctx.enemyTowerDanger() == nil then
 		bot.aib_creepReactLast = now
+		-- Repeated damage is the one case where swinging back is strictly wrong: three hits in
+		-- means the wave has settled on us and will keep re-acquiring until we leave. Step out
+		-- and shoot from the edge. The step is a real action, so safety still does not fall
+		-- through to no_action_capped -- and the swing stays as the fallback when the step
+		-- cannot be computed (melee heroes, no location).
+		if range > 300 and ctx.moveToAttackEdge(creep, "creep-hit-react-aggro-step", aggroStep) then
+			Style.Intent(bot, "creep-hit-react", string.format("dist=%.0f hp=%.0f hits=%d reason=aggro_step", dist, hp * 100, bot.aib_creepReactCount or 0), 1.0)
+			return true
+		end
 		Style.Intent(bot, "creep-hit-react", string.format("dist=%.0f hp=%.0f hits=%d reason=forced_attack", dist, hp * 100, bot.aib_creepReactCount or 0), 1.0)
 		if not alreadySwinging then
 			bot:Action_AttackUnit(creep, true)
@@ -321,9 +346,13 @@ function M.CreepHitReact(ctx)
 		return true
 	end
 
-	if hp >= 0.38 and dist <= range + 160 and ctx.enemyTowerDanger() == nil then
+	-- Floor lowered from 0.38 to forcedAttackHp: the band where standing in the wave costs the
+	-- most is 30-38%, and that was exactly the band where the step was denied and the bot had
+	-- nothing left but to trade with the creeps. 8924633108 [D] spent t=102-148 there, fifty
+	-- seconds at 23-47% with last hits frozen at 5-6.
+	if hp >= forcedAttackHp and dist <= range + 160 and ctx.enemyTowerDanger() == nil then
 		Style.Intent(bot, "creep-hit-react", string.format("dist=%.0f hp=%.0f hits=%d reason=edge_attack", dist, hp * 100, bot.aib_creepReactCount or 0), 1.5)
-		if ctx.moveToAttackEdge(creep, "creep-hit-react-step", 35) then
+		if ctx.moveToAttackEdge(creep, "creep-hit-react-step", aggroStep) then
 			bot.aib_creepReactLast = now
 			return true
 		end
