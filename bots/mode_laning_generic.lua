@@ -463,19 +463,6 @@ local function ThinkLocationReport()
 	end
 end
 
--- Pre-game positioning (DotaTime < 0, GAMEMODE_1V1MID). Returns true when Think() should exit.
--- Positions based on pregame_behavior rule; attacks enemy hero on sight.
-local function AIB_Dist2D(a, b)
-	if a == nil or b == nil then return math.huge end
-	local dx, dy = a.x - b.x, a.y - b.y
-	return math.sqrt(dx*dx + dy*dy)
-end
-
-local function AIB_ResetVisualAFK(now, loc)
-	bot.aib_afkAnchorLoc = loc
-	bot.aib_afkAnchorTime = now
-end
-
 local AIB_MoveAwayFrom = AIBUtils.MoveAwayFrom
 
 local function AIB_TowardFountainFrom(loc, distance)
@@ -640,6 +627,11 @@ end
 
 local function AIB_RuntimeCtx(dials, rules, extra)
 	local ctx = AIB_LaningModuleCtx(dials, rules)
+	local snapshot = AIBLaningContext.Build(bot, dials, rules, nEnemyCreeps, nAllyCreeps,
+		botAssignedLane, botAttackRange)
+	for k, v in pairs(snapshot) do
+		if ctx[k] == nil then ctx[k] = v end
+	end
 	ctx.safeCounter = AIB_SafeCounter
 	ctx.moveAwayFrom = AIB_MoveAwayFrom
 	ctx.towardFountain = AIB_TowardFountainFrom
@@ -1081,7 +1073,7 @@ local function AIB_BuildDesireCandidates(dials, rules, runtimeCtx, intentCtx)
 	-- hero kills live in the urgent arbiter (earlier stage) and still preempt.
 	do
 		local lhCreep, lhSoon = GetBestLastHitCreep(nEnemyCreeps)
-		local siegeCommitted = bot.aib_siegeCommitUntil ~= nil and DotaTime() < bot.aib_siegeCommitUntil
+		local siegeCommitted = AIBLaneSiege.Active(bot)
 		-- farm_focus reaches last-hitting HERE, and until 23.07 it reached it nowhere at all:
 		-- binding.py measured r=-0.01 between the dial and lh/min across a 0.15-0.72 spread,
 		-- and reading its consumers explained why -- two `< 0.25` booleans, rune creep
@@ -1227,8 +1219,8 @@ local function ThinkLaningCore(dials, rules)
 	elseif debugNoForward then
 		Style.DiagRL(bot, "dbg-no-fwd", 10)
 	end
-	local intentCtx = AIBLaningContext.Build(bot, dials, rules, nEnemyCreeps, nAllyCreeps, botAssignedLane, botAttackRange)
 	local runtimeCtx = AIB_RuntimeCtx(dials, rules, { debugSkeleton = debugSkeleton })
+	local intentCtx = runtimeCtx
 	if DotaTime() >= 0 and DotaTime() <= 25 and not bot.aib_postHornRecoveryReset then
 		bot.aib_postHornRecoveryReset = true
 		AIB_ClearRecoveryState()
@@ -1268,6 +1260,13 @@ local function ThinkLaningCore(dials, rules)
 	local needMove = csAllowed and (csDistNow > botAttackRange or csSoon == true)
 	runtimeCtx.csAllowed = csAllowed
 	runtimeCtx.needMove = needMove
+	runtimeCtx.hitCreep = hitCreep
+	runtimeCtx.csSoon = csSoon
+	runtimeCtx.csDistNow = csDistNow
+	runtimeCtx.rangedSpacing = function() return AIBLaneSafety.RangedMeleePackSpacing(runtimeCtx) end
+	runtimeCtx.lastHitWatchdog = function() return AIBLaneSafety.LastHitWatchdog(runtimeCtx) end
+	runtimeCtx.siegeIntent = function() return AIB_SiegeIntent(dials, rules) end
+	runtimeCtx.bestDeny = GetBestDenyCreep
 	local aib_deathSurvive = GetHeroDeaths(bot:GetPlayerID()) >= 1 and J.GetHP(bot) < AIBLanePolicy.Hp.secondDeathSurvive
 	runtimeCtx.deathSurvive = aib_deathSurvive
 	-- low-hp-hold via the PURE probe (no diag). The low-hp-limit signature stays lazy in the
@@ -1348,25 +1347,7 @@ local function ThinkLaningCore(dials, rules)
 	-- (36) and silently reorder a third pair.
 	local farmFocusScore = math.max(36.4, math.min(39.6, 38 + 4 * ((dials.farm_focus or 0.5) - 0.5)))
 	tail("creep-work", farmFocusScore, "lanework", "ready", function()
-		return AIBLaneCreeps.HandleCreepWork({
-			bot = bot,
-			rules = rules,
-			enemyCreeps = nEnemyCreeps,
-			allyCreeps = nAllyCreeps,
-			attackRange = botAttackRange,
-			hitCreep = hitCreep,
-			csSoon = csSoon,
-			csAllowed = csAllowed,
-			csDistNow = csDistNow,
-			needMove = needMove,
-			diag = AIB_Diag,
-			moveToAttackEdge = AIB_MoveToAttackEdgeOf,
-			rangedSpacing = function() return AIBLaneSafety.RangedMeleePackSpacing(runtimeCtx) end,
-			lastHitWatchdog = function() return AIBLaneSafety.LastHitWatchdog(runtimeCtx) end,
-			enemyTowerDanger = AIB_EnemyTowerDanger,
-			siegeIntent = function() return AIB_SiegeIntent(dials, rules) end,
-			bestDeny = GetBestDenyCreep,
-		})
+		return AIBLaneCreeps.HandleCreepWork(runtimeCtx)
 	end)
 	tail("ability-harass", 36, "lanework", "ready", function() return AIBLaneCombat.AbilityHarass(runtimeCtx) end)
 
@@ -1384,7 +1365,7 @@ local function ThinkLaningCore(dials, rules)
 		local recentWatchdog = bot.aib_csWatchLast ~= nil and nowFwd - bot.aib_csWatchLast < 3.0
 		local recentTopEmpty = bot.aib_topArbiterEmptyLast ~= nil and nowFwd - bot.aib_topArbiterEmptyLast < AIBLanePolicy.Forward.suppressAfterEmptyDesire
 		local runeCommit = bot.aib_bottleRuneStarted ~= nil and nowFwd - bot.aib_bottleRuneStarted < AIB_RUNE_COMMIT_SECONDS
-		local siegeCommit = bot.aib_siegeCommitUntil ~= nil and nowFwd <= bot.aib_siegeCommitUntil
+		local siegeCommit = AIBLaneSiege.Active(bot, nowFwd)
 		-- Yield to whoever owns the motor, exactly as lane-line does. Recovery movers claim at
 		-- 90-110, so this also stops forwardness dragging a retreating bot back out.
 		local fwdMotor = AIBMotor.Active(bot)
@@ -1591,4 +1572,3 @@ function AnnounceMessages()
 		end
 	end
 end
-

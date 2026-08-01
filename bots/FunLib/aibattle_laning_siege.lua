@@ -7,6 +7,20 @@ local M = {}
 local J = require(GetScriptDirectory()..'/FunLib/jmz_func')
 local AIBEngine = require(GetScriptDirectory()..'/FunLib/aibattle_engine')
 
+function M.Commit(bot, ttl, now)
+	if bot == nil then return end
+	bot.aib_siegeCommitUntil = (now or DotaTime()) + (ttl or 0)
+end
+
+function M.Active(bot, now)
+	return bot ~= nil and bot.aib_siegeCommitUntil ~= nil
+		and (now or DotaTime()) <= bot.aib_siegeCommitUntil
+end
+
+function M.Release(bot)
+	if bot ~= nil then bot.aib_siegeCommitUntil = nil end
+end
+
 function M.Think(ctx)
 	local bot = ctx.bot
 	local dials = ctx.dials or {}
@@ -120,13 +134,13 @@ function M.Think(ctx)
 	if not alliedTank then
 		-- tower_aggression=always without wave cover: reckless tower hits.
 		if twrDist <= attackRange + 60 then
-			bot.aib_siegeCommitUntil = now + 2.0
+			M.Commit(bot, 2.0, now)
 			bot:Action_AttackUnit(twr, true)
 			ctx.towerOpportunity("hit", string.format("phase=no_tank_always wave=%d tower=%.0f", waveCount, twrDist), 2.0)
 			ctx.diag("siege-no-tank-tower")
 			return true
 		end
-		bot.aib_siegeCommitUntil = now + 2.0
+		M.Commit(bot, 2.0, now)
 		ctx.towerOpportunity("step", string.format("phase=no_tank_always wave=%d tower=%.0f", waveCount, twrDist), 2.0)
 		return ctx.moveToAttackEdge(twr, "siege-no-tank-step", 40)
 	end
@@ -142,7 +156,7 @@ function M.Think(ctx)
 
 	if alliedTank and waveAtTower and twrDist <= attackRange + 180
 		and J.GetHP(bot) >= (ctx.enemyDeadRecently() and 0.26 or 0.34) then
-		bot.aib_siegeCommitUntil = now + 2.4
+		M.Commit(bot, 2.4, now)
 		bot:Action_AttackUnit(twr, true)
 		ctx.towerOpportunity("hit", string.format("phase=terminal wave=%d tower=%.0f", waveCount, twrDist), 2.0)
 		ctx.diag("siege-terminal-tower")
@@ -156,7 +170,7 @@ function M.Think(ctx)
 		local hpAdv = J.GetHP(bot) >= J.GetHP(enemy) + 0.08
 		local killWindow = J.GetHP(enemy) <= 0.60
 		if hasDamageRune or hpAdv or killWindow or (rules.hero_priority or "default") == "always" then
-			bot.aib_siegeCommitUntil = now + 1.2
+			M.Commit(bot, 1.2, now)
 			bot:Action_AttackUnit(enemy, false)
 			ctx.towerOpportunity("hit", string.format("phase=hero wave=%d hero=%.0f ehp=%.0f", waveCount, enemyDist, J.GetHP(enemy) * 100), 2.0)
 			ctx.diag("siege-hero")
@@ -172,9 +186,9 @@ function M.Think(ctx)
 	-- recovery-wait latch in b4b24af -- a latch re-evaluated on time alone while the world
 	-- it was latched against moved on. Dropping the latch falls through to the wave/default
 	-- branches below, which do their own gating, so no tick is burned.
-	if bot.aib_siegeCommitUntil ~= nil and now <= bot.aib_siegeCommitUntil then
+	if M.Active(bot, now) then
 		if not waveAtTower and twrDist <= attackRange + 260 then
-			bot.aib_siegeCommitUntil = nil
+			M.Release(bot)
 			ctx.towerOpportunity("blocked_wave_gone", string.format("wave=%d tower=%.0f", waveCount, twrDist), 4.0)
 			ctx.diag("siege-commit-wave-gone")
 		else
@@ -185,13 +199,13 @@ function M.Think(ctx)
 
 	if strongWaveAtTower and (cwp == "push" or ctx.enemyDeadRecently() or enemyFarOrWeak) then
 		if twrDist <= attackRange + 60 then
-			bot.aib_siegeCommitUntil = now + 2.2
+			M.Commit(bot, 2.2, now)
 			bot:Action_AttackUnit(twr, true)
 			ctx.towerOpportunity("hit", string.format("phase=wave wave=%d tower=%.0f", waveCount, twrDist), 2.0)
 			ctx.diag("siege-wave-tower")
 			return true
 		end
-		bot.aib_siegeCommitUntil = now + 2.2
+		M.Commit(bot, 2.2, now)
 		ctx.towerOpportunity("step", string.format("phase=wave wave=%d tower=%.0f", waveCount, twrDist), 2.0)
 		return ctx.moveToAttackEdge(twr, "siege-wave-step", 20)
 	end
@@ -199,14 +213,14 @@ function M.Think(ctx)
 	for _, creep in pairs(ctx.enemyCreeps or {}) do
 		if J.IsValid(creep) and J.CanBeAttacked(creep)
 			and GetUnitToUnitDistance(bot, creep) <= attackRange + 40 then
-			bot.aib_siegeCommitUntil = now + 1.6
+			M.Commit(bot, 1.6, now)
 			bot:Action_AttackUnit(creep, true)
 			ctx.diag("siege-creep")
 			return true
 		end
 	end
 	if twrDist <= attackRange + 60 then
-		bot.aib_siegeCommitUntil = now + 1.6
+		M.Commit(bot, 1.6, now)
 		bot:Action_AttackUnit(twr, true)
 		ctx.towerOpportunity("hit", string.format("phase=default wave=%d tower=%.0f", waveCount, twrDist), 2.0)
 		ctx.diag("siege-tower")
@@ -214,7 +228,7 @@ function M.Think(ctx)
 	end
 	if bot.aib_siegeLast == nil or now - bot.aib_siegeLast >= 1.0 then
 		bot.aib_siegeLast = now
-		bot.aib_siegeCommitUntil = now + 1.6
+		M.Commit(bot, 1.6, now)
 		ctx.towerOpportunity("step", string.format("phase=default wave=%d tower=%.0f", waveCount, twrDist), 2.0)
 		ctx.moveToAttackEdge(twr, "siege-step", 30)
 	else

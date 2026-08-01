@@ -118,11 +118,6 @@ function M.PreCreepStandoff(ctx)
 	local bot = ctx.bot
 	local now = DotaTime()
 	if now > 25 then return false end
-	if now >= 0 and not bot.aib_postHornRecoveryReset then
-		bot.aib_postHornRecoveryReset = true
-		ctx.clearRecovery()
-		ctx.state("post-horn-reset", "reason=precreep", 2.0)
-	end
 	local range = attackRange(ctx)
 	-- Yield to laning-core only once an ENEMY creep is actually last-hittable-close, not the
 	-- instant any creep is within 900. Root of "Dire drifts to river lowground and tanks poke

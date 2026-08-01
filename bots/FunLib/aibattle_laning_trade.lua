@@ -38,28 +38,6 @@ local function isKillable(bot, enemy, dials)
 	return enemy:GetHealth() <= bot:GetAttackDamage() * 3.0
 end
 
-local function moveToAttackEdge(bot, target, range)
-	if bot == nil or target == nil then return false end
-	range = range or bot:GetAttackRange()
-	if range <= 300 then
-		bot:Action_MoveToUnit(target)
-		return true
-	end
-	if target.GetLocation == nil or bot.GetLocation == nil then return false end
-	local okTarget, tl = pcall(function() return target:GetLocation() end)
-	local okBot, bl = pcall(function() return bot:GetLocation() end)
-	if not okTarget or not okBot or tl == nil or bl == nil then return false end
-	local dx, dy = bl.x - tl.x, bl.y - tl.y
-	local d = math.sqrt(dx*dx + dy*dy)
-	if d < 1 then
-		bot:Action_MoveToLocation(bl + RandomVector(160))
-		return true
-	end
-	local safe = math.max(260, range - 80)
-	bot:Action_MoveToLocation(Vector(tl.x + (dx/d)*safe, tl.y + (dy/d)*safe, tl.z))
-	return true
-end
-
 function M.KillLock(ctx)
 	local bot = ctx.bot
 	local range = ctx.attackRange or bot:GetAttackRange()
@@ -93,7 +71,7 @@ function M.KillLock(ctx)
 			bot:Action_AttackUnit(enemy, true)
 			Style.Diag(bot, win.mutualLow and "mutual-low-finish-atk" or "kill-lock-atk")
 		else
-			if not moveToAttackEdge(bot, enemy, range) then return false end
+			if ctx.moveToAttackEdge == nil or not ctx.moveToAttackEdge(enemy, nil, 0) then return false end
 			Style.Diag(bot, win.mutualLow and "mutual-low-finish-chase" or "kill-lock-chase")
 		end
 	end, string.format("dist=%.0f ehp=%.0f hp=%.0f exec=%s atk=%s mutual=%s",
@@ -127,7 +105,7 @@ function M.HealInterrupt(ctx)
 				and hp >= chaseMinHp
 				and (not towerIsThreat or (isHeal and hp >= 0.45)) then
 				return Engine.Intent("channel-interrupt", isHeal and 138 or 118, "enemy_" .. channelKey, function()
-					if not moveToAttackEdge(bot, enemy, range) then return false end
+					if ctx.moveToAttackEdge == nil or not ctx.moveToAttackEdge(enemy, nil, 0) then return false end
 					Style.Diag(bot, "channel-interrupt-chase")
 				end, string.format("dist=%.0f hp=%.0f kind=%s", dist, hp*100, channelKey))
 			end
@@ -176,7 +154,7 @@ function M.PassingHeroTrade(ctx)
 	end
 
 	return Engine.Intent("hero-pass", 90, "nearby_enemy", function()
-		if not moveToAttackEdge(bot, enemy, range) then return false end
+		if ctx.moveToAttackEdge == nil or not ctx.moveToAttackEdge(enemy, nil, 0) then return false end
 		bot.aib_passHeroLast = DotaTime()
 		Style.Diag(bot, "hero-pass-chase")
 	end, string.format("dist=%.0f hp=%.0f", dist, hp*100))

@@ -102,26 +102,6 @@ local initSmoke = false
 
 local currentTime, botLevel, botGold, botWorth, botMode, botHP, botCourierValue, botStashValue, botDistanceFromFountain
 
-local function AIBItemCost(name)
-	if okAIBItemPolicy and AIBItemPolicy.ItemCost ~= nil then return AIBItemPolicy.ItemCost(name) end
-	local ok, cost = pcall(GetItemCost, name)
-	return (ok and type(cost) == 'number') and cost or 0
-end
-
-local function AIBMissingBuildCheckpoint()
-	if okAIBItemPolicy and okAIB and AIBItemPolicy.MissingBuildCheckpoint ~= nil then
-		return AIBItemPolicy.MissingBuildCheckpoint(bot, AIBStyle)
-	end
-	return nil, 0
-end
-
-local function AIBProtectBottleGold(itemName)
-	if okAIBItemPolicy and okAIB and AIBItemPolicy.ProtectConsumableGold ~= nil then
-		return AIBItemPolicy.ProtectConsumableGold(bot, AIBStyle, itemName)
-	end
-	return false
-end
-
 local function AIBPurchaseConsumable(itemName)
 	if okAIBItemPolicy and okAIB and AIBItemPolicy.PurchaseConsumable ~= nil then
 		return AIBItemPolicy.PurchaseConsumable(bot, AIBStyle, itemName)
