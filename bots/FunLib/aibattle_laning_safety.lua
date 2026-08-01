@@ -553,6 +553,7 @@ function M.VisualHoldHeartbeat(ctx)
 		end
 		if enemyDist <= range + 180 then return ctx.moveToAttackEdge(enemy, "visual-hold-hero-step", 0) end
 	end
+	local alreadyAtEdge = false
 	if (reason == "creep_damage" or reason == "creep_in_range") and creep ~= nil then
 		if creepDist <= range + (hardHold and 100 or 45) then
 			bot:Action_AttackUnit(creep, true)
@@ -574,8 +575,13 @@ function M.VisualHoldHeartbeat(ctx)
 		if edge == nil or GetUnitToLocationDistance(bot, edge) > Const.Visual.holdDistance then
 			return ctx.moveToAttackEdge(creep, "visual-hold-creep-step", 35)
 		end
+		alreadyAtEdge = true
 	end
-	if hardHold and (reason == "creep_damage" or reason == "creep_in_range" or reason == "empty") then
+	-- alreadyAtEdge carries the fall-through. Without it the next-creep step is gated behind
+	-- hardHold, so a bot that arrived here in the first seconds of a hold would skip this branch
+	-- and drop to the lane-front leg below -- which is not a small step, it is a walk into the
+	-- wave. The whole point of falling through was to take one deliberate step, not to widen it.
+	if (hardHold or alreadyAtEdge) and (reason == "creep_damage" or reason == "creep_in_range" or reason == "empty") then
 		local weakCreep = ctx.weakestAttackableEnemyCreep(range * 1.8)
 		if weakCreep ~= nil then return ctx.moveToAttackEdge(weakCreep, "visual-hold-hard-creep", 35) end
 	end
