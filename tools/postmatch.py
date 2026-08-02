@@ -177,8 +177,13 @@ def report(match_id):
         # the ~500 creep acquisition band -- so stepping and not stepping cost the same HP.
         # The number that decides whether this worked is the creep share of damage taken, NOT
         # the step count: 8924633108 [D] already stepped nine times and still ate 24%.
-        print("       aggro-step=%d (replaces stand-and-swing) | creep+mixed share of damage taken: see 'damage by source'"
-              % diag_max(text, side, "creep-hit-react-aggro-step"))
+        # BOTH step branches use the widened aggroStep distance -- the aggro-step counter only
+        # covers the repeated-damage path, so reading it alone said "never fires" for three
+        # matches while creep-hit-react-step was doing the work 7-12 times a game. Print the pair,
+        # and remember the verdict is the creep+mixed damage share, not either count.
+        print("       steps: aggro-step=%d + edge-step=%d (both use the widened distance)"
+              % (diag_max(text, side, "creep-hit-react-aggro-step"),
+                 diag_max(text, side, "creep-hit-react-step")))
         # recovery-timeout was structurally 0: the empty-bottle branch reset the latch that
         # feeds its 10s timer on every tick. Non-zero here is the fix landing, not a fault.
         print("       recovery-latch(b4b24af): recovery-timeout=%d (was structurally 0) | wait=%d yield=%d"
