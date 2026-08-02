@@ -938,6 +938,14 @@ M.HeroAbilityConfig = {
     ["npc_dota_hero_juggernaut"] = {
         -- Blade Fury: no-target AoE spin at 280 radius; cast when enemy is adjacent.
         harass  = { { name = "juggernaut_blade_fury", type = "no_target", max_range = 280 } },
+        -- Omnislash was missing, which quietly killed two things: ExecuteReady returned false
+        -- for this hero always, so kill-lock's execute leg could never fire, and the
+        -- execute_threshold dial -- one of the five proven BOUND dials -- did nothing at all.
+        -- A config asking for aggressive finishing would have been silently ignored, which is
+        -- our worst class of failure: the knob exists, the prompt sets it, the engine shrugs.
+        -- 350 is the cast range; unlike Requiem this is unit-targeted, so it needs a target in
+        -- range rather than a radius to stand in.
+        execute = { name = "juggernaut_omni_slash", type = "unit", max_range = 350 },
     },
     ["npc_dota_hero_zeus"] = {
         harass = {
