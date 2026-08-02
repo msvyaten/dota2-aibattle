@@ -35,7 +35,10 @@ local function isKillable(bot, enemy, dials)
 	if exec > 0 and J.GetHP(enemy) <= exec then return true end
 	-- 3.0x (not 2.2x): GetAttackDamage ignores Raze/Requiem burst, so 2.2x under-counted SF's
 	-- real kill range and the bot passed on winnable commits (15 kill windows -> 2 kills/match).
-	return enemy:GetHealth() <= bot:GetAttackDamage() * 3.0
+	-- That is an SF number, and it used to be spelled out here as a literal in shared code;
+	-- Style.AttackDamageMult owns it now and still answers 3.0 for every hero that has not
+	-- declared its own.
+	return enemy:GetHealth() <= bot:GetAttackDamage() * Style.AttackDamageMult(bot, enemy)
 end
 
 -- One entry point for "is the ramp a reason to refuse", so this file cannot drift from the

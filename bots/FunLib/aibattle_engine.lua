@@ -96,7 +96,8 @@ function M.KillWindow(ctx)
 			local ehp = J.GetHP(enemy)
 			local dist = GetUnitToUnitDistance(bot, enemy)
 			local exec = dials.execute_threshold or 0
-			local attackKill = enemy:GetHealth() <= bot:GetAttackDamage() * (ctx.attackDamageMult or 3.0)
+			local attackKill = enemy:GetHealth()
+				<= bot:GetAttackDamage() * (ctx.attackDamageMult or Style.AttackDamageMult(bot, enemy))
 			-- An HP number alone is not a kill window: see Style.ExecuteReady. Without the
 			-- readiness test this leg made every enemy under execute_threshold permanently
 			-- "killable" and handed the tick to a 1045-unit chase, starving last-hits.
@@ -112,6 +113,12 @@ function M.KillWindow(ctx)
 			if mutualLow then maxDist = math.max(maxDist, math.max(700, range + 260)) end
 			if lowFarmAlways or hpAdv then maxDist = math.max(maxDist, range + 520) end
 			if execute or attackKill or mutualLow or (lowFarmAlways and ehp <= Const.Fight.lowFarmEnemyHp and hp >= 0.34 and hpAdv) then
+				-- Which leg opened the window, so the per-hero attack multiplier has an
+				-- acceptance of its own: killwin-atk is the leg it narrows, killwin-exec and
+				-- killwin-mutual are the legs it must NOT touch. A drop in all three means
+				-- the change went further than intended.
+				Style.DiagRL(bot, attackKill and "killwin-atk"
+					or (execute and "killwin-exec" or "killwin-mutual"), 3)
 				return {
 					enemy = enemy,
 					hp = hp,

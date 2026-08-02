@@ -265,6 +265,12 @@ def report(match_id):
         # rejected: doomed = somebody else finishes it first, tanky = our hit never kills it.
         print("       deny kill-test: rejected doomed=%d tanky=%d (want deny-act DOWN, dn same or UP)"
               % (diag_max(text, side, "deny-cand-doomed"), diag_max(text, side, "deny-cand-tanky")))
+        # Per-hero kill-window multiplier (Style.AttackDamageMult). Juggernaut declares
+        # base=2.0 / burst=3.0; every other hero still answers 3.0, so exec and mutual are the
+        # control legs -- they must hold while atk falls.
+        print("       kill window by leg (RL3): atk=%d (narrowed for melee) exec=%d mutual=%d"
+              % (diag_max(text, side, "killwin-atk"), diag_max(text, side, "killwin-exec"),
+                 diag_max(text, side, "killwin-mutual")))
         bl = buy_loop(text, side)
         print("       buy loop: saving x%d %s" % (bl["saving"][0], bl["saving"][1] or "(silent)"))
         print("                 stalled x%d %s" % (bl["stalled"][0], bl["stalled"][1] or "(silent)"))

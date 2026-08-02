@@ -946,6 +946,14 @@ M.HeroAbilityConfig = {
         -- 350 is the cast range; unlike Requiem this is unit-targeted, so it needs a target in
         -- range rather than a radius to stand in.
         execute = { name = "juggernaut_omni_slash", type = "unit", max_range = 350 },
+        -- Juggernaut is a right-clicker with one burst button. With Omnislash up and the
+        -- target inside its cast range he really can end a fight from range, so keep SF's
+        -- 3.0 there. With it down, "three attack damages" is a window he cannot collect: he
+        -- has to close to 150 first, and a hero that is walking away gives him about two
+        -- landed hits. base=2.0 is that estimate, not a tuned number -- it is the first
+        -- honest value for a hero with no burst, and the acceptance below is what decides
+        -- whether it moved anything.
+        kill_mult = { base = 2.0, burst = 3.0 },
     },
     ["npc_dota_hero_zeus"] = {
         harass = {
@@ -1143,6 +1151,31 @@ function M.ExecuteReady(bot, enemy)
         return false
     end
     return true
+end
+
+-- How much more than a right-click a commit can actually deliver.
+--
+-- "enemy:GetHealth() <= GetAttackDamage() * 3.0" is the kill window used by both the engine's
+-- KillWindow and trade's isKillable, and the 3.0 is a Shadow Fiend constant living in shared
+-- code: it was raised from 2.2 because GetAttackDamage ignores Raze and Requiem burst. A hero
+-- whose damage IS its right-click gets the same three-attack window and thinks it can finish
+-- fights it cannot reach. The engine already had a `ctx.attackDamageMult` hook for exactly
+-- this -- read in one place, written in NONE, so it has always been 3.0. Same failure as
+-- Juggernaut's missing execute entry: the knob exists, nothing fills it, the engine shrugs.
+--
+-- The number belongs next to the burst it is accounting for, so it lives in
+-- HeroAbilityConfig. Absent entry = 3.0, i.e. every hero currently in the table keeps exactly
+-- the behaviour it has today; only a hero that declares one changes.
+--   kill_mult = 2.4                      -- flat
+--   kill_mult = { base = 2.0, burst = 3.0 }  -- burst applies while the execute can actually fire
+function M.AttackDamageMult(bot, enemy)
+    if bot == nil then return 3.0 end
+    local cfg = M.HeroAbilityConfig[bot:GetUnitName()]
+    local m = cfg and cfg.kill_mult
+    if m == nil then return 3.0 end
+    if type(m) == "number" then return m end
+    if m.burst ~= nil and enemy ~= nil and M.ExecuteReady(bot, enemy) then return m.burst end
+    return m.base or 3.0
 end
 
 -- Handles unit/point/no_target types. For no_target executes (SF Requiem, Zeus ult):
