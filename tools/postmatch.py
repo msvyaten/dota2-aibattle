@@ -206,11 +206,24 @@ def report(match_id):
         # creep (gated off for last_hit_only), so the watchdog now declines those ticks
         # entirely. Standing still while regenerating is the intended look, but if `idle` or
         # anti-idle@2 empty-wins spike, the bot is being left with no owner too often.
-        print("       anti-idle(70999f0): anti-idle-lane=%d (want DOWN) enter=%d creep=%d push=%d"
-              " | RISK: idle=%d anti-idle-empty=%d"
-              % (diag_max(text, side, "anti-idle-lane"), diag_max(text, side, "anti-idle-enter"),
-                 diag_max(text, side, "anti-idle-creep"), diag_max(text, side, "anti-idle-push"),
-                 diag_max(text, side, "idle"),
+        # enter and idle are the ONLY two counters in this block that share a rate limit
+        # (DiagRL 3s), so they are the only pair that may be divided by each other. lane and
+        # lowhp-back are DiagRL 5s, combat is a plain Diag -- reading "lane=70 vs combat=5" as
+        # a ratio is the mistake this line used to invite. 8925573332 [R]: 102 of 158
+        # activations ended in no action at all, and the melee pair sits at 57-66% against
+        # 29-49% on SF, i.e. the watchdog both fires more often and comes back emptier.
+        n_enter = diag_max(text, side, "anti-idle-enter")
+        n_idle = diag_max(text, side, "idle")
+        pct = ("%d%%" % round(100.0 * n_idle / n_enter)) if n_enter else "n/a"
+        print("       anti-idle(70999f0): enter=%d -> did nothing %d (%s of them) [same RL, comparable]"
+              % (n_enter, n_idle, pct))
+        print("         legs (RL5): lane=%d (want DOWN) lowhp-back=%d push=%d | (RL3): lowhp-step=%d"
+              " | (plain): combat=%d creep=%d lowhp-cs=%d | empty-wins=%d"
+              % (diag_max(text, side, "anti-idle-lane"), diag_max(text, side, "anti-idle-lowhp-back"),
+                 diag_max(text, side, "anti-idle-push"),
+                 diag_max(text, side, "anti-idle-lowhp-step"),
+                 diag_max(text, side, "anti-idle-combat"), diag_max(text, side, "anti-idle-creep"),
+                 diag_max(text, side, "anti-idle-lowhp-cs"),
                  occ(text, side, "reason=empty_action winner=anti-idle")))
         print("       no_sustain(183a5f7): no_sustain_floor=%d (was structurally 0) | regen_lane_floor=%d"
               % (occ(text, side, "reason=no_sustain_floor"), occ(text, side, "reason=regen_lane_floor")))
