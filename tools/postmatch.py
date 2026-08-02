@@ -304,9 +304,10 @@ def report(match_id):
     # the damage-by-source block) DOWN, with commit/terminal holding. commit/terminal
     # collapsing means the reordering turned sieging off rather than fixing the exit.
     for side in ("R", "D"):
-        print("  [%s] backoff=%d (was structurally 0; want UP) aggro-drop=%d no-dive=%d"
-              " | siege commit=%d terminal=%d (want HELD)"
+        print("  [%s] backoff=%d (was structurally 0; want UP) parked=%d (yielded, not idle)"
+              " aggro-drop=%d no-dive=%d | siege commit=%d terminal=%d (want HELD)"
               % (side, diag_max(text, side, "siege-tower-backoff"),
+                 diag_max(text, side, "siege-backoff-parked"),
                  diag_max(text, side, "tower-aggro-drop"), diag_max(text, side, "no-dive"),
                  diag_max(text, side, "siege-commit-tower"),
                  diag_max(text, side, "siege-terminal-tower")))

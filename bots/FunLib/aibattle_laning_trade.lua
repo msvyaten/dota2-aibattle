@@ -127,7 +127,16 @@ function M.HealInterrupt(ctx)
 				return Engine.Blocked("channel-interrupt", 85, "low_hp", string.format("hp=%.0f kind=%s", hp*100, channelKey))
 			end
 			local towerIsThreat = towerThreat(ctx)
-			if dist <= range + 120 and (not towerIsThreat or (isHeal and hp >= 0.45)) then
+			-- The bypass below is licensed for hitting from where we already stand -- that is
+			-- the healingSafeHit case DivePolicy itself permits. But the branch reached to
+			-- range+120, and those last 120 units the bot walks itself, unexamined, because
+			-- towerThreat reads the CURRENT position. Codex's audit: the comment promised a
+			-- standing hit and the code did not guarantee one. Inside attack range nothing
+			-- moves; past it this is a small chase, and it owes the same destination question
+			-- the real chase below already asks.
+			local wouldStep = dist > range
+			if dist <= range + 120 and (not towerIsThreat or (isHeal and hp >= 0.45))
+				and not (wouldStep and chaseIntoTower(enemy)) then
 				return Engine.Intent("channel-interrupt", isHeal and 150 or 132, "enemy_" .. channelKey, function()
 					bot:Action_AttackUnit(enemy, true)
 					Style.Diag(bot, "channel-interrupt-atk")

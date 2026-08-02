@@ -333,17 +333,24 @@ local function itemCost(name)
 	return fallback[name] or 0
 end
 
+-- What is the bot actually saving for right now?
+--
+-- This used to be a hardcoded list -- bottle, magic wand, treads, lifesteal -- walked in order,
+-- returning the first one not owned. Neither Juggernaut's build nor either live config contains
+-- a bottle or a lifesteal, so it returned "item_bottle" on every call for the whole match and
+-- the guard below spent the game protecting savings for an item nobody would ever buy. Found by
+-- Codex's audit, and it is the reason 8f5993e only half worked: lifting the count cap in the
+-- caller just handed the refusal to this one, which is why 8926148548 still read bought=2 on
+-- both sides with everything above it coming through the critical bypass.
+--
+-- The buy loop already knows the answer and publishes it on the bot: currBuyingBasicItem is the
+-- component it is trying to afford this second. Ask the owner instead of guessing, and the
+-- answer is right for every hero and every build, including ones we have not written yet.
 local function missingCheckpointItem(bot)
-	local checkpoints = {
-		"item_bottle",
-		"item_magic_wand",
-		"item_power_treads",
-		"item_lifesteal",
-	}
-	for _, name in ipairs(checkpoints) do
-		if not hasItem(bot, name) then return name, itemCost(name) end
-	end
-	return nil, 0
+	local name = bot.currBuyingBasicItem or bot.currBuyingItemInPurchaseList
+	if type(name) ~= "string" then return nil, 0 end
+	if hasItem(bot, name) then return nil, 0 end
+	return name, itemCost(name)
 end
 
 local function consumableSpendBlocked(bot, hp, gold, itemName)
@@ -355,11 +362,11 @@ local function consumableSpendBlocked(bot, hp, gold, itemName)
 		recoveryPlan(bot, "buy_" .. tostring(itemName), "checkpoint_block", string.format("item=%s hp=%.0f gold=%d", checkpoint, hp*100, gold), 3.0)
 		return true
 	end
-	if hp >= 0.18 and checkpoint ~= nil and (bot.aib_recBuySpent or 0) >= 220 then
-		Style.Blocked(bot, "recovery-buy", "consumable_budget", string.format("item=%s hp=%.0f spent=%d", checkpoint, hp*100, bot.aib_recBuySpent or 0), 8.0)
-		recoveryPlan(bot, "buy_" .. tostring(itemName), "budget_block", string.format("item=%s hp=%.0f spent=%d", checkpoint, hp*100, bot.aib_recBuySpent or 0), 3.0)
-		return true
-	end
+	-- The 220-gold lifetime budget that used to sit here is gone. It was the same disease as
+	-- the count cap forty lines down -- a whole-match total that nothing reset, worth exactly
+	-- two salves -- and having two budgets meant lifting one changed nothing. There is one
+	-- budget owner now, the gold-scaled allowance in the caller, and one checkpoint test here,
+	-- which is anchored to gold (`gold >= cost - 160`) so it cannot fire forever.
 	return false
 end
 

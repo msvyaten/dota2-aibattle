@@ -42,8 +42,26 @@ function M.WantsTowerBackoff(bot, twr, now)
 	-- target == bot, not "a hero on our team": here counting ourselves IS the point, and in a
 	-- five-man game a tower shooting an ally is not a reason for us to walk.
 	if target ~= nil and target == bot then return true end
-	return bot.aib_towerBackoffUntil ~= nil and (now or DotaTime()) < bot.aib_towerBackoffUntil
+	-- Latched but ALREADY at the safe point is not a claim on the tick. Answering true there
+	-- made CanAct promise an action that Think delivered as a bare `return true` with no order,
+	-- so the bot stood still for the rest of the 2.5s window and lost the farm/fight it could
+	-- have had (Codex's audit -- and exactly the empty-owner shape this file keeps paying for).
+	return M.TowerBackoffLatched(bot, now) and not M.TowerBackoffArrived(bot)
+end
+
+-- The latch's remaining time after arrival still has a job: it is what stops the siege desire
+-- from turning round and walking straight back in. So it is not dropped on arrival (which is
+-- what an audit reading of "release the latch once safe" would do) -- siege simply stops
+-- claiming the tick and lets somebody else use it.
+function M.TowerBackoffLatched(bot, now)
+	return bot ~= nil and bot.aib_towerBackoffUntil ~= nil
+		and (now or DotaTime()) < bot.aib_towerBackoffUntil
 		and bot.aib_towerBackoffDest ~= nil
+end
+
+function M.TowerBackoffArrived(bot)
+	return bot ~= nil and bot.aib_towerBackoffDest ~= nil
+		and GetUnitToLocationDistance(bot, bot.aib_towerBackoffDest) <= 90
 end
 
 function M.Think(ctx)
@@ -94,10 +112,14 @@ function M.Think(ctx)
 		ctx.blocked("siege", "tower_targeting_me",
 			string.format("tower=%.0f hp=%.0f", twrDist, J.GetHP(bot) * 100), 3.0)
 		ctx.diag("siege-tower-backoff")
-		if GetUnitToLocationDistance(bot, bot.aib_towerBackoffDest) > 90 then
-			bot:Action_MoveToLocation(bot.aib_towerBackoffDest)
-		end
+		bot:Action_MoveToLocation(bot.aib_towerBackoffDest)
 		return true
+	end
+	if towerAggr ~= "always" and M.TowerBackoffLatched(bot, now) then
+		-- Parked at the safe point with time left on the latch: yield the tick rather than own
+		-- it emptily, but do NOT fall through into the siege body, which would walk us back in.
+		ctx.diag("siege-backoff-parked")
+		return false
 	end
 
 	if ctx.towerThreatening(twr) and towerAggr ~= "always" then return false end

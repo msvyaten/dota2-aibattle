@@ -233,6 +233,12 @@ end
 -- safe pop entire state when finishing/abandoning a composite item
 local function _resetCurrentTarget()
 	bot.countInvCheck = 0
+	-- rebuildCount is the retry budget for ONE target's component list, and it was the only
+	-- piece of that state this function forgot -- so it was really a per-match counter. Three
+	-- rebuilds anywhere in the game and every later item went straight to the give-up branch
+	-- with no attempt to work out what it was actually missing. Codex's audit; it matters more
+	-- since 76997f8, because that branch now advances the abandon timer instead of idling.
+	bot.rebuildCount = 0
 	bot.currBuyingItemInPurchaseList = nil
 	bot.currBuyingBasicItem = nil
 	bot.currBuyingBasicItemList = {}
