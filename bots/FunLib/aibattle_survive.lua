@@ -834,7 +834,25 @@ local function recovery(bot, dials, nEnemyCreeps)
 	-- Under hero fire the buy stays available: surviving the walk beats saving the gold.
 	-- NOTE: must NOT return here -- the floor lives further down in this same function, so an
 	-- early return would stop the trip as well as the buy. Skip only the purchase block.
+	-- ...but only while that is still a prediction and not a wish. The guard defers to a floor
+	-- that has not run yet, and 8925573332 [D] is what happens when the floor never gets there:
+	-- low_hp_behavior=regen_lane sends the tick into the water-rune branch, which returned
+	-- `blocked` every tick because no rune was up, so the walk home never started. The bot stood
+	-- at (912,998) from t=975 to t=995 between 1% and 12% HP with 1478 gold in the bag, refusing
+	-- to buy a 110 gold salve because something else was supposedly about to save it. The buy
+	-- waits on the floor, the floor waits on the rune, and the rune has nothing.
+	-- So the deferral is now time-boxed: it holds while the floor plausibly just has not had its
+	-- tick yet, and expires once the bot has been in the band long enough that the prediction is
+	-- simply false. Two seconds is a floor that fires every tick when it fires at all.
+	if hp < 0.22 then
+		if bot.aib_floorDeferSince == nil then bot.aib_floorDeferSince = DotaTime() end
+	else
+		bot.aib_floorDeferSince = nil
+	end
+	local floorDeferFresh = bot.aib_floorDeferSince == nil
+		or DotaTime() - bot.aib_floorDeferSince < 2.0
 	local floorWillSendHome = hp < 0.22 and not bot:WasRecentlyDamagedByAnyHero(2.0)
+		and floorDeferFresh
 	if floorWillSendHome and not hasItem(bot, "item_flask") then
 		Style.Blocked(bot, "recovery-buy", "fountain_floor_free_heal", string.format("hp=%.0f gold=%d", hp*100, gold), 8.0)
 		Style.DiagRL(bot, "buy-skip-fountain-floor", 5)
