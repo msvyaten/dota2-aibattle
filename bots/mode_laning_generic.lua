@@ -1056,8 +1056,34 @@ local function AIB_BuildDesireCandidates(dials, rules, runtimeCtx, intentCtx)
 	-- won the tick at 96-122 and returned empty. 8906755360 [R]: fight@114 x7, fight@96 x6,
 	-- fight@122 x1, fight@104 x1 = 15 of 18 empty_action ticks on that side. 1200 keeps slack
 	-- above the widest action gate so no reachable engage is cut.
+	-- The fight desire must not win an election it cannot use. HarassAndChase refuses to
+	-- INITIATE while our own salve/bottle/clarity is ticking (c60bf7a) unless the enemy is
+	-- already hitting us -- and out of contact range that is the only leg left, so the desire
+	-- took the tick, dropped it, and the idle watchdog caught what it dropped.
+	--
+	-- I deferred this twice on the grounds that it was log noise, because the arbiter does fall
+	-- through to the next candidate. The first melee match showed what it falls through TO:
+	-- 8925526609 [R] anti-idle was the top tick owner of the whole match at 91, ahead of fight
+	-- (86 wins, 126 empty actions) and ahead of farm. own_heal_running was the single largest
+	-- refusal on both sides (31 and 35). Melee feels it far harder than Shadow Fiend did:
+	-- neither bot bought a bottle in sixteen minutes, so they live on salves and tangos and the
+	-- guard is up for long stretches.
+	--
+	-- Capping also settles the objection that stopped me last time -- that vetoing the desire
+	-- would suppress AbilityPressure, which does not carry this guard. It should: opening with
+	-- an ability cancels our own heal exactly like a right click does. AbilityPressure not
+	-- testing it is the inconsistency, not this cap.
+	--
+	-- In-contact fighting is untouched: inside range + 80 the contact leg acts and the guard
+	-- never applied. Being hit voids it too, same escape hatch as the guard's own.
+	local ownHealTicking = (bot:HasModifier("modifier_flask_healing")
+			or bot:HasModifier("modifier_bottle_regeneration")
+			or bot:HasModifier("modifier_clarity_potion"))
+		and not bot:WasRecentlyDamagedByAnyHero(2.0)
 	local fightReach = (enemyDist or 99999) <= 1200
-	local fightCanAct = enemy ~= nil and not concedeLane and fightReach and (
+	local fightCanAct = enemy ~= nil and not concedeLane and fightReach
+		and not (ownHealTicking and (enemyDist or 99999) > range + 80)
+		and (
 		(enemyDist or 99999) <= range + 80
 		or hp < 0.32
 		or (not AIB_UphillMiss(enemy) and not hpBehind
