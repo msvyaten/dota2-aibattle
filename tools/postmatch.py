@@ -329,8 +329,19 @@ def report(match_id):
         print("  min:      " + " ".join("%5d" % m for m in mins))
         for s in ("R", "D"):
             print("  lvl  [%s]: " % s + " ".join("%5s" % lv[s].get(m, "-") for m in mins))
+        # The value each side reports at minute 0 -- before creeps exist -- is what
+        # GetLaneFrontLocation gives with no wave to measure. It recurs mid-match (8925526609
+        # [R] printed 7078 at minutes 0, 4, 11 and 15), and printed bare it reads as a hard
+        # push that never happened. Mark it rather than let it pass as data: same defect class
+        # as decided_at returning the end of the match when it had no leader to trace.
         for s in ("R", "D"):
-            print("  front[%s]: " % s + " ".join("%5s" % fr[s].get(m, "-") for m in mins))
+            base = fr[s].get(0)
+            cells = []
+            for m in mins:
+                v = fr[s].get(m)
+                cells.append("-" if v is None else ("(n/a)" if base is not None and v == base else str(v)))
+            print("  front[%s]: " % s + " ".join("%5s" % c for c in cells))
+        print("             (n/a = the no-wave default this side reports at minute 0)")
 
     print("----- archetype contrast (bind check: R vs D) -----")
     for side in ("R", "D"):
