@@ -109,7 +109,37 @@ local AIBUtils = require(GetScriptDirectory()..'/FunLib/aibattle_utils')
 local function AIB_EnemyTowerDanger()          return AIBUtils.EnemyTowerDanger(bot) end
 local function AIB_ForwardSurvivingTowerLoc()  return AIBUtils.ForwardSurvivingTowerLoc(bot) end
 local function AIB_EnemyCreepCentroid(creeps)  return AIBUtils.EnemyCreepCentroid(creeps) end
-local function AIB_UphillMiss(target)          return AIBUtils.UphillMiss(bot, target) end
+-- The uphill question, with its one standing exception folded in, because thirteen sites ask it
+-- and only two of them carried the exception. AIBUtils.UphillMiss stays pure geometry -- "is the
+-- target above me" -- and anything that wants that can still call it directly.
+--
+-- The exception, from bee3dd8: a 25% whiff rate is a reason not to OPEN a trade up the ramp. It
+-- was never a reason to stand still and be free-hit. The version that shipped tested the enemy
+-- at `range + 120` (about 620 for SF) -- but the harass that hurts arrives from 700-800 through
+-- spells, so at the distance where the bot is actually being farmed the exception could not
+-- fire at all. 8925432161 [R] t=143-154: the enemy sits at 801 units on half health, fight wins
+-- the election at 98 with an execute bonus, every leg refuses on uphill, and the tick falls
+-- through to ranged-spacing:41 whose action is to hold position. Eleven seconds of standing
+-- still while being shot -- the same complaint as 8909602648, from the same guard, after the
+-- fix that was supposed to close it.
+-- The radius scales with attack range instead of being a flat number, because the old one was a
+-- formula too (range + 120) and that is exactly how it ended up too small without anyone noticing:
+-- it reads like a constant and moves with the hero. 900 is AbilityPressure's scan radius and the
+-- practical reach of lane harass; a longer-ranged hero gets eaten from further away, so take
+-- whichever is bigger. An enemy hero that close which damaged us in the last two seconds is the
+-- one doing it -- there is only one enemy hero in a 1v1 mid.
+-- Melee never reaches here: AIBUtils.UphillMiss returns false below 310 attack range, so the
+-- whole uphill guard is inert for them and this radius never applies.
+local function AIB_UphillMiss(target)
+	if not AIBUtils.UphillMiss(bot, target) then return false end
+	local reach = math.max(900, (botAttackRange or bot:GetAttackRange() or 500) + 300)
+	if target ~= nil and bot:WasRecentlyDamagedByAnyHero(2.0)
+		and GetUnitToUnitDistance(bot, target) <= reach then
+		Style.DiagRL(bot, "uphill-void-under-fire", 3)
+		return false
+	end
+	return true
+end
 
 local function AIB_HealingChannelActive()
 	return bot:HasModifier("modifier_tango_heal")

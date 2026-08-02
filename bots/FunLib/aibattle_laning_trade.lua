@@ -38,6 +38,14 @@ local function isKillable(bot, enemy, dials)
 	return enemy:GetHealth() <= bot:GetAttackDamage() * 3.0
 end
 
+-- One entry point for "is the ramp a reason to refuse", so this file cannot drift from the
+-- laning context's answer. ctx.uphillMiss carries the under-fire exception; the raw geometry is
+-- only the fallback for callers built without a ctx.
+local function uphillBlocks(ctx, enemy)
+	if ctx ~= nil and ctx.uphillMiss ~= nil then return ctx.uphillMiss(enemy) end
+	return AIBUtils.UphillMiss(ctx and ctx.bot or nil, enemy)
+end
+
 function M.KillLock(ctx)
 	local bot = ctx.bot
 	local range = ctx.attackRange or bot:GetAttackRange()
@@ -54,7 +62,10 @@ function M.KillLock(ctx)
 	if AIBUtils.IsTowerActuallyThreatening(bot, towerDanger(ctx), true) then
 		return Engine.Blocked("kill-lock", 90, "tower", string.format("dist=%.0f hp=%.0f", win.dist, win.hp*100))
 	end
-	if AIBUtils.UphillMiss(bot, enemy) then
+	-- Through the ctx owner, not the raw geometry: kill-lock is the leg that closes 800 units
+	-- down to attack range, so it is precisely the one that must not refuse while we are being
+	-- shot from up the ramp. 8925432161 [R] blocked it five times in that state.
+	if uphillBlocks(ctx, enemy) then
 		return Engine.Blocked("kill-lock", 90, "uphill", string.format("dist=%.0f hp=%.0f", win.dist, win.hp*100))
 	end
 	if not win.inCommitRange then
@@ -114,7 +125,7 @@ function M.HealInterrupt(ctx)
 			local chaseIntoTower = foeTower ~= nil and foeTower:IsAlive()
 				and GetUnitToUnitDistance(enemy, foeTower) <= foeTower:GetAttackRange() + 150
 			if dist <= math.max(isHeal and 1050 or 900, range + (isHeal and 560 or 300))
-				and not AIBUtils.UphillMiss(bot, enemy)
+				and not uphillBlocks(ctx, enemy)
 				and hp >= chaseMinHp
 				and not towerIsThreat and not chaseIntoTower then
 				return Engine.Intent("channel-interrupt", isHeal and 138 or 118, "enemy_" .. channelKey, function()
@@ -147,7 +158,7 @@ function M.PassingHeroTrade(ctx)
 	end
 
 	local enemy = enemies[1]
-	if AIBUtils.UphillMiss(bot, enemy) then
+	if uphillBlocks(ctx, enemy) then
 		return Engine.Blocked("hero-pass", 60, "uphill", string.format("hp=%.0f", hp*100))
 	end
 
