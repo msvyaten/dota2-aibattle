@@ -131,6 +131,18 @@ def report(match_id):
     # 21.07 batch. empty_action was the top blocked reason on both sides (105/65 in
     # 8906632392) and the scorecard did NOT flag it -- empty/min read 8.4/5.2 against a
     # limit of 13. Always read the per-winner split, not the aggregate.
+    # WHO ACTUALLY RAN THE MATCH. Five matches in I had never looked at this, and kept
+    # reconstructing "what happened" from narrow windows around the user's timestamps instead.
+    # 8925526609 (first melee match) is why it is here: anti-idle -- the watchdog that exists
+    # for when nothing else acted -- was the top tick owner for [R] at 91, ahead of fight and
+    # farm. That is the shape of the melee problem in one line, and no other panel showed it.
+    print("----- who owned the ticks (arbiter winners, whole match) -----")
+    for side in ("R", "D"):
+        wins = re.findall(r"AIB\[%s\] intent=top-arbiter family=state winner=([a-z-]+):" % side, text)
+        top = collections.Counter(wins).most_common(8)
+        print("  [%s] n=%d | %s"
+              % (side, len(wins), ", ".join("%s=%d" % (k, v) for k, v in top) or "none"))
+
     print("----- watch: empty_action by winner (structural: capped/no-contract wins) -----")
     for side in ("R", "D"):
         tot = occ(text, side, "reason=empty_action")
