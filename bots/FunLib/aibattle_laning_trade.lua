@@ -141,13 +141,10 @@ function M.HealInterrupt(ctx)
 			-- The bypass stays on the in-range branch above on purpose: interrupting from where
 			-- we already stand is exactly the healingSafeHit case DivePolicy itself permits
 			-- (laning_tempo.lua:341). Walking in to do it is not the same transaction.
-			local foeTower = GetTower(GetOpposingTeam(), TOWER_MID_1)
-			local chaseIntoTower = foeTower ~= nil and foeTower:IsAlive()
-				and GetUnitToUnitDistance(enemy, foeTower) <= foeTower:GetAttackRange() + 150
 			if dist <= math.max(isHeal and 1050 or 900, range + (isHeal and 560 or 300))
 				and not uphillBlocks(ctx, enemy)
 				and hp >= chaseMinHp
-				and not towerIsThreat and not chaseIntoTower then
+				and not towerIsThreat and not chaseIntoTower(enemy) then
 				return Engine.Intent("channel-interrupt", isHeal and 138 or 118, "enemy_" .. channelKey, function()
 					if ctx.moveToAttackEdge == nil or not ctx.moveToAttackEdge(enemy, nil, 0) then return false end
 					Style.Diag(bot, "channel-interrupt-chase")
