@@ -122,7 +122,14 @@ def decided_point(pairs, band=LEAD_BAND_GOLD):
     end_t = pairs[-1]["t"]
     final = _leader(pairs[-1]["gold_lead"], band)
     if final == 0:
-        return end_t, 0.0
+        # Ended inside the contested band, so there is no eventual leader to trace back to.
+        # This used to return (end_t, 0.0), which reads as "contested to the final second" and
+        # is indistinguishable from a genuine nail-biter -- 8925526609 finished at -167 gold
+        # against a 200 band and printed decided_at=996s dead_tail=0.0%, off which I told the
+        # user the match was undecided throughout. It was not: lead_changes=0 and D peaked at
+        # +764, so one side led the whole way and the gap merely closed at the end.
+        # None makes the caller say "n/a" instead of inventing a verdict.
+        return None, None
     decided_at = pairs[0]["t"]
     for p in pairs:
         if _leader(p["gold_lead"], band) != final:
