@@ -298,8 +298,14 @@ def report(match_id):
     # loop owned the windows where it grew. This line is the acceptance for the backoff: the
     # signature must be non-zero AND the tower share must fall.
     print("----- watch: tower pokes (siege backoff) -----")
+    # backoff was 0 in every match on record because both CanAct and Think refused the tick
+    # exactly when the tower had picked us -- the escape sat behind the gate that fires when
+    # the escape is needed. Acceptance: backoff > 0 AND the tower share of damage taken (see
+    # the damage-by-source block) DOWN, with commit/terminal holding. commit/terminal
+    # collapsing means the reordering turned sieging off rather than fixing the exit.
     for side in ("R", "D"):
-        print("  [%s] backoff=%d aggro-drop=%d no-dive=%d | siege commit=%d terminal=%d"
+        print("  [%s] backoff=%d (was structurally 0; want UP) aggro-drop=%d no-dive=%d"
+              " | siege commit=%d terminal=%d (want HELD)"
               % (side, diag_max(text, side, "siege-tower-backoff"),
                  diag_max(text, side, "tower-aggro-drop"), diag_max(text, side, "no-dive"),
                  diag_max(text, side, "siege-commit-tower"),

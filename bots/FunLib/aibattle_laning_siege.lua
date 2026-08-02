@@ -21,6 +21,31 @@ function M.Release(bot)
 	if bot ~= nil then bot.aib_siegeCommitUntil = nil end
 end
 
+-- "The tower has picked ME." Pure test, no latch written: CanAct scores candidates and must
+-- not have side effects, so the latch is set only on the acting side in Think.
+--
+-- This exists as its own function because of where the answer has to be asked. Both CanAct
+-- and Think opened with `if ctx.towerThreatening(twr) and towerAggr ~= "always" then return
+-- false end`, and IsTowerActuallyThreatening returns true precisely when the tower is in range
+-- of us AND is not busy shooting one of our creeps -- i.e. exactly when it is shooting us. The
+-- backoff written for that case sat sixty lines the wrong side of that gate, so it could never
+-- run: siege-tower-backoff reads 0 in every match on record, on every hero. The mechanism was
+-- never broken. It was unreachable, and the bot's only answer to "a tower is hitting me" was
+-- for siege to decline the tick and let some other owner keep standing there. 8925573332 [D]
+-- took 1206 tower damage, 12% of everything it received.
+--
+-- Asked before the hp/desire gates too, on purpose: the lowest HP is when leaving matters most,
+-- and those gates would have refused there as well.
+function M.WantsTowerBackoff(bot, twr, now)
+	if bot == nil or twr == nil or not twr:IsAlive() then return false end
+	local target = twr:GetAttackTarget()
+	-- target == bot, not "a hero on our team": here counting ourselves IS the point, and in a
+	-- five-man game a tower shooting an ally is not a reason for us to walk.
+	if target ~= nil and target == bot then return true end
+	return bot.aib_towerBackoffUntil ~= nil and (now or DotaTime()) < bot.aib_towerBackoffUntil
+		and bot.aib_towerBackoffDest ~= nil
+end
+
 function M.Think(ctx)
 	local bot = ctx.bot
 	local dials = ctx.dials or {}
@@ -44,6 +69,37 @@ function M.Think(ctx)
 		ctx.blocked("siege", "tower_aggression_never", string.format("tower=%.0f", GetUnitToUnitDistance(bot, twr)), 5.0)
 		return false
 	end
+
+	local now = DotaTime()
+	local twrDist = GetUnitToUnitDistance(bot, twr)
+	-- Leaving comes before every gate below. tower_aggression="always" still buys the right to
+	-- stand and eat it; everyone else walks out first and argues about desire afterwards.
+	if towerAggr ~= "always" and M.WantsTowerBackoff(bot, twr, now) then
+		if bot.aib_towerBackoffUntil == nil or now >= bot.aib_towerBackoffUntil then
+			bot.aib_towerBackoffUntil = now + 2.5
+			-- Out of the tower's range, not a fixed 420. 420 was the step that cleared a
+			-- 500-range hero standing at ~560. A melee hero is at 150-330 when it hits a
+			-- tower, so the same step leaves it at 570-750 -- still inside the tower's 700 --
+			-- and the latch expires straight into another walk-in. That is the "runs into
+			-- tower range and runs back out" the user watched. Derived from the tower now, so
+			-- it is right for both classes without asking which one we are.
+			--
+			-- Computed ONCE and re-issued unchanged. Deriving it from the CURRENT position
+			-- every tick is the bug this codebase has paid for three times -- f26c645, b4b24af,
+			-- 39e3e6b -- the target walks away as fast as the bot walks toward it.
+			local need = (twr:GetAttackRange() + 150) - twrDist
+			bot.aib_towerBackoffDest = J.VectorAway(bot:GetLocation(), twr:GetLocation(),
+				math.max(need, 250))
+		end
+		ctx.blocked("siege", "tower_targeting_me",
+			string.format("tower=%.0f hp=%.0f", twrDist, J.GetHP(bot) * 100), 3.0)
+		ctx.diag("siege-tower-backoff")
+		if GetUnitToLocationDistance(bot, bot.aib_towerBackoffDest) > 90 then
+			bot:Action_MoveToLocation(bot.aib_towerBackoffDest)
+		end
+		return true
+	end
+
 	if ctx.towerThreatening(twr) and towerAggr ~= "always" then return false end
 
 	local cwp = rules.creep_wave_priority or "last_hit_only"
@@ -62,8 +118,6 @@ function M.Think(ctx)
 		return false
 	end
 
-	local now = DotaTime()
-	local twrDist = GetUnitToUnitDistance(bot, twr)
 	local alliedTank = false
 	local target = twr:GetAttackTarget()
 	-- "Something of OURS is soaking the tower" -- and a hero is not that something. The team
@@ -83,42 +137,18 @@ function M.Think(ctx)
 			end
 		end
 	end
-	-- THE TOWER IS SHOOTING US. Measured across the era: 14 of 16 sides took tower damage,
-	-- and aggregating what the bot was doing in the 31 windows where that damage grew puts the
+	-- THE TOWER IS SHOOTING US is answered at the top of this function now, ahead of the gate
+	-- that used to bury it. Measured across the era: 14 of 16 sides took tower damage, and
+	-- aggregating what the bot was doing in the 31 windows where that damage grew puts the
 	-- siege machinery on top by a distance (state-desire-siege 89, siege:terminal 34,
 	-- siege:commit 22). So "tower pokes in almost every match" is not a stray dive -- it is
 	-- this loop, standing in range and trading hits with a building.
 	--
 	-- An aggro-drop helper already existed (AIB_TowerAggroDrop) but only DivePolicy ever
 	-- called it, never the siege path, and it works by attacking an allied creep -- which does
-	-- not move tower aggro in modern Dota. Leaving the tower's range does. And the signal for
-	-- when to leave was sitting right here unread: the same GetAttackTarget() used above for
-	-- alliedTank says plainly whether the target is us.
+	-- not move tower aggro in modern Dota. Leaving the tower's range does.
 	--
-	-- One poke is the price of information; four is how Dire lost 8909602648. The latch keeps
-	-- the bot out for 2.5s so this cannot oscillate against the siege desire that will still be
-	-- winning the tick, and tower_aggression="always" still buys the right to stand and eat it.
-	--
-	-- The destination is computed ONCE, when the latch is set, and re-issued unchanged. Deriving
-	-- it from the CURRENT position every tick is the bug this codebase has now paid for three
-	-- separate times -- f26c645, b4b24af, 39e3e6b -- because the target then walks away from the
-	-- bot as fast as the bot walks toward it and the move is re-pathed forever.
-	local towerOnMe = target ~= nil and target:IsHero() and target:GetTeam() == GetTeam()
-	if towerOnMe and towerAggr ~= "always"
-		and (bot.aib_towerBackoffUntil == nil or now >= bot.aib_towerBackoffUntil) then
-		bot.aib_towerBackoffUntil = now + 2.5
-		bot.aib_towerBackoffDest = J.VectorAway(bot:GetLocation(), twr:GetLocation(), 420)
-	end
-	if bot.aib_towerBackoffUntil ~= nil and now < bot.aib_towerBackoffUntil
-		and bot.aib_towerBackoffDest ~= nil and towerAggr ~= "always" then
-		ctx.blocked("siege", "tower_targeting_me",
-			string.format("tower=%.0f hp=%.0f", twrDist, J.GetHP(bot) * 100), 3.0)
-		ctx.diag("siege-tower-backoff")
-		if GetUnitToLocationDistance(bot, bot.aib_towerBackoffDest) > 90 then
-			bot:Action_MoveToLocation(bot.aib_towerBackoffDest)
-		end
-		return true
-	end
+	-- One poke is the price of information; four is how Dire lost 8909602648.
 
 	if not alliedTank and towerAggr ~= "always" then
 		if ctx.enemyDeadRecently() and twrDist > attackRange + 60 then
@@ -267,6 +297,12 @@ function M.CanAct(ctx)
 
 	local towerAggr = rules.tower_aggression or "default"
 	if towerAggr == "never" then return false end
+	-- Mirrors Think: when the tower has picked us, siege is exactly the owner that must get the
+	-- tick, because its job in that case is to leave. Saying "cannot act" here is what kept the
+	-- backoff out of the election in the first place. Checked before the desire and hp floors
+	-- below for the same reason -- at 30% hp those refuse, and 30% hp is when walking out
+	-- matters most. Pure test; the latch is written only on the acting side.
+	if towerAggr ~= "always" and M.WantsTowerBackoff(bot, twr) then return true end
 	if ctx.towerThreatening(twr) and towerAggr ~= "always" then return false end
 
 	local cwp = rules.creep_wave_priority or "last_hit_only"
