@@ -335,7 +335,7 @@ function M.HarassAndChase(ctx)
 			and GetUnitToUnitDistance(bot, enemy) <= range + 120
 	end
 	local function uphillWhiff(enemy)
-		return range > 300 and ctx.uphillMiss(enemy) and ctx.enemyTowerDanger() == nil
+		return not AIBUtils.IsMelee(bot) and ctx.uphillMiss(enemy) and ctx.enemyTowerDanger() == nil
 			and not beingHitBy(enemy)
 	end
 	if atkHero and #atkHero > 0 and atkHero[1]:IsAlive() then

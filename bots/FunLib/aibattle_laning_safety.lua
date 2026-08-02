@@ -140,7 +140,9 @@ function M.RangedMeleePackSpacing(ctx)
 	local bot = ctx.bot
 	local now = DotaTime()
 	local range = attackRange(ctx)
-	if now <= 0 or range <= 350 then return false end
+	-- Ranged-only by construction: it exists to keep a ranged hero at max range outside the
+	-- enemy melee pack. A melee hero has to be inside it to attack at all.
+	if now <= 0 or AIBUtils.IsMelee(bot) then return false end
 	local safe = math.max(360, range - 90)
 	-- HYSTERESIS. The scan must still see the pack while we are standing at the safe edge,
 	-- otherwise this function switches itself off at the exact moment it succeeds. Detection was a
@@ -270,7 +272,7 @@ function M.CreepHitReact(ctx)
 	-- to the attack edge, which still attacks, so safety keeps a real action and does not
 	-- fall to no_action_capped (the empty-tick trap the recovery_commit note warns about).
 	local insidePack = false
-	if range > 350 and ctx.meleeCreepCentroid ~= nil then
+	if AIBUtils.IsRanged(bot) and ctx.meleeCreepCentroid ~= nil then
 		local cen, count = ctx.meleeCreepCentroid(ctx.enemyCreeps, 380)
 		if cen ~= nil and count >= 2
 			and GetUnitToLocationDistance(bot, cen) < math.max(360, range - 90) - 40 then
@@ -334,7 +336,8 @@ function M.CreepHitReact(ctx)
 		-- and shoot from the edge. The step is a real action, so safety still does not fall
 		-- through to no_action_capped -- and the swing stays as the fallback when the step
 		-- cannot be computed (melee heroes, no location).
-		if range > 300 and ctx.moveToAttackEdge(creep, "creep-hit-react-aggro-step", aggroStep) then
+		if AIBUtils.CanStepOutOfCreepAggro(bot)
+			and ctx.moveToAttackEdge(creep, "creep-hit-react-aggro-step", aggroStep) then
 			Style.Intent(bot, "creep-hit-react", string.format("dist=%.0f hp=%.0f hits=%d reason=aggro_step", dist, hp * 100, bot.aib_creepReactCount or 0), 1.0)
 			return true
 		end

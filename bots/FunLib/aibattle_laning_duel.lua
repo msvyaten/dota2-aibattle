@@ -116,7 +116,7 @@ local function duelState(ctx, enemy, dist, phase, hpFloor, approachExtra)
 	if Style.AbilityExecute(bot, enemy) then return true end
 	if Style.AbilityHarass(bot, enemy) then return true end
 
-	if range > 350 and dist < range * 0.62 and hp < 0.80 then
+	if AIBUtils.IsRanged(bot) and dist < range * 0.62 and hp < 0.80 then
 		if ctx.moveToAttackEdge(enemy, keyPrefix .. "-space", 30) then return true end
 	end
 	if dist <= range + 80 then

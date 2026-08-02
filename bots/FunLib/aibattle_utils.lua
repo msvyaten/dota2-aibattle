@@ -111,10 +111,54 @@ local function safeHeightLevel(loc)
 	return nil
 end
 
+-- =================================================================================
+-- HERO PROFILE: melee or ranged, asked in ONE place.
+--
+-- Thirteen sites across five files decide this with a bare number, and they do not agree:
+-- 300 in mode_laning_generic and combat, 310 here, 350 in safety and duel. None of them is
+-- wrong on its own; together they mean a hero at 320 attack range is melee to one handler and
+-- ranged to two others, and nobody would find out until it played badly.
+--
+-- Worse for what comes next: a melee hero does not "take a different branch" in this code, it
+-- FALLS OUT. AIB_AttackEdgeLocation returns the target's own position below 300, so "step to
+-- the attack edge" becomes "walk onto it" -- which silently turns the creep-aggro step, the
+-- visual-hold step and break-contact into no-ops. That is fine for Shadow Fiend and invisible
+-- until the day it is not.
+--
+-- MELEE_MAX is 310 because that is what UphillMiss already used and it is the one threshold
+-- with a real rule behind it: uphill miss is a ranged-attack problem. Everything else was a
+-- number someone picked. Handlers that want a positioning band should ask for the band, not
+-- re-derive it from the raw range.
+local MELEE_MAX = 310
+
+function M.AttackRange(bot)
+	if bot == nil then return 0 end
+	local ok, r = pcall(function() return bot:GetAttackRange() end)
+	return (ok and type(r) == "number") and r or 0
+end
+
+function M.IsMelee(bot)
+	return M.AttackRange(bot) <= MELEE_MAX
+end
+
+function M.IsRanged(bot)
+	return not M.IsMelee(bot)
+end
+
+-- Creep acquisition is ~500 and does not care how far the hero can attack. A ranged hero can
+-- stand outside it and still work the wave; a melee hero cannot -- at 150 attack range there is
+-- no position that is both outside acquisition and in reach. So "step out of the aggro" is a
+-- ranged answer only, and a melee bot needs a different one rather than a smaller number.
+-- Callers must branch on this instead of assuming the step exists.
+function M.CanStepOutOfCreepAggro(bot)
+	return M.AttackRange(bot) >= 450
+end
+-- =================================================================================
+
 -- True when bot (ranged) is on lower terrain than target; 25% miss applies.
 function M.UphillMiss(bot, target)
 	if bot == nil or target == nil then return false end
-	if (bot:GetAttackRange() or 0) <= 310 then return false end
+	if M.IsMelee(bot) then return false end
 	if bot.GetLocation == nil or target.GetLocation == nil then return false end
 	local okBot, botLoc = pcall(function() return bot:GetLocation() end)
 	local okTarget, targetLoc = pcall(function() return target:GetLocation() end)

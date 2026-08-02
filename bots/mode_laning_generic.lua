@@ -603,7 +603,10 @@ local function AIB_AttackEdgeLocation(target, extraBack)
 	local okTarget, tl = pcall(function() return target:GetLocation() end)
 	local okBot, bl = pcall(function() return bot:GetLocation() end)
 	if not okTarget or not okBot or tl == nil or bl == nil then return nil end
-	if range <= 300 then return tl end
+	-- Melee: the attack edge IS the target. Kept explicit so the callers that assume a step
+	-- exists (creep-aggro, visual-hold, break-contact) can be found and given a melee answer
+	-- instead of silently turning into "walk onto it".
+	if AIBUtils.IsMelee(bot) then return tl end
 	local packCen, packCount = AIB_MeleeCreepCentroidAround(tl, 380)
 	if packCen ~= nil and packCount >= 2 then
 		local ownT1 = GetTower(GetTeam(), TOWER_MID_1)
