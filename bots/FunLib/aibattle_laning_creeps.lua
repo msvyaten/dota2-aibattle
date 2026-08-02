@@ -28,16 +28,41 @@ function M.GetBestLastHitCreep(bot, creeps, attackDamage)
 	return nil
 end
 
-function M.GetBestDenyCreep(creeps, attackDamage)
-	if not creeps then return nil end
+-- One owner for "is this ally creep actually denyable".
+--
+-- The last-hit side has always asked the predictive question -- J.WillKillTarget with the
+-- attack delay, i.e. "will my hit land while it is still alive, and will it kill". The deny
+-- side asked a static one (GetHealth() <= attackDamage, no delay, no check that somebody
+-- else finishes it first), and deny_policy="always" asked no damage question at all: it took
+-- the first ally creep under 60% hp and swung at it. 8925573332 [D, always]: deny-act=462
+-- (atk 163 + walk 299) against dn=5 -- most of a match spent walking at, and swinging on, own
+-- creeps it could not kill. R on "default" read 224/8 with the same missing delay model.
+--
+-- The policy is only allowed to move the hp ceiling. Whether the swing lands is physics, not
+-- policy, so it lives here for every caller.
+function M.GetBestDenyCreep(bot, creeps, attackDamage, hpCeil)
+	if bot == nil or not creeps then return nil end
+	hpCeil = hpCeil or Const.Creeps.defaultDenyHp
+	local rejected = nil
 	for _, creep in pairs(creeps) do
 		if J.IsValid(creep)
-			and J.GetHP(creep) < Const.Creeps.defaultDenyHp
-			and J.CanBeAttacked(creep)
-			and creep:GetHealth() <= attackDamage then
-			return creep
+			and J.GetHP(creep) < hpCeil
+			and J.CanBeAttacked(creep) then
+			local nDelay = J.GetAttackProDelayTime(bot, creep)
+			if J.WillKillTarget(creep, attackDamage, DAMAGE_TYPE_PHYSICAL, nDelay) then
+				return creep
+			end
+			-- Which half of the old predicate was doing the damage: 'doomed' = it dies to
+			-- somebody else before our swing lands, 'tanky' = our hit does not kill it at all.
+			-- Labelled once per call, not once per creep, so the count stays comparable to
+			-- deny-act instead of scaling with wave size.
+			if rejected ~= "doomed" then
+				rejected = (J.GetTotalAttackWillRealDamage(creep, nDelay) >= creep:GetHealth())
+					and "doomed" or "tanky"
+			end
 		end
 	end
+	if rejected ~= nil then Style.Diag(bot, "deny-cand-"..rejected) end
 	return nil
 end
 
@@ -187,14 +212,11 @@ function M.HandleCreepWork(ctx)
 	local denyPol = rules.deny_policy or "default"
 	if denyPol ~= "never" then
 		local denyCreep
-		if denyPol == "always" then
-			for _, c in pairs(ctx.allyCreeps or {}) do
-				if J.IsValid(c) and J.GetHP(c) < Const.Creeps.alwaysDenyHp and J.CanBeAttacked(c) then
-					denyCreep = c; break
-				end
-			end
-		elseif ctx.bestDeny ~= nil then
-			denyCreep = ctx.bestDeny(ctx.allyCreeps)
+		if ctx.bestDeny ~= nil then
+			-- "always" buys a wider hp window, nothing else. It used to buy the right to
+			-- swing at creeps the hero cannot kill; see GetBestDenyCreep.
+			denyCreep = ctx.bestDeny(ctx.allyCreeps,
+				denyPol == "always" and Const.Creeps.alwaysDenyHp or Const.Creeps.defaultDenyHp)
 		end
 		if J.IsValid(denyCreep) then
 			local skipDeny = false

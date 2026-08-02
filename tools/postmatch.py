@@ -218,6 +218,11 @@ def report(match_id):
               % (diag_max(text, side, "deny-act"), diag_max(text, side, "deny-act-atk"),
                  diag_max(text, side, "deny-act-walk"), diag_max(text, side, "deny-skip-backtrack"),
                  last_stat(text, side, "dn")))
+        # The kill test now runs for BOTH deny policies, so the acceptance has to read both
+        # halves: deny-act (effort spent) must fall while dn (denies landed) must not.
+        # rejected: doomed = somebody else finishes it first, tanky = our hit never kills it.
+        print("       deny kill-test: rejected doomed=%d tanky=%d (want deny-act DOWN, dn same or UP)"
+              % (diag_max(text, side, "deny-cand-doomed"), diag_max(text, side, "deny-cand-tanky")))
         # ead1e05's signature was unobservable until 9e74621 moved it to the mirror in
         # mode_laning_generic, where the decision is actually taken.
         print("       recovery_commit(now observable): %d"

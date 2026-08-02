@@ -397,8 +397,8 @@ function GetBestLastHitCreep(hCreepList)
 	return AIBLaneCreeps.GetBestLastHitCreep(bot, hCreepList, attackDamage)
 end
 
-function GetBestDenyCreep(hCreepList)
-	return AIBLaneCreeps.GetBestDenyCreep(hCreepList, attackDamage)
+function GetBestDenyCreep(hCreepList, nHpCeil)
+	return AIBLaneCreeps.GetBestDenyCreep(bot, hCreepList, attackDamage, nHpCeil)
 end
 
 -- THINK SECTION FUNCTIONS
