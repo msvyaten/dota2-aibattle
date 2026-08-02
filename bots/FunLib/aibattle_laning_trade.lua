@@ -41,6 +41,21 @@ end
 -- One entry point for "is the ramp a reason to refuse", so this file cannot drift from the
 -- laning context's answer. ctx.uphillMiss carries the under-fire exception; the raw geometry is
 -- only the fallback for callers built without a ctx.
+-- "Is my target standing in its own tower's range?" -- the question every chase has to ask and
+-- only one of them did. towerThreat/enemyTowerDanger read where the bot IS, so a bot outside the
+-- radius passes them and then walks in; this reads the DESTINATION. It was added to the
+-- heal-interrupt chase (c370f42) and left there, which is the point-fix habit this project keeps
+-- paying for: 8925476921 [R] t=325-340 walked 1900 units into Dire's half after an enemy on 41%
+-- HP and ended up 200 units from the tower, HP 69% -> 26% on the way back out. hero-contact
+-- refused with `unsafe tower=true` -- correctly, and far too late, because a different leg had
+-- already done the walking.
+local function chaseIntoTower(enemy)
+	if enemy == nil then return false end
+	local foeTower = GetTower(GetOpposingTeam(), TOWER_MID_1)
+	return foeTower ~= nil and foeTower:IsAlive()
+		and GetUnitToUnitDistance(enemy, foeTower) <= foeTower:GetAttackRange() + 150
+end
+
 local function uphillBlocks(ctx, enemy)
 	if ctx ~= nil and ctx.uphillMiss ~= nil then return ctx.uphillMiss(enemy) end
 	return AIBUtils.UphillMiss(ctx and ctx.bot or nil, enemy)
@@ -67,6 +82,11 @@ function M.KillLock(ctx)
 	-- shot from up the ramp. 8925432161 [R] blocked it five times in that state.
 	if uphillBlocks(ctx, enemy) then
 		return Engine.Blocked("kill-lock", 90, "uphill", string.format("dist=%.0f hp=%.0f", win.dist, win.hp*100))
+	end
+	-- A kill worth walking under a tower for is a kill we can land from outside it. Finishing
+	-- from where we already stand keeps its own leg below (win.dist <= range + 80).
+	if win.dist > (ctx.attackRange or bot:GetAttackRange()) + 80 and chaseIntoTower(enemy) then
+		return Engine.Blocked("kill-lock", 90, "chase_into_tower", string.format("dist=%.0f ehp=%.0f", win.dist, win.ehp*100))
 	end
 	if not win.inCommitRange then
 		return Engine.Blocked("kill-lock", 90, "far", string.format("dist=%.0f max=%.0f hp=%.0f", win.dist, win.maxDist, win.hp*100))
@@ -158,6 +178,9 @@ function M.PassingHeroTrade(ctx)
 	end
 
 	local enemy = enemies[1]
+	if chaseIntoTower(enemy) and GetUnitToUnitDistance(bot, enemy) > range + 80 then
+		return Engine.Blocked("hero-pass", 60, "chase_into_tower", string.format("hp=%.0f", hp*100))
+	end
 	if uphillBlocks(ctx, enemy) then
 		return Engine.Blocked("hero-pass", 60, "uphill", string.format("hp=%.0f", hp*100))
 	end
