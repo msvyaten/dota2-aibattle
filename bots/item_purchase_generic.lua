@@ -102,6 +102,18 @@ local initSmoke = false
 
 local currentTime, botLevel, botGold, botWorth, botMode, botHP, botCourierValue, botStashValue, botDistanceFromFountain
 
+-- The buy loop is the only part of the bot that spends gold and the only part with no
+-- telemetry at all. 8925573332 [D] ended the match with 1518 unspent gold and made no build
+-- purchase for the last 350s; the gold curve alone cannot say whether it was saving for a
+-- component it could not reach or stuck on a target with an empty component list, because
+-- both look identical from outside. One rate-limited line, so the next match can tell them
+-- apart instead of being read twice.
+local function AIBBuyState(reason, detail)
+	if okAIB and type(AIBStyle) == "table" and AIBStyle.Blocked ~= nil then
+		AIBStyle.Blocked(bot, "buy-loop", reason, detail, 8.0)
+	end
+end
+
 local function AIBPurchaseConsumable(itemName)
 	if okAIBItemPolicy and okAIB and AIBItemPolicy.PurchaseConsumable ~= nil then
 		return AIBItemPolicy.PurchaseConsumable(bot, AIBStyle, itemName)
@@ -398,6 +410,9 @@ local function GeneralPurchase()
 		end
 	else
 		bot.SecretShop = false
+		AIBBuyState("saving", string.format("target=%s head=%s cost=%d gold=%d left=%d",
+			tostring(bot.currBuyingItemInPurchaseList), tostring(bot.currBuyingBasicItem),
+			cost, bot:GetGold(), #bot.currBuyingBasicItemList))
 	end
 end
 
@@ -1323,8 +1338,22 @@ function ItemPurchaseThink()
 				bot.currBuyingRequiredCounts = _buildRequiredCounts(bot.currBuyingBasicItemList)
 				_popIfNoLongerNeeded()
 			else
-				-- and can't finish even with lots of gold
-				if botGold > GetItemCost(bot.currBuyingItemInPurchaseList) * 2 and botGold >= 2000 then
+				-- The only way out of "component list is empty but the item never assembled"
+				-- is countInvCheck reaching the 3-minute timeout above, and it used to advance
+				-- only for a bot sitting on 2000+ gold. A hero saving 1600 for its next
+				-- component can never satisfy that, so the escape hatch was unreachable for
+				-- exactly the bots most likely to need it, and the target stayed latched for
+				-- the rest of the match. Affordability is beside the point here: the component
+				-- queue is EMPTY, there is nothing left to buy for this target no matter how
+				-- rich we get. Nothing in flight (courier/stash checked above) is the real
+				-- condition -- if something is being ferried, keep waiting.
+				if botCourierValue == 0 and botStashValue == 0
+					and botName ~= "npc_dota_hero_lone_druid" then
+					bot.countInvCheck = bot.countInvCheck + 1
+					AIBBuyState("stalled", string.format("target=%s gold=%d rebuilds=%d wait=%d",
+						tostring(bot.currBuyingItemInPurchaseList), botGold,
+						bot.rebuildCount or 0, bot.countInvCheck))
+				elseif botGold > GetItemCost(bot.currBuyingItemInPurchaseList) * 2 and botGold >= 2000 then
 					bot.countInvCheck = bot.countInvCheck + 1
 				end
 			end

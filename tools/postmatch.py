@@ -40,6 +40,22 @@ def _minutes(text):
     return (max(vals) / 60.0) if vals else 0.0
 
 
+def buy_loop(text, side):
+    """Both ways the buy loop can stop spending, kept apart.
+
+    'saving' = the head component costs more than we have, which is legitimate right up
+    until the component is unreachable for the rest of the match. 'stalled' = the component
+    queue is empty and the target never assembled. The gold curve cannot tell these apart --
+    both read as a flat line with a full wallet -- which is why the loop now says which.
+    """
+    out = {}
+    for reason in ("saving", "stalled"):
+        rows = re.findall(
+            r"AIB\[%s\] blocked=buy-loop reason=%s ([^']*)" % (side, reason), text)
+        out[reason] = (len(rows), rows[-1].strip() if rows else "")
+    return out
+
+
 def recovery_owner_counts(text, side):
     lines = re.findall(r"AIB\[%s\][^']*intent=recovery-owner[^']*" % side, text)
     counts = {
@@ -236,6 +252,9 @@ def report(match_id):
         # rejected: doomed = somebody else finishes it first, tanky = our hit never kills it.
         print("       deny kill-test: rejected doomed=%d tanky=%d (want deny-act DOWN, dn same or UP)"
               % (diag_max(text, side, "deny-cand-doomed"), diag_max(text, side, "deny-cand-tanky")))
+        bl = buy_loop(text, side)
+        print("       buy loop: saving x%d %s" % (bl["saving"][0], bl["saving"][1] or "(silent)"))
+        print("                 stalled x%d %s" % (bl["stalled"][0], bl["stalled"][1] or "(silent)"))
         # ead1e05's signature was unobservable until 9e74621 moved it to the mirror in
         # mode_laning_generic, where the decision is actually taken.
         print("       recovery_commit(now observable): %d"
