@@ -154,6 +154,24 @@ local TRIP_DONE_HP = 0.55
 -- fixing the path whose signature you happened to be looking at is not fixing the rule.
 local HEAL_INSTEAD_OF_FOUNTAIN_HP = 0.25
 
+-- "Am I already drinking something?" -- one owner, because a salve heals over SIXTEEN seconds
+-- and the only guard at the consume sites was a three second cooldown. Three seconds in, a salve
+-- has delivered about 75 of its 400, HP is still under the 0.40 gate, the cooldown has expired --
+-- and the bot drinks the next one, overwriting a channel with thirteen seconds of healing left.
+-- Dota does not stack these: ten salves drunk together heal exactly what one heals. So a bot
+-- holding three of them empties all three in six seconds and buys the value of one.
+-- 8925401611 [D] around 7:00 is that, and it is 200 gold of a 619 gold deficit.
+-- The project already knew the test -- fountainTripDoneReason and canHealHere both check these
+-- modifiers to decide whether a trip is still needed. It simply was not applied where the
+-- drinking happens. Same shape as noSustain-versus-holdsHeal: one question, several tests, and
+-- the one that mattered was missing at the site that spends the item.
+local function healTicking(bot)
+	return bot:HasModifier("modifier_flask_healing")
+		or bot:HasModifier("modifier_tango_heal")
+		or bot:HasModifier("modifier_bottle_regeneration")
+		or bot:HasModifier("modifier_clarity_potion")
+end
+
 local function holdsHeal(bot, charges)
 	return hasItem(bot, "item_flask")
 		or hasItem(bot, "item_tango") or hasItem(bot, "item_tango_single")
@@ -507,6 +525,7 @@ local function defensiveHeal(bot, dials)
 
 	if hpMissing >= 400
 		and (bot.aib_flaskLast == nil or DotaTime() - bot.aib_flaskLast >= FLASK_CD)
+		and not healTicking(bot)
 		and not fountainFreeHealSoon(bot, hp)
 		and not (bot:WasRecentlyDamagedByAnyHero(0.5) or bot:WasRecentlyDamagedByCreep(0.5)) then
 		local flask = getItem(bot, "item_flask")
@@ -589,7 +608,7 @@ local function defensiveHeal(bot, dials)
 	-- 8. Clarity: channel, any damage cancels -- separate mana CD.
 	if mana < 0.25 and manaReady then
 		local safe = not (bot:WasRecentlyDamagedByAnyHero(0.5) or bot:WasRecentlyDamagedByCreep(0.5))
-		if safe then
+		if safe and not healTicking(bot) then
 			local clarity = getItem(bot, "item_clarity")
 			if clarity then
 				bot.aib_manaLast = DotaTime(); Style.Diag(bot, "mana-clarity")
@@ -600,7 +619,8 @@ local function defensiveHeal(bot, dials)
 
 	-- 9. Flask at lower threshold -- not gated by healReady so tango/wand use doesn't block it.
 	-- At critical HP (< 0.30) bypass recent-damage check (channel gets cancelled but worth trying).
-	if hp < 0.40 and (bot.aib_flaskLast == nil or DotaTime() - bot.aib_flaskLast >= FLASK_CD) then
+	if hp < 0.40 and not healTicking(bot)
+		and (bot.aib_flaskLast == nil or DotaTime() - bot.aib_flaskLast >= FLASK_CD) then
 		local flask = getItem(bot, "item_flask")
 		if flask and fountainFreeHealSoon(bot, hp) then
 			Style.Blocked(bot, "heal-item", "fountain_floor_free_heal", string.format("hp=%.0f", hp*100), 8.0)
@@ -734,6 +754,10 @@ local function recovery(bot, dials, nEnemyCreeps)
 		local flask = getItem(bot, "item_flask")
 		if flask and fountainFreeHealSoon(bot, hp) then
 			Style.Blocked(bot, "recovery-flask", "fountain_floor_free_heal", string.format("hp=%.0f", hp*100), 8.0)
+			flask = nil
+		end
+		if flask and healTicking(bot) then
+			Style.Blocked(bot, "recovery-flask", "already_healing", string.format("hp=%.0f", hp*100), 4.0)
 			flask = nil
 		end
 		if flask then
