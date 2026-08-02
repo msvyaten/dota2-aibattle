@@ -118,6 +118,13 @@ def report(match_id):
         # heal_in_hand releases go to ~0 while break-contact carries the traffic.
         rel = re.findall(r"AIB\[%s\][^']*?blocked=fountain-floor reason=(\w+)" % side, text)
         by_reason = {r: rel.count(r) for r in sorted(set(rel))}
+        # heal_in_flight is a legitimate release -- the cure is paid for and arriving, so the
+        # walk home is wasted. What was missing is what happens next: 8925401611 [D] released
+        # three times and then idled at 19-36% HP in the contested lane for most of a minute.
+        # inflight-back is the owner for that window. It should track heal_in_flight releases.
+        print("       inflight-back=%d hold=%d (owner for the courier wait)"
+              % (diag_max(text, side, "heal-inflight-back"),
+                 diag_max(text, side, "heal-inflight-hold")))
         print("       break-contact=%d (want UP) | trip releases: %s (heal_in_hand wants 0)"
               % (diag_max(text, side, "heal-break-contact"), by_reason or "none"))
 

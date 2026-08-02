@@ -1012,6 +1012,30 @@ local function recovery(bot, dials, nEnemyCreeps)
 		end
 	end
 
+	-- The trip is off because the cure is on its way -- and then nobody decided what to do for
+	-- the forty seconds until it lands. 8925401611 [D] spent 5:50 to 6:46 at 19-36% HP in the
+	-- contested half of the lane: not fighting, not farming (last hits frozen at 26), not
+	-- leaving. idle=60 against 22 for the other side. The level gap opens exactly in that window
+	-- and both deaths follow it. Waiting for the courier is the right call; waiting for it in
+	-- front of a healthy enemy is not -- it reaches us just as fast behind our own line.
+	-- Deliberately does NOT claim the tick once we are there: the point is to wait somewhere
+	-- safe, not to stop playing. Standing at the spot yields, so last-hit and lane work own the
+	-- wait, which is the difference between this and the idling it replaces.
+	if flightFresh and not heldHeal and hp < 0.55
+		and not (bot.aib_fountainTrip or bot.aib_fountainFloorTrip) then
+		local back = xpRecoveryLoc(bot, nEnemyCreeps, hp)
+		if back ~= nil and GetUnitToLocationDistance(bot, back) > 220 then
+			if bot.aib_recMoveLast == nil or DotaTime() - bot.aib_recMoveLast >= 1.5 then
+				bot.aib_recMoveLast = DotaTime()
+				Style.Diag(bot, "heal-inflight-back")
+				recoveryPlan(bot, "back", "heal_in_flight", string.format("hp=%.0f", hp * 100), 2.0)
+				bot:Action_MoveToLocation(back)
+			end
+			return true
+		end
+		Style.DiagRL(bot, "heal-inflight-hold", 5)
+	end
+
 	-- 4b (user's deferred call, 21.07 -> chosen 23.07): before spending 60 seconds walking
 	-- home, look at the rune clock. A rune that is nearly up and closer than the fountain
 	-- gives the same full bar plus bottle charges plus map presence, for a few seconds of
