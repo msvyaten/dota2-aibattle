@@ -196,6 +196,19 @@ def report(match_id):
         print("  [%s] flask-guard(f942b46): consume-blocked=%d (heal-item + recovery-flask) "
               "| buy-blocked=%d (543c0c1, older)"
               % (side, consume, occ(text, side, "blocked=recovery-buy reason=fountain_floor_free_heal")))
+        # Sustain economy. The bought/drunk pair is the point: 8925573332 read bought 3-4 and
+        # drunk 2-3 for a whole 17-minute match spent a third of the time under 45% hp, with
+        # the third salve refused at hp=26 gold=1518 by a lifetime count cap. Want bought and
+        # drunk UP and budget_cap near 0 while gold is high; regen/walk are the do-nothing
+        # answer to low HP and should come DOWN as the consumables come up.
+        print("       sustain: bought=%d (+critical %d) drunk flask=%d tango=%d heal-item=%d"
+              " | blocked budget_cap=%d flask_in_bag=%d | stand-and-regen=%d walk=%d"
+              % (diag_max(text, side, "recovery-buy"), diag_max(text, side, "recovery-buy-critical"),
+                 diag_max(text, side, "recovery-flask"), diag_max(text, side, "recovery-tango"),
+                 diag_max(text, side, "heal-item"),
+                 occ(text, side, "blocked=recovery-buy reason=budget_cap"),
+                 occ(text, side, "blocked=recovery-buy reason=flask_in_inventory"),
+                 diag_max(text, side, "recovery-regen"), diag_max(text, side, "regen-walk")))
         print("       melee-pack(3e64ecb): inside_melee_pack=%d | creep-hit-react atk=%d step=%d back=%d"
               % (occ(text, side, "blocked=creep-hit-react reason=inside_melee_pack"),
                  diag_max(text, side, "creep-hit-react-atk"),

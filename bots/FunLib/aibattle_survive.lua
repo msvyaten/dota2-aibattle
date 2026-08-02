@@ -875,8 +875,27 @@ local function recovery(bot, dials, nEnemyCreeps)
 			and gold >= itemCost("item_flask")
 			and not bot:HasModifier("modifier_flask_healing")
 		if not criticalStuck then
-			if (bot.aib_recBuyCount or 0) >= 2 then
-				Style.Blocked(bot, "recovery-buy", "budget_cap", string.format("hp=%.0f gold=%d", hp*100, gold), 8.0)
+			-- The cap used to be a LIFETIME count of 2, and nothing ever reset it, so the
+			-- third salve of a match was refused no matter what had happened since. It was
+			-- written against a real problem -- the early flask re-buy loop that reset the
+			-- gold climb every 110g and starved the bottle until 5:09 -- but that problem is
+			-- about a POOR bot, and the cap did not ask about gold at all.
+			--
+			-- 8925573332 [D] is the bill: "blocked=recovery-buy reason=budget_cap hp=26
+			-- gold=1518". A third of the match under 45% hp, 1518 gold in the bag, refusing a
+			-- 110g salve because it had bought two of them fifteen minutes earlier. Both
+			-- sides drank recovery-flask=1 and heal-item=1 all match and answered low HP by
+			-- standing still (recovery-regen=27/28, regen-walk=53/30) -- which is the whole
+			-- reason the idle watchdog owns more ticks than fighting and farming.
+			--
+			-- So ask the question the cap was always meant to ask: can we spare it. Two buys
+			-- for free, one more per 400 gold on hand. A bot saving for boots on 150 gold
+			-- sees exactly the old limit; a bot sitting on 1500 buys the salve.
+			local allowance = 2 + math.floor(gold / 400)
+			if (bot.aib_recBuyCount or 0) >= allowance then
+				Style.Blocked(bot, "recovery-buy", "budget_cap",
+					string.format("hp=%.0f gold=%d count=%d allow=%d",
+						hp*100, gold, bot.aib_recBuyCount or 0, allowance), 8.0)
 				return false
 			end
 			if wantsBottleFromStyle(bot) and hp >= 0.22 then
