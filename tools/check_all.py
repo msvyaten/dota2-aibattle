@@ -335,6 +335,46 @@ def check_lua_syntax():
     return True
 
 
+def check_lua_local_use_before_decl():
+    """Catch a local called before it is declared -- Lua resolves that to a global, i.e. to nil.
+
+    Not a style rule: it is a runtime crash the structure check cannot see. Written after
+    shipping exactly this -- uphillBlocks was declared below M.KillLock and called inside it,
+    which compiles fine, passes the balanced-delimiter check, and dies the first time the branch
+    runs. Lua scopes a local from its declaration point onward, so a call above it never binds.
+
+    The forward-declaration pattern (`local f` now, `f = function() ...` later) is legitimate and
+    is honoured: what matters is where the NAME becomes local, not where the body lands.
+    """
+    print("[check] lua local-use-before-declaration", flush=True)
+    decl_fn = re.compile(r"^[ \t]*local\s+function\s+([A-Za-z_]\w*)", re.M)
+    decl_var = re.compile(r"^[ \t]*local\s+([A-Za-z_]\w*)\s*(?:=|$)", re.M)
+    bad = []
+    for rel in SYNTAX_FILES:
+        path = ROOT / "bots" / rel
+        if not path.exists():
+            continue
+        src = _strip_lua(path.read_text(encoding="utf-8", errors="ignore"))
+        first_decl = {}
+        for m in list(decl_fn.finditer(src)) + list(decl_var.finditer(src)):
+            name = m.group(1)
+            if name not in first_decl or m.start() < first_decl[name]:
+                first_decl[name] = m.start()
+        for name, at in first_decl.items():
+            # A call, not a mention: `name(` and not preceded by a field/method separator, so
+            # ctx.name(...) and obj:name(...) are somebody else's binding, not this local.
+            hit = re.search(r"(?<![\w.:])" + re.escape(name) + r"\s*\(", src[:at])
+            if hit:
+                line = src.count(chr(10), 0, hit.start()) + 1
+                bad.append("%s: %s() called at line ~%d, declared local further down" % (rel, name, line))
+    if bad:
+        print("[fail] local used before declaration (binds to a nil global at runtime):", flush=True)
+        for b in bad:
+            print("   ", b, flush=True)
+        return False
+    return True
+
+
 def check_python_syntax():
     """Compile source in memory so syntax checks never create __pycache__ files."""
     print("[check] python syntax", flush=True)
@@ -420,6 +460,7 @@ def main():
     ok = run_step("text encoding", [sys.executable, "tools/check_text_encoding.py"]) and ok
     ok = check_active_docs() and ok
     ok = check_lua_syntax() and ok
+    ok = check_lua_local_use_before_decl() and ok
     ok = check_python_syntax() and ok
     ok = check_forbidden_laning_keys() and ok
     ok = check_deploy_manifest_sync() and ok
