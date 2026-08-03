@@ -26,6 +26,7 @@ Per match
   amplitude         max lead each way and mean |lead| -- do live odds move at all?
   deficit_overcome  biggest hole the winner climbed out of
   first_event       first blood, or first big HP swing -- when the match gets going
+  state markets     HP/level/lane-pressure curves, low-HP and kill-pressure windows
 
 Per series (--series)
   totals line       duration distribution -> over/under market
@@ -33,12 +34,14 @@ Per series (--series)
   method split      how matches were won -> method market
   outcome spread    same-looking matches repeated = replay, not a contest
   in-play basis     empirical P(win | lead at minute N), accumulated across matches
+  identity gate     frozen build + frozen strategy pair + mandatory side swap
 
 Usage
   python tools/betting.py <log-or-matchid> [more ids ...]
   python tools/betting.py --series <id1> <id2> ...
 """
 
+import hashlib
 import os
 import re
 import statistics
@@ -52,6 +55,13 @@ LEAD_BAND_GOLD = 200
 PAIR_TOLERANCE_S = 3.0
 # An HP drop this large between consecutive samples counts as a real exchange.
 BIG_HP_SWING = 20.0
+# A market-facing danger band. This is deliberately independent from a bot style:
+# odds care that a hero is one short exchange from death, regardless of why its
+# recovery policy did or did not react.
+LOW_HP_PCT = 35.0
+# 900 is the widest common laning combat scan. A low target outside it is not an
+# immediate kill window; it is merely hurt somewhere else on the map.
+KILL_PRESSURE_RANGE = 900.0
 # Lead buckets for the in-play win-probability table.
 LEAD_BUCKETS = [(-10**9, -800), (-800, -300), (-300, 300), (300, 800), (800, 10**9)]
 BUCKET_LABELS = ["D +800", "D +300", "even", "R +300", "R +800"]
@@ -69,6 +79,12 @@ def pair_streams(telemetry, tolerance=PAIR_TOLERANCE_S):
     pairs, dire = [], telemetry["D"]
     if not dire:
         return pairs
+    # `front` is measured from each side's own fountain, so raw R-D contains map
+    # geometry and two different wave origins. Compare movement from each side's
+    # first observed front instead: positive means Radiant's wave advanced farther
+    # than Dire's, negative means Dire pressure.
+    front_r0 = next((s["front"] for s in telemetry["R"] if s.get("front") is not None and s["front"] >= 0), None)
+    front_d0 = next((s["front"] for s in dire if s.get("front") is not None and s["front"] >= 0), None)
     for r in telemetry["R"]:
         d = min(dire, key=lambda s: abs(s["t"] - r["t"]))
         if abs(d["t"] - r["t"]) > tolerance:
@@ -76,6 +92,15 @@ def pair_streams(telemetry, tolerance=PAIR_TOLERANCE_S):
         lh_lead = None
         if r["lh"] is not None and d["lh"] is not None:
             lh_lead = r["lh"] - d["lh"]
+        level_lead = None
+        if r.get("lvl") is not None and d.get("lvl") is not None and r["lvl"] >= 0 and d["lvl"] >= 0:
+            level_lead = r["lvl"] - d["lvl"]
+        lane_pressure = None
+        if (front_r0 is not None and front_d0 is not None
+                and r.get("front") is not None and d.get("front") is not None
+                and r["front"] >= 0 and d["front"] >= 0):
+            lane_pressure = (r["front"] - front_r0) - (d["front"] - front_d0)
+        distances = [x for x in (r.get("enemy_dist"), d.get("enemy_dist")) if x is not None]
         pairs.append({
             "t": r["t"],
             # Advantage, not wallet contents -- see extract_telemetry. The key keeps its
@@ -86,6 +111,10 @@ def pair_streams(telemetry, tolerance=PAIR_TOLERANCE_S):
             "lh_lead": lh_lead,
             "hp_r": r["hp"],
             "hp_d": d["hp"],
+            "hp_lead": r["hp"] - d["hp"],
+            "level_lead": level_lead,
+            "lane_pressure": lane_pressure,
+            "contact_dist": min(distances) if distances else None,
         })
     return pairs
 
@@ -161,9 +190,93 @@ def amplitude(pairs):
         return None
     leads = [p["gold_lead"] for p in pairs]
     return {
-        "max_r": max(leads),
-        "max_d": -min(leads),
+        "max_r": max(0, max(leads)),
+        "max_d": max(0, -min(leads)),
         "mean_abs": statistics.mean(abs(x) for x in leads),
+    }
+
+
+def _curve_summary(pairs, key):
+    """Signed R-minus-D summary for an optional paired telemetry field."""
+    values = [p[key] for p in pairs if p.get(key) is not None]
+    if not values:
+        return None
+    return {
+        "final": values[-1],
+        "max_r": max(0, max(values)),
+        "max_d": max(0, -min(values)),
+        "mean": statistics.mean(values),
+        "mean_abs": statistics.mean(abs(v) for v in values),
+        "samples": len(values),
+    }
+
+
+def _sample_spans(pairs):
+    """Attach a bounded duration to each periodic sample.
+
+    Telemetry is normally ~5s apart. A missing log chunk must not turn one active
+    sample into a minute-long betting window, so gaps are capped at twice the
+    median observed cadence. The final sample has no known lifetime and contributes
+    zero seconds rather than inventing time beyond the end of the log.
+    """
+    if not pairs:
+        return []
+    gaps = [b["t"] - a["t"] for a, b in zip(pairs, pairs[1:]) if b["t"] > a["t"]]
+    cadence = statistics.median(gaps) if gaps else 5.0
+    cap = max(2.0 * cadence, 1.0)
+    spans = []
+    for i, p in enumerate(pairs):
+        raw = pairs[i + 1]["t"] - p["t"] if i + 1 < len(pairs) else 0.0
+        spans.append((p, max(0.0, min(raw, cap))))
+    return spans
+
+
+def _window_stats(spans, predicate):
+    seconds = 0.0
+    episodes = 0
+    first = None
+    active = False
+    for p, duration in spans:
+        on = bool(predicate(p))
+        if on:
+            seconds += duration
+            if not active:
+                episodes += 1
+                if first is None:
+                    first = p["t"]
+        active = on
+    return {"seconds": seconds, "episodes": episodes, "first": first}
+
+
+def state_markets(pairs):
+    """Market signals that unspent-gold advantage cannot represent.
+
+    These are descriptive state variables, not a hand-tuned win-probability model.
+    They start accumulating the inputs needed for one: health danger, actionable
+    kill pressure, level advantage, and wave pressure.
+    """
+    spans = _sample_spans(pairs)
+    duration = sum(dt for _, dt in spans)
+
+    def low(side):
+        return lambda p: p[f"hp_{side.lower()}"] <= LOW_HP_PCT
+
+    def kill_pressure(side):
+        own = "hp_r" if side == "R" else "hp_d"
+        foe = "hp_d" if side == "R" else "hp_r"
+        return lambda p: (p.get("contact_dist") is not None
+                          and p["contact_dist"] <= KILL_PRESSURE_RANGE
+                          and p[foe] <= LOW_HP_PCT
+                          and p[own] > p[foe])
+
+    return {
+        "duration": duration,
+        "hp": _curve_summary(pairs, "hp_lead"),
+        "level": _curve_summary(pairs, "level_lead"),
+        "lane": _curve_summary(pairs, "lane_pressure"),
+        "low_hp": {side: _window_stats(spans, low(side)) for side in ("R", "D")},
+        "kill_pressure": {side: _window_stats(spans, kill_pressure(side)) for side in ("R", "D")},
+        "mutual_low": _window_stats(spans, lambda p: p["hp_r"] <= LOW_HP_PCT and p["hp_d"] <= LOW_HP_PCT),
     }
 
 
@@ -223,6 +336,28 @@ def infer_winner(pairs, deaths, result=None):
     return winner, "tower/last-hits (see match_stats)"
 
 
+def strategy_fingerprints(text):
+    """Stable IDs for the two announced LLM strategies.
+
+    The announce is the canonical runtime config, unlike the mutable files on disk.
+    Hashing its three lines keeps series output compact while still detecting one
+    changed dial or rule. Old logs without a complete announce remain supported.
+    """
+    rows = {"R": {}, "D": {}}
+    pattern = re.compile(r"AIB\[([RD])\]\s+((?:harass|defend|hero)=[^']+)")
+    for side, body in pattern.findall(text):
+        body = " ".join(body.split())
+        rows[side][body.split("=", 1)[0]] = body
+    result = {}
+    for side in ("R", "D"):
+        if not all(k in rows[side] for k in ("harass", "defend", "hero")):
+            result[side] = None
+            continue
+        canonical = "\n".join(rows[side][k] for k in ("harass", "defend", "hero"))
+        result[side] = hashlib.sha1(canonical.encode("utf-8")).hexdigest()[:8]
+    return result
+
+
 # ---------------------------------------------------------------- per match
 
 def analyse(text):
@@ -249,6 +384,8 @@ def analyse(text):
         "amplitude": amplitude(pairs),
         "deficit_overcome": deficit_overcome(pairs, winner),
         "first_event": first_event(pairs, deaths),
+        "state": state_markets(pairs),
+        "strategies": strategy_fingerprints(text),
         "final_gold_lead": final["gold_lead"],
         "final_lh_lead": final["lh_lead"],
         "deaths": {k: len(v) for k, v in deaths.items()},
@@ -260,6 +397,10 @@ def analyse(text):
 
 def _fmt(v, suffix="", nd=1):
     return "n/a" if v is None else f"{v:.{nd}f}{suffix}"
+
+
+def _share(seconds, total):
+    return None if not total else seconds / total * 100.0
 
 
 def report_one(label, m):
@@ -282,6 +423,42 @@ def report_one(label, m):
     if m["final_lh_lead"] is not None:
         margin += f", lh {m['final_lh_lead']:+d}"
     print(f"  final margin      {margin}")
+    strategies = m.get("strategies") or {}
+    if strategies.get("R") or strategies.get("D"):
+        print(f"  strategies        R={strategies.get('R') or '?'} D={strategies.get('D') or '?'}")
+
+    state = m.get("state") or {}
+    print("\n  state markets")
+    hp = state.get("hp")
+    if hp:
+        print(f"    hp advantage    final {hp['final']:+.0f}pp, R peak +{hp['max_r']:.0f}, "
+              f"D peak +{hp['max_d']:.0f}, mean |edge| {hp['mean_abs']:.0f}pp")
+    level = state.get("level")
+    if level:
+        print(f"    level advantage final {level['final']:+.0f}, R peak +{level['max_r']:.0f}, "
+              f"D peak +{level['max_d']:.0f}")
+    else:
+        print("    level advantage n/a (old telemetry)")
+    lane = state.get("lane")
+    if lane:
+        print(f"    lane pressure   final {lane['final']:+.0f}, R peak +{lane['max_r']:.0f}, "
+              f"D peak +{lane['max_d']:.0f}, mean {lane['mean']:+.0f}")
+    else:
+        print("    lane pressure   n/a (old telemetry)")
+
+    total = state.get("duration") or 0.0
+    low = state.get("low_hp") or {}
+    kp = state.get("kill_pressure") or {}
+    for side in ("R", "D"):
+        low_side = low.get(side, {"seconds": 0.0, "episodes": 0})
+        kp_side = kp.get(side, {"seconds": 0.0, "episodes": 0, "first": None})
+        print(f"    [{side}] low HP       {low_side['seconds']:.0f}s "
+              f"({_fmt(_share(low_side['seconds'], total), '%')}) in {low_side['episodes']} windows; "
+              f"kill pressure {kp_side['seconds']:.0f}s/{kp_side['episodes']} windows, "
+              f"first {_fmt(kp_side.get('first'), 's', 0)}")
+    mutual = state.get("mutual_low") or {"seconds": 0.0, "episodes": 0}
+    print(f"    mutual low      {mutual['seconds']:.0f}s in {mutual['episodes']} windows"
+          "   <- live comeback/kill volatility")
 
 
 def _line(values, nd=0):
@@ -310,8 +487,61 @@ def check_frozen_build(results):
     return False
 
 
+def series_config_status(results):
+    """Validate one frozen strategy matchup and its side swap."""
+    orientations = []
+    unknown = []
+    for label, m in results:
+        strategies = m.get("strategies") or {}
+        r, d = strategies.get("R"), strategies.get("D")
+        if r is None or d is None:
+            unknown.append(label)
+        else:
+            orientations.append((r, d))
+    if unknown:
+        return {"ok": True, "known": False, "unknown": unknown, "swapped": None, "pair": None}
+    matchups = {tuple(sorted(pair)) for pair in orientations}
+    if len(matchups) != 1:
+        return {"ok": False, "known": True, "reason": "config_changed",
+                "matchups": sorted(matchups), "swapped": False, "pair": None}
+    pair = next(iter(matchups))
+    mirrored = pair[0] == pair[1]
+    swapped = mirrored or ((pair[0], pair[1]) in orientations and (pair[1], pair[0]) in orientations)
+    # A one-match preview has no market line yet, so report the pending swap without refusing it.
+    ok = swapped or len(results) < 2
+    return {"ok": ok, "known": True, "reason": None if ok else "missing_side_swap",
+            "swapped": swapped, "pair": pair, "orientations": orientations}
+
+
+def check_frozen_config(results):
+    status = series_config_status(results)
+    if not status["known"]:
+        print("\nWARNING: strategy announce missing in: " + ", ".join(status["unknown"]))
+        print("Config freeze and side swap cannot be verified for this legacy series.")
+        return True
+    if status["ok"]:
+        pair = status.get("pair")
+        if pair is not None:
+            swap = "mirrored strategy" if pair[0] == pair[1] else ("side swap verified" if status["swapped"] else "side swap pending")
+            print(f"  strategy matchup         {pair[0]} vs {pair[1]} ({swap})")
+        return True
+    print("\nREFUSED: strategy configs are not a valid betting series.\n")
+    if status.get("reason") == "missing_side_swap":
+        a, b = status["pair"]
+        print(f"  {a} vs {b} was played on only one orientation.")
+        print("  Run the same matchup with Radiant/Dire swapped before pricing it.")
+    else:
+        print("  More than one strategy matchup was found:")
+        for pair in status.get("matchups", []):
+            print("  " + " vs ".join(pair))
+        print("  Freeze both configs; dial changes start a new series.")
+    return False
+
+
 def report_series(results):
     if not check_frozen_build(results):
+        return
+    if not check_frozen_config(results):
         return
     print("\n=== series ===")
     header = (f"{'match':<13}{'win':>5}{'dur':>7}{'1st ev':>8}{'decided':>9}"
@@ -362,6 +592,39 @@ def report_series(results):
         print(f"\n  biggest comeback in series: {max(comebacks):.0f} gold")
         if max(comebacks) < LEAD_BAND_GOLD:
             print("    WARNING: nobody ever came back -> live market dies at the first real lead")
+
+    print("\n--- state-market spread ---")
+    for side in ("R", "D"):
+        low_shares = []
+        pressure_seconds = []
+        pressure_episodes = 0
+        for m in metrics:
+            state = m.get("state") or {}
+            total = state.get("duration") or 0.0
+            low = (state.get("low_hp") or {}).get(side)
+            kp = (state.get("kill_pressure") or {}).get(side)
+            if low is not None and total > 0:
+                low_shares.append(_share(low["seconds"], total))
+            if kp is not None:
+                pressure_seconds.append(kp["seconds"])
+                pressure_episodes += kp["episodes"]
+        if low_shares:
+            print(f"  [{side}] low-HP share       {_line(low_shares, 1)}%")
+        if pressure_seconds:
+            print(f"      kill-pressure sec  {_line(pressure_seconds, 0)}; episodes total {pressure_episodes}")
+
+    level_finals = [m["state"]["level"]["final"] for m in metrics
+                    if (m.get("state") or {}).get("level") is not None]
+    lane_means = [m["state"]["lane"]["mean"] for m in metrics
+                  if (m.get("state") or {}).get("lane") is not None]
+    mutual_seconds = [m["state"]["mutual_low"]["seconds"] for m in metrics
+                      if (m.get("state") or {}).get("mutual_low") is not None]
+    if level_finals:
+        print(f"  final level lead R-D  {_line(level_finals, 0)}")
+    if lane_means:
+        print(f"  mean lane pressure    {_line(lane_means, 0)}")
+    if mutual_seconds:
+        print(f"  mutual-low seconds    {_line(mutual_seconds, 0)}")
 
     inplay_table(metrics)
 
