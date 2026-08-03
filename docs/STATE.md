@@ -68,7 +68,16 @@ changing who owns a tick makes review harder but does not cure oscillation.
 - Recovery can still win while having no useful action; verify `empty_action by winner` and
   low-HP episode traces after every recovery change.
 - Anti-idle still contains gameplay actions. Its long-term job is detection/escalation only;
-  farm, combat, rune, recovery, and siege owners must provide the actual action.
+  farm, combat, rune, recovery, and siege owners must provide the actual action. Measured in
+  `8926148548`: it is the single largest tick owner on both sides (109/106 against 65/68 for
+  fight) and comes back with no action in 66-67% of its activations. It wins not because it
+  takes the tick from someone, but because nothing above it is a candidate at all — `fight`
+  was absent from the loser list in 103 of 117 wins on the earlier match.
+- Two owners can deadlock by each deferring to the other, and neither logs an error. Live case,
+  open: `blocked=heal-item reason=fountain_trip_committed` and `blocked=fountain-floor
+  reason=heal_in_hand` on the same tick — the drink waits for the trip, the trip waits for the
+  drink, and the bot leaves the lane holding an unused salve. When adding a guard that defers
+  to another owner, check what that owner does when IT sees this guard.
 - Cross-module `bot.aib_*` state is ownership debt. Run `tools/project_inventory.py` and move
   writes behind owner APIs when touching those systems.
 - `mode_laning_generic.lua`, `aibattle_style.lua`, and `aibattle_survive.lua` remain large.
@@ -83,6 +92,25 @@ Use evidence in this order:
 3. cumulative diag counters;
 4. rate-limited intent strings, which are lower bounds only;
 5. visual observation, tied to a match timestamp.
+
+Never divide two counters without checking both rate limits in the source. `Style.Diag` is
+plain and `Style.DiagRL(bot, key, sec)` fires once per `sec`; putting them side by side invites
+a ratio that does not exist. In the anti-idle block the only honest pair is `anti-idle-enter`
+against `idle`, both `DiagRL(3s)`.
+
+Grep locates code; it never justifies a claim about it. Before writing that a function is dead,
+unreachable, or never fires, read the whole body — the actual conditions, not the `return`
+lines a grep happens to surface — and enumerate every definition that reads like it:
+
+```powershell
+python tools\check_all.py --twins <FunctionName>
+```
+
+Two similarly named functions in different files are two functions. On 02.08 the mechanism of
+`MissingBuildCheckpoint` (`aibattle_item_policy.lua`, genuinely dead — it reads an empty
+`Style.GetItemBuild`) was assumed to hold for `missingCheckpointItem` (`aibattle_survive.lua`,
+hardcoded list, very much alive). It held a second consumable cap and made a shipped fix half
+work. `--twins` prints both.
 
 Compare rates per minute, not raw counters. Attribute every match to the build SHA written in
 its log. Validation debt is `git log <match-build>..HEAD`; do not carry a hand-written count.
@@ -101,6 +129,8 @@ batch. Tooling, tests, documentation, and behavior-preserving deduplication may 
 - `tools/run_tests.py`: dependency-free Python test runner.
 - `tools/check_schema_contract.py`: Python/Lua/prompt/config schema agreement.
 - `tools/check_all.py --skip-live`: local pre-deploy gate.
+- `tools/check_all.py --twins NAME`: every Lua definition whose name reads like NAME, with
+  file and line. Run before claiming any function is dead or unreachable.
 - `tools/deploy.bat [code|playstyle|all|general|check]`: explicit deployment profiles.
 
 ## Collaboration
