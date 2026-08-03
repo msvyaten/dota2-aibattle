@@ -206,6 +206,11 @@ def report(match_id):
         # bought=0 with budget_cap=0 used to have no third explanation; this is it. The buy
         # now also runs at that gate, so bought must rise while the gate count stays high --
         # the gate is correct for everything except purchasing.
+        # ward-seen is the denominator that tells "never attacked it" apart from "it was never
+        # there". The real acceptance is one line down in the betting report: mutual low must
+        # become non-zero for the first time in any match on record.
+        print("       heal ward: seen=%d hit=%d (want both > 0; then check betting mutual-low)"
+              % (diag_max(text, side, "ward-seen"), diag_max(text, side, "ward-hit")))
         print("       recovery gate: enemy-near=%d (bails the whole function; buy exempted)"
               % diag_max(text, side, "recovery-enemy-near"))
         print("       sustain: bought=%d (+critical %d) drunk flask=%d tango=%d heal-item=%d"

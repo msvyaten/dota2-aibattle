@@ -29,6 +29,47 @@ local function powerRuneTowerTarget(ctx, range)
 	return twr, wave
 end
 
+-- Enemy heal summons: fragile units that undo a whole trade and that nothing in this codebase
+-- has ever looked at. Juggernaut's healing ward is cast by the vendor hero file
+-- (BotLib/hero_juggernaut.lua:349 X.ConsiderW) whose main trigger is "retreating below 50% HP",
+-- so in a melee mirror it goes down every single time somebody leaves a trade. The opponent
+-- cannot see it and never attacks it, so the trade resets and nobody is ever finished. That is
+-- the mechanism behind mutual-low reading 0s in 0 windows in every match measured, one death
+-- per game, and matches ending on a tower instead of a kill. User's diagnosis, 03.08.
+local HEAL_SUMMONS = {
+	npc_dota_juggernaut_healing_ward = true,
+	npc_dota_wisp_spirit = false,  -- placeholder shape: add heal summons here, not at call sites
+}
+
+local function enemyHealSummon(bot, radius)
+	local okList, units = pcall(GetUnitList, UNIT_LIST_ENEMY_CREEPS)
+	if not okList or type(units) ~= "table" then return nil end
+	local best, bestDist = nil, radius
+	for _, u in pairs(units) do
+		if u ~= nil and u.GetUnitName ~= nil and HEAL_SUMMONS[u:GetUnitName()] == true
+			and u:IsAlive() and J.CanBeAttacked(u) then
+			local d = GetUnitToUnitDistance(bot, u)
+			if d <= bestDist then best, bestDist = u, d end
+		end
+	end
+	return best, bestDist
+end
+
+-- The swing we were already taking, pointed at a better target. Deliberately NOT a new tick
+-- owner: every gate that let us attack at all -- hp floor, tower, uphill, concede -- still
+-- decided this tick, and a separate high-priority candidate would have bypassed all of them
+-- to chase a ward. Returns true when it issued the attack.
+local function hitHealSummonFirst(ctx, bot, range)
+	local ward, wardDist = enemyHealSummon(bot, range + 80)
+	if ward == nil then return false end
+	ctx.diag("ward-seen")
+	if wardDist > range then return false end
+	bot:Action_AttackUnit(ward, true)
+	ctx.diag("ward-hit")
+	Style.Intent(bot, "heal-ward", string.format("dist=%.0f hp=%.0f", wardDist, J.GetHP(bot) * 100), 2.0)
+	return true
+end
+
 function M.ContactHero(ctx)
 	local bot = ctx.bot
 	local rules = ctx.rules or {}
@@ -62,6 +103,7 @@ function M.ContactHero(ctx)
 		end
 		bot.aib_contactHeroLast = now
 		bot.aib_harassLast = now
+		if hitHealSummonFirst(ctx, bot, range) then return true end
 		Style.Intent(bot, "hero-contact", string.format("dist=%.0f hp=%.0f reason=attackable_enemy", dist, hp * 100))
 		bot:Action_AttackUnit(enemy, false)
 		ctx.diag("hero-contact-atk")
@@ -354,6 +396,7 @@ function M.HarassAndChase(ctx)
 				return false
 			end
 			if not (ctx.csAllowed and ctx.needMove) then
+				if hitHealSummonFirst(ctx, bot, range) then return true end
 				bot:Action_AttackUnit(atkHero[1], false)
 				ctx.diag("hero-prio-always")
 				return true
@@ -365,6 +408,7 @@ function M.HarassAndChase(ctx)
 			if inRange and ctx.enemyTowerDanger() == nil and not ctx.deathSurvive and harassReady
 				and not uphillWhiff(atkHero[1]) then
 				bot.aib_harassLast = DotaTime()
+				if hitHealSummonFirst(ctx, bot, range) then return true end
 				bot:Action_AttackUnit(atkHero[1], false)
 				ctx.diag("harass-atk")
 				return true
