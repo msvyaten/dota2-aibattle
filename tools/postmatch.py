@@ -201,6 +201,13 @@ def report(match_id):
         # the third salve refused at hp=26 gold=1518 by a lifetime count cap. Want bought and
         # drunk UP and budget_cap near 0 while gold is high; regen/walk are the do-nothing
         # answer to low HP and should come DOWN as the consumables come up.
+        # recovery-enemy-near is the third gate, now visible: recovery() bails whole when an
+        # enemy is inside 900, which is 68% of the match and 50-67% of every low-HP sample.
+        # bought=0 with budget_cap=0 used to have no third explanation; this is it. The buy
+        # now also runs at that gate, so bought must rise while the gate count stays high --
+        # the gate is correct for everything except purchasing.
+        print("       recovery gate: enemy-near=%d (bails the whole function; buy exempted)"
+              % diag_max(text, side, "recovery-enemy-near"))
         print("       sustain: bought=%d (+critical %d) drunk flask=%d tango=%d heal-item=%d"
               " | blocked budget_cap=%d flask_in_bag=%d | stand-and-regen=%d walk=%d"
               % (diag_max(text, side, "recovery-buy"), diag_max(text, side, "recovery-buy-critical"),

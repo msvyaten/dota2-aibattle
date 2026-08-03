@@ -703,6 +703,86 @@ end
 -- recovery: post-fight heal WITHOUT safety gates.
 -- Enemy is dead/gone -- no need to wait for "safe" windows.
 --
+-- Buying a salve is not an action the enemy can contest. It is instant, has no cast time, and
+-- happens at the shop rather than in the lane -- unlike drinking one, which damage cancels, or
+-- walking to a safe line, which an enemy in range punishes. Everything else in recovery()
+-- genuinely needs the enemy gone. This does not, and it spent its whole life 190 lines below
+-- the `enemy within 900 -> return false` gate at the top of that function.
+--
+-- Measured across 8926148548 and 8927375253: an enemy sits inside 900 for 68% of the match and
+-- for 50-67% of every sample below 45% HP. So the bot could only stock up when it no longer
+-- needed to. That is the third gate behind the two consumable caps already lifted, and it is
+-- why 8927375253 read `bought=0 (+critical 5)` with `budget_cap=0` -- no guard refused the
+-- purchase, the code was never reached. Two caps removed, volume unchanged: 6 buys to 5.
+--
+-- Returns "bought" when it purchased, "have" when a salve is already in the bag (which is
+-- recovery()'s reason to yield the tick, preserved), nil otherwise. ONE owner, two call sites.
+-- Do not inline a second copy at the gate.
+local function stockHealConsumable(bot, hp, gold)
+	if hp < 0.22 then
+		if bot.aib_floorDeferSince == nil then bot.aib_floorDeferSince = DotaTime() end
+	else
+		bot.aib_floorDeferSince = nil
+	end
+	local floorDeferFresh = bot.aib_floorDeferSince == nil
+		or DotaTime() - bot.aib_floorDeferSince < 2.0
+	local floorWillSendHome = hp < 0.22 and not bot:WasRecentlyDamagedByAnyHero(2.0)
+		and floorDeferFresh
+	if floorWillSendHome and not hasItem(bot, "item_flask") then
+		Style.Blocked(bot, "recovery-buy", "fountain_floor_free_heal", string.format("hp=%.0f gold=%d", hp*100, gold), 8.0)
+		Style.DiagRL(bot, "buy-skip-fountain-floor", 5)
+	end
+	if gold < 55 or floorWillSendHome
+		or (bot.aib_recBuyLast ~= nil and DotaTime() - bot.aib_recBuyLast < 15.0) then
+		return nil
+	end
+	if hasItem(bot, "item_flask") then
+		Style.Blocked(bot, "recovery-buy", "flask_in_inventory", string.format("hp=%.0f", hp*100), 8.0)
+		return "have"
+	end
+	-- Critical-stuck escape (8884639175 t=410-436): the bot froze at its anchor for
+	-- ~26s at 26-29% HP while its tower was sieged, with 136 idle gold, because
+	-- budget_cap AND bottle-gold-protect both blocked the one buy that would un-stick
+	-- it (no bottle charge, no reachable rune, no second TP). When in-lane sustain is
+	-- genuinely exhausted, survival > saving: allow ONE flask past both caps. Cannot
+	-- runaway -- each buy spends gold and the 15s rate limit above still holds.
+	local charges = bottleCharges(bot)
+	local criticalStuck = hp < 0.30
+		and (charges == nil or charges <= 0)
+		and gold >= itemCost("item_flask")
+		and not bot:HasModifier("modifier_flask_healing")
+	if not criticalStuck then
+		-- The cap used to be a LIFETIME count of 2, and nothing ever reset it, so the third
+		-- salve of a match was refused no matter what had happened since. It was written
+		-- against a real problem -- the early flask re-buy loop that starved the bottle until
+		-- 5:09 -- but that problem is about a POOR bot, and the cap did not ask about gold.
+		-- Two buys free, one more per 400 gold on hand: a bot saving for boots on 150 gold
+		-- sees exactly the old limit, a bot sitting on 1500 buys the salve.
+		local allowance = 2 + math.floor(gold / 400)
+		if (bot.aib_recBuyCount or 0) >= allowance then
+			Style.Blocked(bot, "recovery-buy", "budget_cap",
+				string.format("hp=%.0f gold=%d count=%d allow=%d",
+					hp*100, gold, bot.aib_recBuyCount or 0, allowance), 8.0)
+			return nil
+		end
+		if wantsBottleFromStyle(bot) and hp >= 0.22 then
+			Style.DiagRL(bot, "bottle-gold-protect", 8)
+			return nil
+		end
+		if consumableSpendBlocked(bot, hp, gold, "item_flask") then
+			return nil
+		end
+	end
+	bot.aib_recBuyLast = DotaTime()
+	bot.aib_recBuyCount = (bot.aib_recBuyCount or 0) + 1
+	bot.aib_recBuySpent = (bot.aib_recBuySpent or 0) + itemCost("item_flask")
+	recoveryPlan(bot, "buy_flask", criticalStuck and "critical_stuck" or "critical",
+		string.format("hp=%.0f gold=%d count=%d", hp*100, gold, bot.aib_recBuyCount or 0), 2.0)
+	bot:ActionImmediate_PurchaseItem("item_flask")
+	Style.Diag(bot, criticalStuck and "recovery-buy-critical" or "recovery-buy")
+	return "bought"
+end
+
 local function recovery(bot, dials, nEnemyCreeps)
 	if Style.Get().rules.healing_style ~= "active" or not bot:IsAlive() then return false end
 
@@ -710,7 +790,14 @@ local function recovery(bot, dials, nEnemyCreeps)
 	local maxMana = bot:GetMaxMana()
 	local mana    = maxMana > 0 and (bot:GetMana() / maxMana) or 1.0
 	local near    = bot:GetNearbyHeroes(900, true, BOT_MODE_NONE)
-	if near and #near > 0 and near[1]:IsAlive() then return false end
+	if near and #near > 0 and near[1]:IsAlive() then
+		-- This gate was invisible: nothing counted it, so "the buy never fired and nothing
+		-- blocked it" had no third explanation to offer. Now it does.
+		Style.Diag(bot, "recovery-enemy-near")
+		-- Stocking up is the one thing below here that an enemy in the lane does not prevent.
+		stockHealConsumable(bot, hp, bot:GetGold())
+		return false
+	end
 
 	-- 1. Tango: 800u radius (wider than laning -- enemy gone, safe to step to farther tree).
 	if tryTango(bot, 0.65, 800, "recovery-tango") then return true end
@@ -851,76 +938,9 @@ local function recovery(bot, dials, nEnemyCreeps)
 	-- So the deferral is now time-boxed: it holds while the floor plausibly just has not had its
 	-- tick yet, and expires once the bot has been in the band long enough that the prediction is
 	-- simply false. Two seconds is a floor that fires every tick when it fires at all.
-	if hp < 0.22 then
-		if bot.aib_floorDeferSince == nil then bot.aib_floorDeferSince = DotaTime() end
-	else
-		bot.aib_floorDeferSince = nil
-	end
-	local floorDeferFresh = bot.aib_floorDeferSince == nil
-		or DotaTime() - bot.aib_floorDeferSince < 2.0
-	local floorWillSendHome = hp < 0.22 and not bot:WasRecentlyDamagedByAnyHero(2.0)
-		and floorDeferFresh
-	if floorWillSendHome and not hasItem(bot, "item_flask") then
-		Style.Blocked(bot, "recovery-buy", "fountain_floor_free_heal", string.format("hp=%.0f gold=%d", hp*100, gold), 8.0)
-		Style.DiagRL(bot, "buy-skip-fountain-floor", 5)
-	end
-	if gold >= 55 and not floorWillSendHome
-		and (bot.aib_recBuyLast == nil or DotaTime() - bot.aib_recBuyLast >= 15.0) then
-		if hasItem(bot, "item_flask") then
-			Style.Blocked(bot, "recovery-buy", "flask_in_inventory", string.format("hp=%.0f", hp*100), 8.0)
-			return false
-		end
-		-- Critical-stuck escape (8884639175 t=410-436): the bot froze at its anchor for
-		-- ~26s at 26-29% HP while its tower was sieged, with 136 idle gold, because
-		-- budget_cap AND bottle-gold-protect both blocked the one buy that would un-stick
-		-- it (no bottle charge, no reachable rune, no second TP). When in-lane sustain is
-		-- genuinely exhausted, survival > saving: allow ONE flask past both caps. Cannot
-		-- runaway -- each buy spends gold and the 15s rate limit above still holds.
-		local charges = bottleCharges(bot)
-		local criticalStuck = hp < 0.30
-			and (charges == nil or charges <= 0)
-			and gold >= itemCost("item_flask")
-			and not bot:HasModifier("modifier_flask_healing")
-		if not criticalStuck then
-			-- The cap used to be a LIFETIME count of 2, and nothing ever reset it, so the
-			-- third salve of a match was refused no matter what had happened since. It was
-			-- written against a real problem -- the early flask re-buy loop that reset the
-			-- gold climb every 110g and starved the bottle until 5:09 -- but that problem is
-			-- about a POOR bot, and the cap did not ask about gold at all.
-			--
-			-- 8925573332 [D] is the bill: "blocked=recovery-buy reason=budget_cap hp=26
-			-- gold=1518". A third of the match under 45% hp, 1518 gold in the bag, refusing a
-			-- 110g salve because it had bought two of them fifteen minutes earlier. Both
-			-- sides drank recovery-flask=1 and heal-item=1 all match and answered low HP by
-			-- standing still (recovery-regen=27/28, regen-walk=53/30) -- which is the whole
-			-- reason the idle watchdog owns more ticks than fighting and farming.
-			--
-			-- So ask the question the cap was always meant to ask: can we spare it. Two buys
-			-- for free, one more per 400 gold on hand. A bot saving for boots on 150 gold
-			-- sees exactly the old limit; a bot sitting on 1500 buys the salve.
-			local allowance = 2 + math.floor(gold / 400)
-			if (bot.aib_recBuyCount or 0) >= allowance then
-				Style.Blocked(bot, "recovery-buy", "budget_cap",
-					string.format("hp=%.0f gold=%d count=%d allow=%d",
-						hp*100, gold, bot.aib_recBuyCount or 0, allowance), 8.0)
-				return false
-			end
-			if wantsBottleFromStyle(bot) and hp >= 0.22 then
-				Style.DiagRL(bot, "bottle-gold-protect", 8)
-				return false
-			end
-			if consumableSpendBlocked(bot, hp, gold, "item_flask") then
-				return false
-			end
-		end
-		bot.aib_recBuyLast = DotaTime()
-		bot.aib_recBuyCount = (bot.aib_recBuyCount or 0) + 1
-		bot.aib_recBuySpent = (bot.aib_recBuySpent or 0) + itemCost("item_flask")
-		recoveryPlan(bot, "buy_flask", criticalStuck and "critical_stuck" or "critical", string.format("hp=%.0f gold=%d count=%d", hp*100, gold, bot.aib_recBuyCount or 0), 2.0)
-		bot:ActionImmediate_PurchaseItem("item_flask")
-		Style.Diag(bot, criticalStuck and "recovery-buy-critical" or "recovery-buy")
-		return true
-	end
+	local stock = stockHealConsumable(bot, hp, gold)
+	if stock == "bought" then return true end
+	if stock == "have" then return false end
 
 	-- b. TP to fountain -- tp_fountain ONLY.
 	-- walk_fountain is defined as "no TP escape; walk to own fountain on foot" (style.lua:86):
