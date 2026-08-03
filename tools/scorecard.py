@@ -42,11 +42,29 @@ def game_minutes(text):
 
 
 def side_counter_max(text, side, key):
+    """Highest value of a cumulative diag counter, read ONLY from counter-dump lines.
+
+    The old version matched `key=N` anywhere on any AIB line for that side, which is not the
+    same question. `execute` is a real diag counter (aibattle_style.lua:1201) AND a field in
+    the fight-desire intent string -- `state-desire-fight base=78 execute=20 dist=327` -- where
+    20 is the execute bonus in the score, printed every time the desire is evaluated. postmatch
+    reported execute=20 for both sides in three consecutive matches while the actual counter sat
+    at 2-3, and that number was being read as evidence about finishing.
+
+    Two guards. A dump line is an AIB line carrying neither `intent=` nor `blocked=` -- those
+    two prefixes cover every structured line that is not a counter dump. And the key needs a
+    left boundary that is not a word character or a hyphen, so `creep-hit-react-atk` cannot
+    answer a query for `atk`.
+    """
+    pat = re.compile(r"(?<![\w-])%s=(\d+)" % re.escape(key))
     best = 0
-    for m in re.finditer(r"AIB\[%s\][^']*?%s=(\d+)" % (side, re.escape(key)), text):
-        v = int(m.group(1))
-        if v > best:
-            best = v
+    for line in re.findall(r"AIB\[%s\][^']*" % side, text):
+        if "intent=" in line or "blocked=" in line:
+            continue
+        for m in pat.finditer(line):
+            v = int(m.group(1))
+            if v > best:
+                best = v
     return best
 
 
