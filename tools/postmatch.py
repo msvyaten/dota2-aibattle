@@ -267,10 +267,18 @@ def report(match_id):
               % (diag_max(text, side, "deny-cand-doomed"), diag_max(text, side, "deny-cand-tanky")))
         # Per-hero kill-window multiplier (Style.AttackDamageMult). Juggernaut declares
         # base=2.0 / burst=3.0; every other hero still answers 3.0, so exec and mutual are the
-        # control legs -- they must hold while atk falls.
-        print("       kill window by leg (RL3): atk=%d (narrowed for melee) exec=%d mutual=%d"
-              % (diag_max(text, side, "killwin-atk"), diag_max(text, side, "killwin-exec"),
-                 diag_max(text, side, "killwin-mutual")))
+        # control legs -- they must hold while atk falls. All plain counters, so the legs are
+        # comparable to the scan denominator and to each other.
+        #
+        # `narrowed` is the direct measurement and the one to read first: enemies the old
+        # Shadow Fiend 3.0 would have called killable and this hero's own number does not.
+        # narrowed=0 means the change did nothing -- no verdict, not a pass.
+        scan = diag_max(text, side, "killwin-scan")
+        print("       kill window: scan=%d -> atk=%d exec=%d mutual=%d | NARROWED=%d"
+              " (0 = the change never bit; not a pass)"
+              % (scan, diag_max(text, side, "killwin-atk"), diag_max(text, side, "killwin-exec"),
+                 diag_max(text, side, "killwin-mutual"),
+                 diag_max(text, side, "killwin-atk-narrowed")))
         bl = buy_loop(text, side)
         print("       buy loop: saving x%d %s" % (bl["saving"][0], bl["saving"][1] or "(silent)"))
         print("                 stalled x%d %s" % (bl["stalled"][0], bl["stalled"][1] or "(silent)"))

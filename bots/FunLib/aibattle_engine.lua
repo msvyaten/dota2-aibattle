@@ -96,8 +96,20 @@ function M.KillWindow(ctx)
 			local ehp = J.GetHP(enemy)
 			local dist = GetUnitToUnitDistance(bot, enemy)
 			local exec = dials.execute_threshold or 0
-			local attackKill = enemy:GetHealth()
-				<= bot:GetAttackDamage() * (ctx.attackDamageMult or Style.AttackDamageMult(bot, enemy))
+			-- Denominator. Without it the leg counters below are unreadable: 8926148548 read
+			-- killwin-atk 0-2 per side, which says nothing at all until you know whether the
+			-- question was asked twice or two thousand times.
+			Style.Diag(bot, "killwin-scan")
+			local atkDmg = bot:GetAttackDamage()
+			local killMult = ctx.attackDamageMult or Style.AttackDamageMult(bot, enemy)
+			local attackKill = enemy:GetHealth() <= atkDmg * killMult
+			-- The multiplier's acceptance, measured directly instead of inferred from outcomes:
+			-- count the enemies the OLD Shadow Fiend constant would have called killable and
+			-- this hero's own number does not. Zero here means the change did nothing at all --
+			-- either the hero declares no kill_mult, or the band never comes up in play.
+			if not attackKill and enemy:GetHealth() <= atkDmg * 3.0 then
+				Style.Diag(bot, "killwin-atk-narrowed")
+			end
 			-- An HP number alone is not a kill window: see Style.ExecuteReady. Without the
 			-- readiness test this leg made every enemy under execute_threshold permanently
 			-- "killable" and handed the tick to a 1045-unit chase, starving last-hits.
@@ -113,12 +125,13 @@ function M.KillWindow(ctx)
 			if mutualLow then maxDist = math.max(maxDist, math.max(700, range + 260)) end
 			if lowFarmAlways or hpAdv then maxDist = math.max(maxDist, range + 520) end
 			if execute or attackKill or mutualLow or (lowFarmAlways and ehp <= Const.Fight.lowFarmEnemyHp and hp >= 0.34 and hpAdv) then
-				-- Which leg opened the window, so the per-hero attack multiplier has an
-				-- acceptance of its own: killwin-atk is the leg it narrows, killwin-exec and
-				-- killwin-mutual are the legs it must NOT touch. A drop in all three means
-				-- the change went further than intended.
-				Style.DiagRL(bot, attackKill and "killwin-atk"
-					or (execute and "killwin-exec" or "killwin-mutual"), 3)
+				-- Which leg opened the window: killwin-atk is the one the multiplier narrows,
+				-- exec and mutual are the controls it must NOT touch. Plain Diag, not DiagRL --
+				-- these have to be comparable to killwin-scan above and to each other, and a
+				-- 3-second limit on all three made them look like a handful of events in a
+				-- match where the question is asked continuously.
+				Style.Diag(bot, attackKill and "killwin-atk"
+					or (execute and "killwin-exec" or "killwin-mutual"))
 				return {
 					enemy = enemy,
 					hp = hp,
