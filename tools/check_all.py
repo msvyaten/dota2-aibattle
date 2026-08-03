@@ -375,6 +375,92 @@ def check_lua_local_use_before_decl():
     return True
 
 
+def _lua_definitions():
+    """Every function definition in the live Lua set: (name, rel, line, is_global)."""
+    # The name may be qualified (M.Foo, J.Bar, CDOTA_Bot_Script:Baz). Only a bare `function Foo`
+    # writes a global -- anything with a dot or colon is a field on a table that already exists.
+    pat = re.compile(r"^[ \t]*(local\s+function|function)\s+([A-Za-z_][\w.:]*)", re.M)
+    out = []
+    for rel in SYNTAX_FILES:
+        path = ROOT / "bots" / rel
+        if not path.exists():
+            continue
+        src = _strip_lua(path.read_text(encoding="utf-8", errors="ignore"))
+        for m in pat.finditer(src):
+            raw = m.group(2)
+            qualified = "." in raw or ":" in raw
+            name = re.split(r"[.:]", raw)[-1]
+            is_global = m.group(1) == "function" and not qualified
+            out.append((name, rel, src.count(chr(10), 0, m.start()) + 1, is_global))
+    return out
+
+
+def _name_tokens(name):
+    spaced = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", name).lower()
+    return {t for t in re.split(r"[^a-z0-9]+", spaced) if len(t) > 3}
+
+
+# Vendor mode entry points: every mode_*.lua is expected to define these, the engine calls the
+# one belonging to the active mode. Not a collision, and not ours to rename.
+KNOWN_GLOBAL_TWINS = {"Think", "GetDesire", "GetDesireHelper"}
+
+
+def check_lua_global_twins():
+    """A plain `function Name()` in two live files is one binding, and the last load wins.
+
+    Not hypothetical: mode_laning_generic and override_generic/mode_laning_generic both define
+    GetBestDenyCreep. Nothing warns, nothing crashes, and which body runs depends on load order.
+    """
+    print("[check] lua global twin names", flush=True)
+    by_name = {}
+    for name, rel, line, is_global in _lua_definitions():
+        if is_global and name not in KNOWN_GLOBAL_TWINS:
+            by_name.setdefault(name, []).append("%s:%d" % (rel, line))
+    dupes = {n: v for n, v in by_name.items() if len(v) > 1}
+    if dupes:
+        print("[fail] same global function name in more than one live file (last load wins):", flush=True)
+        for n, where in sorted(dupes.items()):
+            print("    %s -- %s" % (n, ", ".join(where)), flush=True)
+        return False
+    return True
+
+
+def report_twins(query):
+    """`--twins NAME`: every definition whose name reads like NAME, with file and line.
+
+    This exists because of a specific mistake, not as a style report. On 02.08 I read
+    MissingBuildCheckpoint in aibattle_item_policy.lua (which asks Style.GetItemBuild, empty in
+    both live configs, so genuinely dead), then met missingCheckpointItem in aibattle_survive.lua
+    -- similar name, different file -- grepped out its `return` lines, and filled in the
+    conditions from the function I had already read. That one hardcodes its checkpoint list and
+    was very much alive: it held a second salve cap that made a shipped fix half work.
+
+    So: before writing "this function is dead / unreachable / never fires", run this and read
+    every body it prints. A name that reads the same is not the same function.
+    """
+    want = _name_tokens(query)
+    if not want:
+        print("[twins] give a name with at least one word longer than 3 characters", flush=True)
+        return True
+    rows = []
+    for name, rel, line, is_global in _lua_definitions():
+        toks = _name_tokens(name)
+        if not toks:
+            continue
+        shared = toks & want
+        exact = name.lower() == query.lower()
+        if exact or (len(shared) >= 2 and len(shared) / min(len(toks), len(want)) >= 0.6):
+            rows.append((0 if exact else 1, name, rel, line, is_global))
+    if not rows:
+        print("[twins] no definition reads like %r in the live Lua set" % query, flush=True)
+        return True
+    print("[twins] %d definition(s) read like %r -- READ EVERY BODY before claiming anything "
+          "about any of them:" % (len(rows), query), flush=True)
+    for _, name, rel, line, is_global in sorted(rows):
+        print("    %-34s %s:%d%s" % (name, rel, line, "  (global)" if is_global else ""), flush=True)
+    return True
+
+
 def check_python_syntax():
     """Compile source in memory so syntax checks never create __pycache__ files."""
     print("[check] python syntax", flush=True)
@@ -454,13 +540,20 @@ def main():
     parser.add_argument("--match", help="Optional match id for match_stats smoke")
     parser.add_argument("--latest", action="store_true", help="Run match_stats against newest console log")
     parser.add_argument("--skip-live", action="store_true", help="Skip live Dota folder checks")
+    parser.add_argument("--twins", metavar="NAME",
+                        help="List every Lua definition whose name reads like NAME, and exit. "
+                             "Run this before claiming a function is dead or unreachable.")
     args = parser.parse_args()
+
+    if args.twins:
+        return 0 if report_twins(args.twins) else 1
 
     ok = True
     ok = run_step("text encoding", [sys.executable, "tools/check_text_encoding.py"]) and ok
     ok = check_active_docs() and ok
     ok = check_lua_syntax() and ok
     ok = check_lua_local_use_before_decl() and ok
+    ok = check_lua_global_twins() and ok
     ok = check_python_syntax() and ok
     ok = check_forbidden_laning_keys() and ok
     ok = check_deploy_manifest_sync() and ok
