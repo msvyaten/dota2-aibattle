@@ -67,21 +67,31 @@ changing who owns a tick makes review harder but does not cure oscillation.
   complete transaction telemetry, not bottle-empty percentage alone.
 - Recovery can still win while having no useful action; verify `empty_action by winner` and
   low-HP episode traces after every recovery change.
-- Anti-idle still contains gameplay actions. Its long-term job is detection/escalation only;
-  farm, combat, rune, recovery, and siege owners must provide the actual action. Measured in
-  `8926148548`: it is the single largest tick owner on both sides (109/106 against 65/68 for
-  fight) and comes back with no action in 66-67% of its activations. It wins not because it
-  takes the tick from someone, but because nothing above it is a candidate at all — `fight`
-  was absent from the loser list in 103 of 117 wins on the earlier match.
-- Two owners can deadlock by each deferring to the other, and neither logs an error. Live case,
-  open: `blocked=heal-item reason=fountain_trip_committed` and `blocked=fountain-floor
-  reason=heal_in_hand` on the same tick — the drink waits for the trip, the trip waits for the
-  drink, and the bot leaves the lane holding an unused salve. When adding a guard that defers
-  to another owner, check what that owner does when IT sees this guard.
-- Cross-module `bot.aib_*` state is ownership debt. Run `tools/project_inventory.py` and move
-  writes behind owner APIs when touching those systems.
+- Anti-idle still contains gameplay actions; its long-term job is detection only. Measured
+  (`8926148548`): largest tick owner on both sides, 109/106 against 65/68 for fight, and empty
+  in 66-67% of activations. It wins because nothing above it is a candidate at all — `fight`
+  was absent from the loser list in 103 of 117 of its wins.
+- Two owners can deadlock by deferring to each other, and neither logs an error. Open case:
+  `blocked=heal-item reason=fountain_trip_committed` with `blocked=fountain-floor
+  reason=heal_in_hand` on one tick — drink waits for trip, trip waits for drink, bot leaves
+  lane holding an unused salve. Adding a guard that defers? Read what that owner does back.
+- Cross-module `bot.aib_*` state is ownership debt; move writes behind owner APIs when touching
+  those systems (`tools/project_inventory.py` lists the writers).
 - `mode_laning_generic.lua`, `aibattle_style.lua`, and `aibattle_survive.lua` remain large.
   Shrink them by ownership extraction, not by arbitrary line-count targets.
+
+## Telemetry Volume: Deliberate, Not Debt
+
+Diag/Intent/Blocked all post to ALL CHAT (`ActionImmediate_Chat(msg, true)`); the console log
+is a record of chat, and `print()` does not reach it, so chat is a bot script's only channel.
+About 4400 lines a match, five a second. **User's call, 03.08: keep it while debugging** -- it
+is the only source that says who owned a tick and why, and it is what located the window where
+the last match was decided. Do not "clean it up".
+
+It becomes a product problem once a match has a spectator, since telemetry and watchability
+share one channel. Then: a switch in `Customize/general.lua` (a silent show match teaches us
+nothing), or thin the `intent=` traffic, ~3000 of those 4400 lines. Counter dumps are already
+once per 60s at 30 lines a match -- the dense data is disciplined, the per-event data is not.
 
 ## Evidence Rules
 
