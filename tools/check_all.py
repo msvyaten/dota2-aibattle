@@ -51,6 +51,7 @@ LIVE_CODE_FILES = [
     "mode_laning_generic.lua",
     "mode_roam_generic.lua",
     "mode_retreat_generic.lua",
+    "mode_rune_generic.lua",
     "FretBots/SettingsDefault.lua",
 ]
 
@@ -401,8 +402,9 @@ def _name_tokens(name):
 
 
 # Vendor mode entry points: every mode_*.lua is expected to define these, the engine calls the
-# one belonging to the active mode. Not a collision, and not ours to rename.
-KNOWN_GLOBAL_TWINS = {"Think", "GetDesire", "GetDesireHelper"}
+# one belonging to the active mode. Not a collision, and not ours to rename. OnStart/OnEnd
+# joined the list when mode_rune_generic entered the deploy contract.
+KNOWN_GLOBAL_TWINS = {"Think", "GetDesire", "GetDesireHelper", "OnStart", "OnEnd"}
 
 
 def check_lua_global_twins():
@@ -480,8 +482,12 @@ def report_never_fired(n_logs):
     """
     import aibattle_log as _log
     keys = {}
-    src_files = sorted((ROOT / "bots" / "FunLib").glob("aibattle_*.lua"))
-    src_files.append(ROOT / "bots" / "mode_laning_generic.lua")
+    # Scan everything we deploy, not a hand-picked subset. The first version looked only at
+    # FunLib/aibattle_* plus mode_laning, so mode_rune_generic -- which owns rune pickup and
+    # carries the rune-grab counter written specifically to A/B the rune_control dial -- was
+    # outside the scan entirely. A "has this ever run" tool that cannot see a file cannot
+    # answer for it, and I read its silence as an answer.
+    src_files = [ROOT / "bots" / rel for rel in LIVE_CODE_FILES]
     # Counters and intents are emitted by different calls and land in the log in different
     # shapes -- `key=N` inside a dump line versus `intent=name`. Scanning only the first said
     # the whole rune subsystem was silent when rune-ground-truth is in the log 102 times; it

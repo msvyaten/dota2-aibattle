@@ -83,6 +83,7 @@ if "%DO_CODE%"=="1" (
 	call :copyfile "mode_laning_generic.lua" || exit /b 1
 	call :copyfile "mode_roam_generic.lua" || exit /b 1
 	call :copyfile "mode_retreat_generic.lua" || exit /b 1
+	call :copyfile "mode_rune_generic.lua" || exit /b 1
 	call :copyfile "FretBots\SettingsDefault.lua" || exit /b 1
 	call :writebuild || exit /b 1
 	echo.
