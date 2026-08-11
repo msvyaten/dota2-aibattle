@@ -18,18 +18,15 @@ python tools\pre_match_state.py
 **покупка лечения вне гейта «враг ближе 900»** (`sustain: bought` обязан пробить потолок 2),
 и **честное чтение счётчиков** (`0176505` — до него четыре числа в панели были фальшивыми).
 
-Читать `python tools/postmatch.py <id>`, панели написаны под конкретные правки:
+Читать `python tools/postmatch.py <id>` сверху вниз; панели написаны под конкретные правки:
 
-- `runtime_errors = 0`, `aib_err = 0`, last hits > 0 у обеих сторон — как всегда первым;
-- **`sustain:`** — `bought`/`drunk` ВВЕРХ, `budget_cap` ≈ 0, `stand-and-regen` ВНИЗ. Главное
-  за день: снят ВТОРОЙ кап на салвы (пожизненные 220 золота за первым капом «2»). Если
-  `bought` снова упрётся ровно в 2 — искать третий кап, а не объяснять «работает частично»;
-- `deny probe` + `deny kill-test` — `deny-act` ВНИЗ при `dn` не ниже (подтверждено один раз);
-- `tower pokes` — `backoff` > 0, `parked` показывает уступленные тики вместо пустого владения,
-  `siege commit`/`terminal` ДЕРЖАТСЯ. В `8926148548` они упали (D terminal 159→59) — приёмка
-  не сошлась, разобрать до новых правок осады;
-- `buy loop` — `stalled` остаётся 0 (в `8926148548` было 0, бот КОПИТ, а не залипает);
-- `anti-idle` — пара `enter`/`idle` (единственные два счётчика с общим рейт-лимитом).
+- `runtime_errors`/`aib_err` = 0 и last hits > 0 у обеих сторон — всегда первым;
+- **`sustain:`** — `bought`/`drunk` ВВЕРХ, `budget_cap` ≈ 0, `stand-and-regen` ВНИЗ. Если
+  `bought` снова упрётся в 2 — искать ЧЕТВЁРТЫЙ затвор, а не объяснять «работает частично»;
+- `deny probe`/`deny kill-test` — `deny-act` ВНИЗ при `dn` не ниже;
+- `tower pokes` — `backoff` > 0, `parked` вместо пустого владения, commit/terminal ДЕРЖАТСЯ
+  (в `8926148548` они упали — разобрать до новых правок осады);
+- `buy loop` — `stalled` остаётся 0; `anti-idle` — только пара `enter`/`idle`.
 
 До этого матча не складывать новые изменения владельцев тика.
 
@@ -112,18 +109,17 @@ python tools\pre_match_state.py
   предмета, руны, угрозы или полезного перемещения.
 - **Anti-idle ownership.** Ветки combat/creep/push должны перейти к соответствующим владельцам;
   watchdog только обнаруживает отсутствие прогресса.
-- **Tower-aggro CS.** Вернуться к controlled aggro-pull под своей T1 после P3, если симптом
-  подтверждается новым матчем.
+- **Tower-aggro CS.** Controlled aggro-pull под своей T1 — после P3 и только если симптом
+  подтвердится новым матчем.
 - **Uphill и low-ground travel.** Не добавлять очередной step-back; решать через единый combat
   path/position owner.
 
 ## Bettability
 
-Сделано (Codex, `2d86ed6`): секция `state markets` в `tools/betting.py` — HP/level/lane-pressure
-кривые, окна low-HP и kill-pressure, `strategy_fingerprints` и `check_frozen_config`.
-На `8926148548` читается так: `mutual low = 0s in 0 windows` за весь матч, `dead_tail 57%`,
-`lead_changes 0`. **«Ни одного момента, когда оба одновременно в опасности» — это и есть
-недостающее число под жалобу на скучность**, и оно сходится с ручным трейсом того матча.
+Сделано (Codex, `2d86ed6`): `state markets` в `tools/betting.py` — HP/level/lane-pressure,
+окна low-HP и kill-pressure, `strategy_fingerprints`, `check_frozen_config`. ⭐ Оттуда главное
+число проекта: **`mutual low = 0s in 0 windows`** — ни одного момента, когда оба одновременно
+в опасности, в КАЖДОМ измеренном матче. Это и есть «скучно» в цифре.
 
 Осталось:
 
@@ -133,8 +129,8 @@ python tools\pre_match_state.py
 - реально использованные преимущества (rune power windows, а не только их наличие);
 - series aggregation с frozen build/config и обязательным side swap.
 
-Новые betting-поля добавлять в общий parser (`tools/aibattle_log.py`) и покрывать тестами,
-чтобы `match_stats`, `postmatch` и `betting` не читали одну строку по-разному.
+Новые поля — в общий parser `tools/aibattle_log.py` и под тесты, иначе `match_stats`,
+`postmatch` и `betting` прочитают одну строку по-разному.
 
 ## Инфраструктура
 
