@@ -715,9 +715,13 @@ end
 -- why 8927375253 read `bought=0 (+critical 5)` with `budget_cap=0` -- no guard refused the
 -- purchase, the code was never reached. Two caps removed, volume unchanged: 6 buys to 5.
 --
--- Returns "bought" when it purchased, "have" when a salve is already in the bag (which is
--- recovery()'s reason to yield the tick, preserved), nil otherwise. ONE owner, two call sites.
--- Do not inline a second copy at the gate.
+-- Return values exist to preserve recovery()'s original control flow exactly, because before
+-- the extraction every one of these branches was a bare `return false` INSIDE recovery and so
+-- yielded the whole tick. "bought" -> recovery returns true. "have" and "blocked" -> recovery
+-- returns false, as those branches always did. nil -> recovery carries on to the fountain legs
+-- below, which is what falling past the outer gold/rate-limit test always did. Getting this
+-- wrong would have turned a claimed pure extraction into a silent behaviour change, which is
+-- the worst kind: nothing to grep for later. ONE owner, two call sites, no second copy.
 local function stockHealConsumable(bot, hp, gold)
 	if hp < 0.22 then
 		if bot.aib_floorDeferSince == nil then bot.aib_floorDeferSince = DotaTime() end
@@ -763,14 +767,14 @@ local function stockHealConsumable(bot, hp, gold)
 			Style.Blocked(bot, "recovery-buy", "budget_cap",
 				string.format("hp=%.0f gold=%d count=%d allow=%d",
 					hp*100, gold, bot.aib_recBuyCount or 0, allowance), 8.0)
-			return nil
+			return "blocked"
 		end
 		if wantsBottleFromStyle(bot) and hp >= 0.22 then
 			Style.DiagRL(bot, "bottle-gold-protect", 8)
-			return nil
+			return "blocked"
 		end
 		if consumableSpendBlocked(bot, hp, gold, "item_flask") then
-			return nil
+			return "blocked"
 		end
 	end
 	bot.aib_recBuyLast = DotaTime()
@@ -940,7 +944,7 @@ local function recovery(bot, dials, nEnemyCreeps)
 	-- simply false. Two seconds is a floor that fires every tick when it fires at all.
 	local stock = stockHealConsumable(bot, hp, gold)
 	if stock == "bought" then return true end
-	if stock == "have" then return false end
+	if stock == "have" or stock == "blocked" then return false end
 
 	-- b. TP to fountain -- tp_fountain ONLY.
 	-- walk_fountain is defined as "no TP escape; walk to own fountain on foot" (style.lua:86):
