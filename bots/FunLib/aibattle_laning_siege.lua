@@ -325,6 +325,12 @@ function M.CanAct(ctx)
 	-- below for the same reason -- at 30% hp those refuse, and 30% hp is when walking out
 	-- matters most. Pure test; the latch is written only on the acting side.
 	if towerAggr ~= "always" and M.WantsTowerBackoff(bot, twr) then return true end
+	-- Latched but already parked at the safe point: WantsTowerBackoff answers false there (it
+	-- is not a claim on the tick), and Think yields early to stop the siege body walking us
+	-- back in. Without this line CanAct kept walking past -- towerThreatening is false once we
+	-- are out of range, so the desire and hp gates could pass and promise an action Think then
+	-- refused, which is the empty tick owner this whole change exists to remove.
+	if towerAggr ~= "always" and M.TowerBackoffLatched(bot) then return false end
 	if ctx.towerThreatening(twr) and towerAggr ~= "always" then return false end
 
 	local cwp = rules.creep_wave_priority or "last_hit_only"
