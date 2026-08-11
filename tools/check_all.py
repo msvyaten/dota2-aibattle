@@ -461,6 +461,50 @@ def report_twins(query):
     return True
 
 
+def report_never_fired(n_logs):
+    """`--never-fired N`: diag keys the code can emit that N recent matches never show.
+
+    The dominant defect in this codebase is not wrong logic, it is code that never runs --
+    a knob nothing writes, an escape behind the gate that closes when you need it, a branch
+    made unreachable by something upstream. Every one of those found so far was found by
+    accident. This makes the question askable on purpose.
+
+    A zero is not automatically a bug: 1v1 has no ally, so anti-idle-assist cannot fire, and
+    a build with no bottle makes every bottle branch dead by construction. Read it as "these
+    branches have never executed -- for each, do I know why".
+
+    Known limits, so a reader does not chase ghosts. Keys assembled at runtime
+    (`"deny-cand-"..rejected`) are listed by their literal prefix and will always look dead.
+    Counters added after the scanned matches were played will too -- check the commit date
+    before treating one as a finding.
+    """
+    import aibattle_log as _log
+    keys = {}
+    src_files = sorted((ROOT / "bots" / "FunLib").glob("aibattle_*.lua"))
+    src_files.append(ROOT / "bots" / "mode_laning_generic.lua")
+    emit = re.compile(r'(?:Style\.Diag|Style\.DiagRL|ctx\.diag|M\.Diag|M\.DiagRL|AIB_Diag)'
+                      r'\s*\(\s*(?:bot\s*,\s*)?"([a-z0-9][a-z0-9-]*)"')
+    for path in src_files:
+        if not path.exists():
+            continue
+        for m in emit.finditer(path.read_text(encoding="utf-8", errors="ignore")):
+            keys.setdefault(m.group(1), path.name)
+    logs = sorted(_log.DOTA_LOG_DIR.glob("console.*.log"),
+                  key=lambda p: p.stat().st_mtime, reverse=True)[:n_logs]
+    if not logs:
+        print("[never-fired] no console logs found", flush=True)
+        return True
+    text = "".join(p.read_text(encoding="utf-8", errors="ignore") for p in logs)
+    never = [(k, f) for k, f in sorted(keys.items())
+             if not re.search(r"(?<![\w-])%s=\d" % re.escape(k), text)]
+    print("[never-fired] %d of %d diag keys never appeared across %d match(es): %s"
+          % (len(never), len(keys), len(logs), ", ".join(p.stem.split(".")[-1] for p in logs)),
+          flush=True)
+    for k, f in never:
+        print("    %-34s %s" % (k, f), flush=True)
+    return True
+
+
 def check_python_syntax():
     """Compile source in memory so syntax checks never create __pycache__ files."""
     print("[check] python syntax", flush=True)
@@ -540,6 +584,9 @@ def main():
     parser.add_argument("--match", help="Optional match id for match_stats smoke")
     parser.add_argument("--latest", action="store_true", help="Run match_stats against newest console log")
     parser.add_argument("--skip-live", action="store_true", help="Skip live Dota folder checks")
+    parser.add_argument("--never-fired", nargs="?", type=int, const=3, metavar="N",
+                        help="List diag keys the code can emit that the N most recent match "
+                             "logs never show, then exit. Default N=3.")
     parser.add_argument("--twins", metavar="NAME",
                         help="List every Lua definition whose name reads like NAME, and exit. "
                              "Run this before claiming a function is dead or unreachable.")
@@ -547,6 +594,9 @@ def main():
 
     if args.twins:
         return 0 if report_twins(args.twins) else 1
+
+    if args.never_fired is not None:
+        return 0 if report_never_fired(args.never_fired or 3) else 1
 
     ok = True
     ok = run_step("text encoding", [sys.executable, "tools/check_text_encoding.py"]) and ok
