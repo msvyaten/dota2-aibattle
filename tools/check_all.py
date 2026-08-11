@@ -53,6 +53,7 @@ LIVE_CODE_FILES = [
     "mode_retreat_generic.lua",
     "mode_rune_generic.lua",
     "FretBots/SettingsDefault.lua",
+    "FretBots/Utilities.lua",
 ]
 
 LIVE_PLAYSTYLE_FILES = [

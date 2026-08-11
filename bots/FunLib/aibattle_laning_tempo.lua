@@ -365,7 +365,14 @@ local function updateEnemyDeathState(ctx)
 		local allNear = bot:GetNearbyHeroes(2000, true, BOT_MODE_NONE)
 		if allNear then
 			for _, h in ipairs(allNear) do
-				if h:IsHero() and not h:IsIllusion() then
+				-- No IsIllusion() here: this list is ENEMIES, and CDOTA_Bot_Script:IsIllusion is
+				-- only legal on a teammate. The engine answered by printing
+				-- "'CDOTA_Bot_Script::IsIllusion' called on an entity ... that is not a teammate!"
+				-- on every call until the enemy PID resolved, which floods the console at the
+				-- start of every match to the point of being unreadable. The check was also
+				-- redundant: GetTeamMember(pid) == h below matches only a real hero, never an
+				-- illusion, so dropping the illegal call loses nothing.
+				if h:IsHero() then
 					for pid = 0, 9 do
 						if GetTeamMember(pid) == h then
 							bot.aib_ePID = pid

@@ -671,7 +671,14 @@ end
 function Utilities:GetMatchData(heroes)
 	local gameData = {}
     local pData = {}
-    for pId = 0, PlayerResource:GetPlayerCount() do
+    -- GetPlayerCount() is a count, so the last valid index is count-1; the old bound walked one
+    -- past the end. More importantly IsValidPlayerID() below answers true for empty lobby slots,
+    -- so in a 1v1 this asked PlayerResource about ids 5, 7, 8 and 9 and the engine replied
+    -- "PR:GetSelectedHeroName called with bogus player id N, ignoring" -- 10692 lines, 61% of an
+    -- entire match log and over 90% of it early on, which is what makes the console unreadable.
+    -- IsTeamPlayer is this file's own answer to "is anybody actually in this slot".
+    for pId = 0, PlayerResource:GetPlayerCount() - 1 do
+      if Utilities:IsTeamPlayer(pId) then
         local connectionState = PlayerResource:GetConnectionState(pId)
         if PlayerResource:IsValidPlayerID(pId)
 		and (connectionState == DOTA_CONNECTION_STATE_CONNECTED or connectionState == DOTA_CONNECTION_STATE_DISCONNECTED)
@@ -690,6 +697,7 @@ function Utilities:GetMatchData(heroes)
             pInfo.hero_name = PlayerResource:GetSelectedHeroName(pId)
             table.insert(pData, pInfo)
         end
+      end
     end
 	gameData.host_id = tostring(PlayerResource:GetSteamID(Utilities:GetHostPlayerID()))
     gameData.players = pData
