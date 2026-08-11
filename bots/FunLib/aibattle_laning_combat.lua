@@ -66,11 +66,27 @@ end
 -- owner: every gate that let us attack at all -- hp floor, tower, uphill, concede -- still
 -- decided this tick, and a separate high-priority candidate would have bypassed all of them
 -- to chase a ward. Returns true when it issued the attack.
+-- Two radii on purpose, and they are not the same question.
+--
+-- The scan is wide because ward-seen is a DENOMINATOR: it has to separate "a ward was up and we
+-- could not reach it" from "there was no ward". Tying it to attack range would have made a
+-- melee hero at 150 report ward-seen=0 for a ward standing 300 away -- the exact reading that
+-- says "this mechanic never happens" when what happened is that we were looking through a
+-- 230-unit keyhole. The healing ward follows its caster (BotLib/hero_juggernaut.lua drives it
+-- through Minion.HealingWardThink), so on a melee mirror it lives wherever the enemy is.
+--
+-- The attack stays at attack range: this is a re-target of a swing, not a licence to walk.
+local WARD_SCAN = 900
 local function hitHealSummonFirst(ctx, bot, range)
-	local ward, wardDist = enemyHealSummon(bot, range + 80)
+	local ward, wardDist = enemyHealSummon(bot, WARD_SCAN)
 	if ward == nil then return false end
 	ctx.diag("ward-seen")
-	if wardDist > range then return false end
+	if wardDist > range then
+		-- seen but out of reach. If this dominates ward-hit, the answer is a melee approach
+		-- leg, not a wider swing -- do not just raise the number here.
+		ctx.diag("ward-out-of-reach")
+		return false
+	end
 	bot:Action_AttackUnit(ward, true)
 	ctx.diag("ward-hit")
 	Style.Intent(bot, "heal-ward", string.format("dist=%.0f hp=%.0f", wardDist, J.GetHP(bot) * 100), 2.0)

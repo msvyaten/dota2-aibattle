@@ -209,8 +209,13 @@ def report(match_id):
         # ward-seen is the denominator that tells "never attacked it" apart from "it was never
         # there". The real acceptance is one line down in the betting report: mutual low must
         # become non-zero for the first time in any match on record.
-        print("       heal ward: seen=%d hit=%d (want both > 0; then check betting mutual-low)"
-              % (diag_max(text, side, "ward-seen"), diag_max(text, side, "ward-hit")))
+        # seen is scanned at 900, hit only within attack range. If out-of-reach dominates, the
+        # ward is up and the melee hero simply cannot touch it -- that calls for an approach
+        # leg, not a bigger swing radius.
+        print("       heal ward: seen=%d hit=%d out-of-reach=%d (seen=0 means it never happened,"
+              " not that the fix failed)"
+              % (diag_max(text, side, "ward-seen"), diag_max(text, side, "ward-hit"),
+                 diag_max(text, side, "ward-out-of-reach")))
         print("       recovery gate: enemy-near=%d (bails the whole function; buy exempted)"
               % diag_max(text, side, "recovery-enemy-near"))
         print("       sustain: bought=%d (+critical %d) drunk flask=%d tango=%d heal-item=%d"
