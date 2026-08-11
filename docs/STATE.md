@@ -26,7 +26,7 @@ an explicit user command:
 - `bots/Customize/playstyle_dire.lua`
 - generated/canonical configs when Claude is currently tuning them
 
-Use named files with `git add`; never stage the whole tree in this repository.
+Stage named files only; never `git add` the whole tree here.
 
 ## Product
 
@@ -58,8 +58,8 @@ Open structural work, in order:
 4. P3-C: windup protection, safe CS in soft recovery, and the remaining rune/recovery semantics.
 5. P1-C: remove duplicated suppression/commit machinery and reduce anti-idle to a watchdog.
 
-Do not perform a mechanical file split before these ownership cuts. Moving 500 lines without
-changing who owns a tick makes review harder but does not cure oscillation.
+No mechanical file split before these ownership cuts: moving 500 lines without changing who
+owns a tick makes review harder and cures nothing.
 
 ## Current Watchlist
 
@@ -77,8 +77,8 @@ changing who owns a tick makes review harder but does not cure oscillation.
   lane holding an unused salve. Adding a guard that defers? Read what that owner does back.
 - Cross-module `bot.aib_*` state is ownership debt; move writes behind owner APIs when touching
   those systems (`tools/project_inventory.py` lists the writers).
-- `mode_laning_generic.lua`, `aibattle_style.lua`, and `aibattle_survive.lua` remain large.
-  Shrink them by ownership extraction, not by arbitrary line-count targets.
+- `mode_laning_generic.lua`, `aibattle_style.lua`, `aibattle_survive.lua` stay large; shrink by
+  ownership extraction, not line-count targets.
 
 ## Telemetry Volume: Deliberate, Not Debt
 
@@ -136,7 +136,6 @@ batch. Tooling, tests, documentation, and behavior-preserving deduplication may 
 - `tools/binding.py`: prove that config knobs reach behavior.
 - `tools/project_inventory.py`: current sizes, direct action surface, shared state writers,
   and dead local helpers.
-- `tools/run_tests.py`: dependency-free Python test runner.
 - `tools/check_schema_contract.py`: Python/Lua/prompt/config schema agreement.
 - `tools/check_all.py --skip-live`: local pre-deploy gate.
 - `tools/check_all.py --twins NAME`: every Lua definition whose name reads like NAME, with
