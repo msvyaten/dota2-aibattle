@@ -361,26 +361,25 @@ end
 
 local function updateEnemyDeathState(ctx)
 	local bot = ctx.bot
+	-- This used to scan GetNearbyHeroes(..., true, ...) -- enemies -- and look for one whose
+	-- handle equalled GetTeamMember(pid). GetTeamMember returns a member of OUR team, so the
+	-- comparison could never be true. Two consequences, both live for as long as the block
+	-- existed: aib_ePID was never set, so every branch below that needs it was unreachable and
+	-- the enemy's deaths were never read; and because the lookup never succeeded, the block ran
+	-- again every single tick, calling h:IsIllusion() on an enemy each time. IsIllusion is only
+	-- legal on a teammate, so the engine answered with a Developer warning per call, forever --
+	-- the flood that made the console unreadable.
+	--
+	-- The enemy's player id does not need a handle scan at all. GetTeamPlayers on the opposing
+	-- team is the direct answer, and in this mode there is exactly one of them.
 	if bot.aib_ePID == nil then
-		local allNear = bot:GetNearbyHeroes(2000, true, BOT_MODE_NONE)
-		if allNear then
-			for _, h in ipairs(allNear) do
-				-- No IsIllusion() here: this list is ENEMIES, and CDOTA_Bot_Script:IsIllusion is
-				-- only legal on a teammate. The engine answered by printing
-				-- "'CDOTA_Bot_Script::IsIllusion' called on an entity ... that is not a teammate!"
-				-- on every call until the enemy PID resolved, which floods the console at the
-				-- start of every match to the point of being unreadable. The check was also
-				-- redundant: GetTeamMember(pid) == h below matches only a real hero, never an
-				-- illusion, so dropping the illegal call loses nothing.
-				if h:IsHero() then
-					for pid = 0, 9 do
-						if GetTeamMember(pid) == h then
-							bot.aib_ePID = pid
-							bot.aib_eDeathCount = GetHeroDeaths(pid)
-							break
-						end
-					end
-					if bot.aib_ePID then break end
+		local okP, foes = pcall(GetTeamPlayers, GetOpposingTeam())
+		if okP and type(foes) == "table" then
+			for _, pid in pairs(foes) do
+				if pid ~= nil then
+					bot.aib_ePID = pid
+					bot.aib_eDeathCount = GetHeroDeaths(pid)
+					break
 				end
 			end
 		end
