@@ -482,26 +482,38 @@ def report_never_fired(n_logs):
     keys = {}
     src_files = sorted((ROOT / "bots" / "FunLib").glob("aibattle_*.lua"))
     src_files.append(ROOT / "bots" / "mode_laning_generic.lua")
-    emit = re.compile(r'(?:Style\.Diag|Style\.DiagRL|ctx\.diag|M\.Diag|M\.DiagRL|AIB_Diag)'
-                      r'\s*\(\s*(?:bot\s*,\s*)?"([a-z0-9][a-z0-9-]*)"')
+    # Counters and intents are emitted by different calls and land in the log in different
+    # shapes -- `key=N` inside a dump line versus `intent=name`. Scanning only the first said
+    # the whole rune subsystem was silent when rune-ground-truth is in the log 102 times; it
+    # just reports as an intent. A tool that answers "has this ever run" has to know both.
+    emit_counter = re.compile(r'(?:Style\.Diag|Style\.DiagRL|ctx\.diag|M\.Diag|M\.DiagRL|AIB_Diag)'
+                              r'\s*\(\s*(?:bot\s*,\s*)?"([a-z0-9][a-z0-9-]*)"')
+    emit_intent = re.compile(r'(?:Style\.Intent|ctx\.state|M\.Intent)'
+                             r'\s*\(\s*(?:bot\s*,\s*)?"([a-z0-9][a-z0-9-]*)"')
     for path in src_files:
         if not path.exists():
             continue
-        for m in emit.finditer(path.read_text(encoding="utf-8", errors="ignore")):
-            keys.setdefault(m.group(1), path.name)
+        text_src = path.read_text(encoding="utf-8", errors="ignore")
+        for m in emit_counter.finditer(text_src):
+            keys.setdefault(m.group(1), (path.name, "counter"))
+        for m in emit_intent.finditer(text_src):
+            keys.setdefault(m.group(1), (path.name, "intent"))
     logs = sorted(_log.DOTA_LOG_DIR.glob("console.*.log"),
                   key=lambda p: p.stat().st_mtime, reverse=True)[:n_logs]
     if not logs:
         print("[never-fired] no console logs found", flush=True)
         return True
     text = "".join(p.read_text(encoding="utf-8", errors="ignore") for p in logs)
-    never = [(k, f) for k, f in sorted(keys.items())
-             if not re.search(r"(?<![\w-])%s=\d" % re.escape(k), text)]
-    print("[never-fired] %d of %d diag keys never appeared across %d match(es): %s"
+    never = []
+    for k, (fname, kind) in sorted(keys.items()):
+        pat = (r"(?<![\w-])%s=\d" % re.escape(k)) if kind == "counter"             else (r"intent=%s(?![\w-])" % re.escape(k))
+        if not re.search(pat, text):
+            never.append((k, fname, kind))
+    print("[never-fired] %d of %d emit points never appeared across %d match(es): %s"
           % (len(never), len(keys), len(logs), ", ".join(p.stem.split(".")[-1] for p in logs)),
           flush=True)
-    for k, f in never:
-        print("    %-34s %s" % (k, f), flush=True)
+    for k, fname, kind in never:
+        print("    %-34s %-8s %s" % (k, kind, fname), flush=True)
     return True
 
 
