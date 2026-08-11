@@ -63,8 +63,8 @@ changing who owns a tick makes review harder but does not cure oscillation.
 
 ## Current Watchlist
 
-- Intentional bottle-rune completion and `rune_control` binding remain weak. Diagnose from
-  complete transaction telemetry, not bottle-empty percentage alone.
+- `rune_control` binding is weak: diagnose from complete transaction telemetry, not from
+  bottle-empty percentage.
 - Recovery can still win while having no useful action; verify `empty_action by winner` and
   low-HP episode traces after every recovery change.
 - Anti-idle still contains gameplay actions; its long-term job is detection only. Measured
