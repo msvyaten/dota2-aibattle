@@ -39,6 +39,28 @@ Configs (`bots/Customize/canonical_*.lua`) are **Claude's zone** — committable
 
 Full config/archetype list and roles: see [`CODE_MAP.md`](CODE_MAP.md) §4.
 
+### Adding a behaviour: re-target before you add an owner
+
+A new behaviour is usually a better TARGET for an action the bot was already allowed to take,
+not a new candidate in the election. Prefer the re-target.
+
+Every gate in the attack path — hp floor, tower danger, uphill, concede-lane, dive licence —
+was written because the bot did something stupid without it. A new high-priority candidate
+starts life above all of them and inherits none, so it re-opens each of those bugs one at a
+time. The healing-ward work (03.08) is the worked example: "kill the ward before trading" was
+added by pointing the already-permitted swing at a different unit in three call sites behind
+one shared helper, and every existing gate kept deciding the tick.
+
+Add a real owner when the behaviour needs to WIN a tick that something else would otherwise
+take. Re-target when it only needs to change what the winner does with it.
+
+### A guard that defers to another owner must know what that owner does back
+
+Two guards can each yield to the other, produce no action, and log no error. Live examples:
+the buy guard waiting on a fountain floor that never ran (`b7209fd`), and the drink waiting on
+a trip while the trip waited on the drink (open, `BACKLOG.md`). When writing "skip this,
+because X will handle it", go read what X does when it sees this guard.
+
 ## Rules, Dials, Constants
 
 Use the right layer:
