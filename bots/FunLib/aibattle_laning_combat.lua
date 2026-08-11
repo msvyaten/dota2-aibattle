@@ -41,11 +41,18 @@ local HEAL_SUMMONS = {
 	npc_dota_wisp_spirit = false,  -- placeholder shape: add heal summons here, not at call sites
 }
 
+-- UNIT_LIST_ENEMIES, not UNIT_LIST_ENEMY_CREEPS. A summoned ward is not a lane creep, and the
+-- one place in this repository that already knew about this unit -- aba_special_units.lua:127,
+-- which scores attacking an enemy healing ward -- walks the broad list. That file is loaded
+-- only by mode_team_roam, so it never runs in a 1v1 mid lane, but it is the authority on where
+-- the unit shows up. Reading the narrow list would have made this whole change a silent no-op
+-- with ward-seen=0, which is exactly the reading the acceptance is built to catch.
 local function enemyHealSummon(bot, radius)
-	local okList, units = pcall(GetUnitList, UNIT_LIST_ENEMY_CREEPS)
+	local okList, units = pcall(GetUnitList, UNIT_LIST_ENEMIES)
 	if not okList or type(units) ~= "table" then return nil end
 	local best, bestDist = nil, radius
 	for _, u in pairs(units) do
+		-- The broad list carries enemy heroes too; the name table is what filters them out.
 		if u ~= nil and u.GetUnitName ~= nil and HEAL_SUMMONS[u:GetUnitName()] == true
 			and u:IsAlive() and J.CanBeAttacked(u) then
 			local d = GetUnitToUnitDistance(bot, u)
