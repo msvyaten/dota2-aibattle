@@ -233,6 +233,13 @@ def report(match_id):
                  occ(text, side, "blocked=recovery-buy reason=budget_cap"),
                  occ(text, side, "blocked=recovery-buy reason=flask_in_inventory"),
                  diag_max(text, side, "recovery-regen"), diag_max(text, side, "regen-walk")))
+        # Option 3 (03.08): creep-work stops walking a ranged hero into the pack, so spacing
+        # no longer has to freeze to prevent it. Read as a pair -- release UP and hold DOWN is
+        # the fix working; jitter or lane-line episodes rising means the walk-in returned
+        # through another owner, and the RELEASE is what to revert, not the creep-work guard.
+        print("       ranged spacing: hold=%d release=%d walk-in refused=%d (want hold DOWN, jitter flat)"
+              % (diag_max(text, side, "melee-pack-hold"), diag_max(text, side, "melee-pack-release"),
+                 diag_max(text, side, "cs-walk-into-pack")))
         print("       melee-pack(3e64ecb): inside_melee_pack=%d | creep-hit-react atk=%d step=%d back=%d"
               % (occ(text, side, "blocked=creep-hit-react reason=inside_melee_pack"),
                  diag_max(text, side, "creep-hit-react-atk"),

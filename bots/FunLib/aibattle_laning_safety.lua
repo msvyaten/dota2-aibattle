@@ -191,8 +191,21 @@ function M.RangedMeleePackSpacing(ctx)
 			bot:Action_MoveToLocation(back)
 			return true
 		end
-		Style.DiagRL(bot, "melee-pack-hold", 5)
-		return true
+		-- RELEASE, do not freeze. Owning the tick with no order is what a viewer sees as a
+		-- statue: ranged-spacing was the top tick owner in 8964741391 at 57 of 260, nearly all
+		-- of it right here. The freeze existed to stop creep-work walking us back into the pack
+		-- during this function's own 1.4s move throttle -- and creep-work now refuses that walk
+		-- itself, at the site that was making it. With the cause gone the symptom cure is just
+		-- a hero standing still.
+		--
+		-- Yielding hands the tick to lane work, which is what a ranged hero at max range should
+		-- be doing while it waits for creeps to come to it. Acceptance is a pair, because the
+		-- old oscillation would look like success on one number alone: ranged-spacing's share
+		-- and melee-pack-hold DOWN, while jitter and lane-line episodes do NOT rise and last
+		-- hits do not fall. If they rise, the walk-in came back through another owner and this
+		-- release is what to revert -- not the creep-work guard, which is the real fix.
+		Style.DiagRL(bot, "melee-pack-release", 5)
+		return false
 	end
 
 	-- Not at the edge yet: throttled step out toward it (throttle gates the MOVE only, so the

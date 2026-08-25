@@ -5,6 +5,7 @@ local M = {}
 local J = require(GetScriptDirectory()..'/FunLib/jmz_func')
 local Style = require(GetScriptDirectory()..'/FunLib/aibattle_style')
 local Const = require(GetScriptDirectory()..'/FunLib/aibattle_constants')
+local AIBUtils = require(GetScriptDirectory()..'/FunLib/aibattle_utils')
 
 function M.GetBestLastHitCreep(bot, creeps, attackDamage)
 	if not creeps then return nil end
@@ -162,6 +163,22 @@ function M.HandleCreepWork(ctx)
 			ctx.diag("cs-walk-gap-small")
 		else
 			ctx.diag("cs-walk-gap-large")     -- parked well outside attack range
+		end
+		-- A RANGED hero does not walk into the enemy melee pack for a creep. This is the cause
+		-- of the statue, not a detail of it: ranged-spacing (41) sits above creep-work (38) and
+		-- holds the safe edge, but during its own 1.4s move throttle it yields the tick, and
+		-- creep-work took those windows to walk the hero back in -- after which spacing pushed
+		-- out again. The oscillation was cured by making the hold OWN the tick and issue no
+		-- order at all, which is why a Shadow Fiend stands still: ranged-spacing was the top
+		-- tick owner at 57 of 260 in 8964741391, most of it melee-pack-hold.
+		--
+		-- Refusing the walk-in removes the reason the hold has to freeze, so the two changes go
+		-- together. It costs no CS the hero could actually take: cs-walk correlates +0.35 with
+		-- lh/min because it collects creeps that come to us, and this only refuses the ones
+		-- sitting inside the pack, which a ranged hero should wait for rather than fetch.
+		if AIBUtils.LocInsideMeleePack(ctx, hitCreep:GetLocation()) then
+			ctx.diag("cs-walk-into-pack")
+			return false
 		end
 		moveToAttackEdge(ctx, hitCreep, 20)
 		return true

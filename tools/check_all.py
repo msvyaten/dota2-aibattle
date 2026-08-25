@@ -524,6 +524,37 @@ def report_never_fired(n_logs):
     return True
 
 
+def check_require_cycles():
+    """A require cycle among our own modules is a load-time crash Lua reports as nil.
+
+    Nearly shipped one: safety already required creeps, and adding the reverse edge to let
+    creep-work ask a safety question closed the loop. Syntax passes, the module list passes,
+    the tests pass -- and the match dies on load. Nothing in this repo could see it, so this
+    check exists to make the next attempt fail here instead of in a lobby.
+    """
+    print("[check] aibattle require cycles", flush=True)
+    edges, req = {}, re.compile(r"require\(\s*GetScriptDirectory\(\)\s*\.\.\s*'/FunLib/(aibattle_[A-Za-z0-9_]+)'")
+    for path in sorted((ROOT / "bots" / "FunLib").glob("aibattle_*.lua")):
+        edges[path.stem] = set(req.findall(path.read_text(encoding="utf-8", errors="ignore")))
+    bad = []
+    for start in edges:
+        seen, stack = set(), [(start, [start])]
+        while stack:
+            node, trail = stack.pop()
+            for nxt in edges.get(node, ()):
+                if nxt == start:
+                    bad.append(" -> ".join(trail + [start]))
+                elif nxt not in seen:
+                    seen.add(nxt)
+                    stack.append((nxt, trail + [nxt]))
+    if bad:
+        print("[fail] require cycle among aibattle modules (Lua returns nil at load):", flush=True)
+        for b in sorted(set(bad))[:6]:
+            print("   ", b, flush=True)
+        return False
+    return True
+
+
 def check_python_syntax():
     """Compile source in memory so syntax checks never create __pycache__ files."""
     print("[check] python syntax", flush=True)
@@ -623,6 +654,7 @@ def main():
     ok = check_lua_syntax() and ok
     ok = check_lua_local_use_before_decl() and ok
     ok = check_lua_global_twins() and ok
+    ok = check_require_cycles() and ok
     ok = check_python_syntax() and ok
     ok = check_forbidden_laning_keys() and ok
     ok = check_deploy_manifest_sync() and ok

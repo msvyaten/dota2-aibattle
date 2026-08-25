@@ -212,4 +212,25 @@ function M.HpDisadvantaged(bot, enemy, executeThreshold, hasActionRune)
 	return (ehp - J.GetHP(bot)) >= 0.15
 end
 
+-- One answer to "would a ranged hero standing at LOC be inside the enemy melee pack".
+--
+-- The geometry was already written twice in this file with different scan radii, on purpose:
+-- spacing scans wide for hysteresis, the swing-back guard scans 380. Neither is exported, so
+-- creep-work -- the owner that actually walks the hero in -- had no way to ask the question
+-- and simply did not. It lives HERE, not in safety, because safety already requires creeps:
+-- putting it there and calling it from creeps closes a require cycle, which Lua answers with
+-- a nil or a stack overflow at load, and no check in this repo would have caught it.
+function M.LocInsideMeleePack(ctx, loc)
+    local bot = ctx.bot
+    if loc == nil or bot == nil or not M.IsRanged(bot) then return false end
+    if ctx.meleeCreepCentroid == nil then return false end
+    local range = ctx.attackRange or bot:GetAttackRange()
+    local edge = math.max(360, range - 90)
+    local cen, count = ctx.meleeCreepCentroid(ctx.enemyCreeps, edge + 160)
+    if cen == nil or count < 2 then return false end
+    local dx, dy = loc.x - cen.x, loc.y - cen.y
+    return math.sqrt(dx * dx + dy * dy) < edge - 40
+end
+
+
 return M
