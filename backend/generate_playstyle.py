@@ -4,9 +4,9 @@ import json
 import argparse
 
 try:
-    from .style_schema import DIAL_KEYS, RULE_VALUES
+    from .style_schema import DIAL_KEYS, RULE_VALUES, ITEM_BUILD_HEROES
 except ImportError:
-    from style_schema import DIAL_KEYS, RULE_VALUES
+    from style_schema import DIAL_KEYS, RULE_VALUES, ITEM_BUILD_HEROES
 
 MODEL = os.environ.get("AIBATTLE_OPENAI_MODEL", "gpt-5.5")
 
@@ -62,7 +62,20 @@ def _sanitize_style(raw: dict) -> dict:
             rules[k] = v
         # invalid or missing -> omit; the engine applies its own default
 
-    return {"dials": dials, "rules": rules}
+    # item_build: keep only known heroes and only strings that look like item ids. The
+    # runtime drops bogus names silently, which is exactly why they must be filtered HERE --
+    # a typo that survives to the engine costs the whole build and reports nothing.
+    raw_items = raw.get("item_build") if isinstance(raw.get("item_build"), dict) else {}
+    item_build = {}
+    for hero in ITEM_BUILD_HEROES:
+        entry = raw_items.get(hero)
+        if not isinstance(entry, list):
+            continue
+        clean = [i for i in entry if isinstance(i, str) and i.startswith("item_")]
+        if clean:
+            item_build[hero] = clean
+
+    return {"dials": dials, "rules": rules, "item_build": item_build}
 
 def _parse_llm_json(raw_text: str) -> dict:
     """Extract a JSON object from the LLM response (tolerates ```json fences)."""
@@ -100,7 +113,7 @@ def _lua_value(v) -> str:
     raise TypeError(f"Unsupported type: {type(v)}")
 
 def write_playstyle_lua(style: dict, output_path: str) -> None:
-    """Write a sanitized nested style dict to a Lua return table file (dials + rules)."""
+    """Write a sanitized style dict to a Lua return table (dials + rules + item_build)."""
     style = _sanitize_style(style)
     lines = ["return {", "    dials = {"]
     for k in DIAL_KEYS:
@@ -111,6 +124,13 @@ def write_playstyle_lua(style: dict, output_path: str) -> None:
         if k in style["rules"]:
             lines.append(f"        {k:<19} = {_lua_value(style['rules'][k])},")
     lines.append("    },")
+    build = style.get("item_build") or {}
+    if build:
+        lines.append("    item_build = {")
+        for hero, items in build.items():
+            body = ", ".join(_lua_value(i) for i in items)
+            lines.append(f"        [{_lua_value(hero)}] = {{ {body} }},")
+        lines.append("    },")
     lines.append("}")
     with open(output_path, "w") as f:
         f.write("\n".join(lines) + "\n")

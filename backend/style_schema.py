@@ -28,3 +28,12 @@ RULE_VALUES = {
     "deny_policy": ("always", "default", "never"),
     "tower_aggression": ("always", "default", "never"),
 }
+
+# Heroes the prompt asks for a build for. The runtime keys item_build by hero name and reads
+# the entry for whichever hero it was handed, so a config carrying only one of these still
+# works -- it just falls back to the vendor long-game build on the other, which is wrong for
+# a match that ends around fifteen minutes. Extend this when a hero joins the rotation.
+ITEM_BUILD_HEROES = (
+    "npc_dota_hero_juggernaut",
+    "npc_dota_hero_nevermore",
+)

@@ -2,6 +2,7 @@ from generate_playstyle import (
     _sanitize_style, _parse_llm_json, _load_system_prompt,
     write_playstyle_lua, DIAL_KEYS, RULE_VALUES,
 )
+from style_schema import ITEM_BUILD_HEROES
 
 def test_schema_is_full_engine_surface():
     assert len(DIAL_KEYS) == 12
@@ -98,3 +99,36 @@ def test_write_playstyle_lua_omits_unspecified_rules(tmp_path):
     assert "hero_priority" in content
     assert "respawn_behavior" not in content
     assert "dive_policy" not in content
+
+
+def test_item_build_keeps_known_heroes_and_drops_bad_names():
+    # The runtime drops unknown item ids silently, so a typo that reaches the engine costs the
+    # whole build and reports nothing. Filtering has to happen here, where it is visible.
+    s = _sanitize_style({"dials": {}, "rules": {}, "item_build": {
+        "npc_dota_hero_juggernaut": ["item_tango", "BAD", 7, "item_power_treads"],
+        "npc_dota_hero_axe": ["item_blink"],
+        "npc_dota_hero_nevermore": "not a list",
+    }})
+    assert s["item_build"] == {"npc_dota_hero_juggernaut": ["item_tango", "item_power_treads"]}
+
+
+def test_item_build_absent_is_empty_not_missing():
+    s = _sanitize_style({"dials": {}, "rules": {}})
+    assert s["item_build"] == {}
+
+
+def test_write_playstyle_lua_emits_item_build(tmp_path):
+    out = tmp_path / "p.lua"
+    write_playstyle_lua({"dials": {}, "rules": {}, "item_build": {
+        "npc_dota_hero_juggernaut": ["item_tango", "item_power_treads"]}}, str(out))
+    text = out.read_text()
+    assert 'item_build = {' in text
+    assert '["npc_dota_hero_juggernaut"] = { "item_tango", "item_power_treads" },' in text
+
+
+def test_prompt_asks_for_a_build_for_every_rotation_hero():
+    # A hero in the rotation with no entry in the prompt gets the vendor long-game build,
+    # which is wrong for a match that ends around fifteen minutes.
+    prompt = _load_system_prompt()
+    for hero in ITEM_BUILD_HEROES:
+        assert hero in prompt
