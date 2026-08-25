@@ -543,17 +543,36 @@ local function defensiveHeal(bot, dials)
 		return true
 	end
 
+	-- WHY THE CREEP CLAUSE IS GONE. This branch refused to drink after ANY damage in the last
+	-- half second, from a hero OR a creep. Standing in a lane means taking creep chip almost
+	-- continuously, so the condition was close to never satisfiable where healing is actually
+	-- needed, and the bot carried salves it never drank: 8964702771 [R] held one from t=918
+	-- (blocked=recovery-buy reason=flask_in_inventory), was at 71% at t=938 and 24% at t=943,
+	-- and never used it. flask_in_bag read 5 that match.
+	--
+	-- Only player-controlled damage cancels a Healing Salve; lane creeps do not. So the hero
+	-- half of this test is real and stays, and the creep half was refusing a heal to prevent
+	-- an interruption that does not happen.
+	--
+	-- It also failed silently -- no counter, no blocked line -- which is why three sessions of
+	-- work on "the bot does not heal" chased purchase caps instead. heal-blocked-damage now
+	-- says when the remaining guard fires, and heal-want says how often we wanted to drink and
+	-- had one; if the salve really does get cancelled here, heal-item rises while HP does not.
 	if hpMissing >= 400
 		and (bot.aib_flaskLast == nil or DotaTime() - bot.aib_flaskLast >= FLASK_CD)
 		and not sameHealTicking(bot, "item_flask")
-		and not fountainFreeHealSoon(bot, hp)
-		and not (bot:WasRecentlyDamagedByAnyHero(0.5) or bot:WasRecentlyDamagedByCreep(0.5)) then
+		and not fountainFreeHealSoon(bot, hp) then
 		local flask = getItem(bot, "item_flask")
 		if flask then
-			bot.aib_flaskLast = DotaTime()
-			Style.Diag(bot, "heal-item")
-			bot:Action_UseAbilityOnEntity(flask, bot)
-			return true
+			Style.Diag(bot, "heal-want")
+			if bot:WasRecentlyDamagedByAnyHero(0.5) then
+				Style.DiagRL(bot, "heal-blocked-damage", 3)
+			else
+				bot.aib_flaskLast = DotaTime()
+				Style.Diag(bot, "heal-item")
+				bot:Action_UseAbilityOnEntity(flask, bot)
+				return true
+			end
 		end
 	end
 

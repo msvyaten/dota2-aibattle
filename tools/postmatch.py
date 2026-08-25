@@ -218,6 +218,13 @@ def report(match_id):
                  diag_max(text, side, "ward-out-of-reach")))
         print("       recovery gate: enemy-near=%d (bails the whole function; buy exempted)"
               % diag_max(text, side, "recovery-enemy-near"))
+        # heal-want is the denominator the sustain thread never had: how often the bot stood
+        # there wanting to drink WITH a salve in hand. want >> item means something is refusing,
+        # and heal-blocked-damage names the only guard left. Before 03.08 the refusal was
+        # silent, which is why three sessions chased purchase caps instead of the drink.
+        print("       drink gate: want=%d -> drank=%d | blocked by hero damage=%d"
+              % (diag_max(text, side, "heal-want"), diag_max(text, side, "heal-item"),
+                 diag_max(text, side, "heal-blocked-damage")))
         print("       sustain: bought=%d (+critical %d) drunk flask=%d tango=%d heal-item=%d"
               " | blocked budget_cap=%d flask_in_bag=%d | stand-and-regen=%d walk=%d"
               % (diag_max(text, side, "recovery-buy"), diag_max(text, side, "recovery-buy-critical"),
