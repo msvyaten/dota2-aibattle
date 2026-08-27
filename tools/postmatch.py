@@ -222,9 +222,10 @@ def report(match_id):
         # there wanting to drink WITH a salve in hand. want >> item means something is refusing,
         # and heal-blocked-damage names the only guard left. Before 03.08 the refusal was
         # silent, which is why three sessions chased purchase caps instead of the drink.
-        print("       drink gate: want=%d -> drank=%d | blocked by hero damage=%d"
+        print("       drink gate: want=%d -> drank=%d | blocked: hero damage=%d trip committed=%d"
               % (diag_max(text, side, "heal-want"), diag_max(text, side, "heal-item"),
-                 diag_max(text, side, "heal-blocked-damage")))
+                 diag_max(text, side, "heal-blocked-damage"),
+                 diag_max(text, side, "heal-skip-trip-committed")))
         print("       sustain: bought=%d (+critical %d) drunk flask=%d tango=%d heal-item=%d"
               " | blocked budget_cap=%d flask_in_bag=%d | stand-and-regen=%d walk=%d"
               % (diag_max(text, side, "recovery-buy"), diag_max(text, side, "recovery-buy-critical"),

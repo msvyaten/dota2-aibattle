@@ -111,7 +111,28 @@ end
 -- 6936,6397, arrived at 100% anyway). The buy side was fixed in 543c0c1 but the CONSUME side
 -- was never gated, and there are three consume sites -- hence one shared predicate.
 -- Under hero fire the flask stays available: surviving the walk beats saving the gold.
+-- "A free heal is about to arrive, so do not pay for one." Two ways that is true, and this
+-- only ever knew the first.
+--
+-- (a) The hp<0.22 floor is going to send us home in a moment.
+-- (b) A fountain trip is ALREADY COMMITTED and we are walking to it right now.
+--
+-- (b) was missing, and the user has now watched it twice: the bot walks toward the fountain
+-- and drinks a salve on the way, paying 110g and ~16s of channel for healing it is about to
+-- get for free, then arrives full. The item layer knew to ask -- AIBItemPolicy.
+-- SkipConsumableForFountainTrip reads exactly these flags -- but it guards the VENDOR consume
+-- path, and our own defensiveHeal never asked.
+--
+-- It stayed hidden because the branch above also refused to drink after any creep touched us,
+-- which in a lane is nearly always, so the wrong drinks were being blocked for the wrong
+-- reason. Removing that clause (f2ab321) fixed the bot refusing to heal and exposed this,
+-- which is the honest order of events: the accidental brake went, and the real guard was
+-- never there.
 local function fountainFreeHealSoon(bot, hp)
+	if bot.aib_fountainTrip == true or bot.aib_fountainFloorTrip == true then
+		Style.DiagRL(bot, "heal-skip-trip-committed", 5)
+		return true
+	end
 	return hp < 0.22 and not bot:WasRecentlyDamagedByAnyHero(2.0)
 end
 
