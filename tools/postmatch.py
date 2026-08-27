@@ -379,7 +379,7 @@ def report(match_id):
                  o, pct(o), st, pct(st), note))
 
     # Farm drivers. The cs-walk buckets are kept as ACTIVITY telemetry, not as a farm
-    # diagnosis: across 133 side-matches (tools/farm_drivers.py) cs-walk/min correlates
+    # diagnosis: across 133 side-matches (one-off driver sweep, see git history) cs-walk/min correlates
     # +0.35 with lh/min, i.e. a high count means the bot is doing CS, not that it is out
     # of position. The count is side-determined (Radiant 11.7-13.4/min vs Dire 6.3-7.2/min
     # in the 2x2, archetype effect ~0), so R>D here is normal and not a finding. The real

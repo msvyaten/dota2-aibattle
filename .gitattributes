@@ -1,0 +1,29 @@
+# Vendor boundary, made machine-readable.
+#
+# About 96% of bots/ is a vendored fork of the OpenHyperAI bot-script engine (see NOTICE.md).
+# Marking it keeps GitHub's language stats, diffs and pull-request views focused on the ~8k
+# lines this project actually owns instead of the ~199k lines it merely carries.
+#
+# This changes presentation only. Nothing is excluded from the repository, from checkout, or
+# from grep. `git diff` still shows vendored changes; they just arrive collapsed by default.
+
+bots/** linguist-vendored
+
+# ...except the AIBattle layer, which is ours and is the whole point of the repository.
+bots/FunLib/aibattle_*.lua -linguist-vendored
+bots/Customize/** -linguist-vendored
+
+# The laning orchestrator is a vendored file we rewrote around: ~286 of its 1661 lines are
+# ours and it is where a reviewer starts. Keep it visible.
+bots/mode_laning_generic.lua -linguist-vendored
+
+# Machine-translated from TypeScript, never hand-edited.
+bots/ts_libs/** linguist-generated
+
+# Large upstream data tables: real code, but nobody reviews them line by line.
+bots/FretBots/matchups_data.lua linguist-generated
+bots/FretBots/HeroSoundsTable.lua linguist-generated
+bots/FretBots/neutrals_data.lua linguist-generated
+
+# Russian working notes and superseded handoffs: provenance, not review material.
+docs/history/** linguist-documentation
