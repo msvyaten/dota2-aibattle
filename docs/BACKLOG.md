@@ -1,5 +1,7 @@
 # AIBattle Backlog
 
+> **Language: Russian.** Working queue. English summary of open work: `docs/STATE.md`.
+
 Только актуальные задачи. Полная форензика и закрытые пункты до 01.08.2026 лежат в истории git:
 `git show ae2604d:docs/BACKLOG.md`. Текущий HEAD/LIVE всегда получать командой:
 

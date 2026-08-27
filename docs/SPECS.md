@@ -1,5 +1,11 @@
 # Спеки незакрытых работ (дизайн готов, имплементация ждёт)
 
+> **Language: Russian.** These are the original authors' working notes on open design
+> mandates, kept in Russian on purpose. They are not required to work on this repository:
+> `README.md`, `NOTICE.md`, `docs/CODE_MAP.md`, `docs/ARCHITECTURE.md`, `docs/STATE.md`
+> and `docs/HANDOFF.md` are English and self-contained. `STATE.md` carries the current
+> plan and the open structural work in English.
+
 > Все — поведенческие, требуют своих матчей и чистой атрибуции.
 > **Текущий порядок: П1-B → П3-B.2 → П3-C → П1-C. П1-A выполнен (`a2bc9a9`); Motor v2 (§1) поглощён П1-A.**
 > Исторический контекст П1-П4 сохранён в `history/HANDOFF_PACKAGE-2026-08-01.md`; текущая очередь — в `BACKLOG.md`.

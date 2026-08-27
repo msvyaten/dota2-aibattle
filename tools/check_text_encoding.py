@@ -1,12 +1,24 @@
 #!/usr/bin/env python3
-"""Check repo text for common mojibake and risky non-ASCII in active code files."""
+"""Check repo text for mojibake, risky non-ASCII in active code, and stray Cyrillic.
+
+Three rules, narrowest first:
+
+1. mojibake markers        -- everywhere
+2. ASCII-only              -- the files we deploy, where a Windows console reads the output
+3. no Cyrillic             -- everywhere except an explicit allowlist
+
+Rule 3 exists because this repository is reviewed by people who do not read Russian. The
+allowlist has exactly two members: vendored user-facing localisation, which is upstream's and
+must not be touched, and the Russian working notes under docs/, which are deliberately kept in
+Russian for the original authors. Anything else in Cyrillic is a leak, not a decision.
+"""
 
 from pathlib import Path
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 TEXT_SUFFIXES = {".lua", ".md", ".py", ".txt", ".bat", ".sh"}
-SKIP_DIRS = {".git", "__pycache__", "node_modules"}
+SKIP_DIRS = {".git", "__pycache__", "node_modules", ".pytest_cache"}
 MOJIBAKE_MARKERS = [
     "\ufffd",  # replacement char
     "\u00d0",  # D0, common Cyrillic mojibake lead
@@ -23,6 +35,24 @@ ASCII_ONLY_PREFIXES = (
     Path("tools/match_stats.py"),
     Path("tools/check_text_encoding.py"),
     Path("README.md"),
+    Path("NOTICE.md"),
+)
+
+# Cyrillic is allowed here and nowhere else.
+#
+#   - bots/FretBots/, localization.lua, aba_chat_table.lua: vendored OHA localisation
+#     (ru/zh/ja strings shown to players). Upstream's; do not edit.
+#   - docs/SPECS.md, docs/BACKLOG.md, docs/history/: Russian working notes, kept on purpose.
+#     README.md "Language" says so; CODE_MAP.md section 7 marks them RU in the reading table.
+#   - archive/dota/local_automation/: gitignored one-off desktop automation, never shipped.
+CYRILLIC_ALLOWED_PREFIXES = (
+    Path("bots/FretBots/"),
+    Path("bots/FunLib/localization.lua"),
+    Path("bots/FunLib/aba_chat_table.lua"),
+    Path("docs/SPECS.md"),
+    Path("docs/BACKLOG.md"),
+    Path("docs/history/"),
+    Path("archive/dota/local_automation/"),
 )
 
 
@@ -35,24 +65,32 @@ def iter_text_files():
             yield path, rel
 
 
-def is_ascii_only(rel):
+def matches_prefix(rel, prefixes):
     rel_text = rel.as_posix()
-    for prefix in ASCII_ONLY_PREFIXES:
+    for prefix in prefixes:
         prefix_text = prefix.as_posix()
         if rel_text == prefix_text or rel_text.startswith(prefix_text):
             return True
     return False
 
 
+def has_cyrillic(line):
+    return any("\u0400" <= ch <= "\u04ff" for ch in line)
+
+
 def main():
     issues = []
     for path, rel in iter_text_files():
         text = path.read_text(encoding="utf-8", errors="replace")
+        ascii_only = matches_prefix(rel, ASCII_ONLY_PREFIXES)
+        cyrillic_ok = matches_prefix(rel, CYRILLIC_ALLOWED_PREFIXES)
         for line_no, line in enumerate(text.splitlines(), 1):
             if any(marker in line for marker in MOJIBAKE_MARKERS):
                 issues.append((rel, line_no, "mojibake-marker", line))
-            if is_ascii_only(rel) and any(ord(ch) > 127 for ch in line):
+            if ascii_only and any(ord(ch) > 127 for ch in line):
                 issues.append((rel, line_no, "non-ascii-active-code", line))
+            if not cyrillic_ok and has_cyrillic(line):
+                issues.append((rel, line_no, "cyrillic-outside-allowlist", line))
 
     for rel, line_no, kind, line in issues[:200]:
         preview = line.encode("unicode_escape").decode("ascii")[:180]

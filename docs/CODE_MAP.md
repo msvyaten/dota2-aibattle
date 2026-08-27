@@ -1,262 +1,293 @@
-# CODE MAP — карта проекта (что где, сколько строк, кто владелец)
+# CODE MAP - what lives where, how big it is, who owns it
 
-> Навигационная карта для передачи проекта. Структура обновлена 2026-08-01.
-> Числа ниже являются снимком, а не источником текущего состояния. Актуальные размеры,
-> прямые action-сайты, shared-state writers и мёртвые локальные функции выдаёт
-> `python tools/project_inventory.py`.
-> Пары к этому файлу: `ARCHITECTURE.md` (продукт/владение), `HANDOFF.md`
-> (операции), `SPECS.md` (мандаты), `BACKLOG.md` (текущая очередь).
+> Navigation map for anyone reading this repository for the first time.
+> Rewritten in English 2026-08-27. **The numbers below are a snapshot, not the source of
+> truth.** Current sizes, direct action sites, shared-state writers and dead local helpers
+> come from `python tools/project_inventory.py`.
+> Companions: `ARCHITECTURE.md` (product and ownership), `HANDOFF.md` (operations),
+> `SPECS.md` (design mandates, Russian), `BACKLOG.md` (current queue, Russian).
 
 ---
 
-## 0. TL;DR — главное за 30 секунд
+## 0. TL;DR - the 30-second version
 
-Продукт: **промпт → LLM → конфиг → измеримое поведение бота Dota 2, 1v1 mid.** База —
-OpenHyperAI (OHA), форк движка бот-скриптов.
+The product: **plain-English strategy -> LLM -> config -> measurable Dota 2 bot behaviour,
+1v1 mid.** The base is a fork of the OpenHyperAI (OHA) bot-script engine; see
+[`NOTICE.md`](../NOTICE.md) for attribution and licence status.
 
-⚠️ **Герой больше не Shadow Fiend.** С 02.08.2026 обе стороны играют милишное зеркало
-`npc_dota_hero_juggernaut`. Это важно при чтении старых заметок: часть констант и вся
-позиционная логика писались от ренджевика с дальностью атаки 500, и у милишника с его 150
-они либо выключаются, либо означают совсем другое расстояние. Актуальный матчап —
-`python tools\pre_match_state.py`, а не этот файл.
+**Live matchup:** both sides play a `npc_dota_hero_nevermore` (Shadow Fiend) mirror, Radiant
+on `canonical_gemini`, Dire on `canonical_grok`. A Juggernaut melee mirror was run earlier and
+is frozen, not deleted - some constants and all positioning logic were written for a ranged
+hero with 500 attack range, and mean something different at melee 150. **Never read the
+current matchup out of this file:**
 
-**Масштаб и что реально наше:**
+```powershell
+python tools\pre_match_state.py
+```
 
-| | строк | % | трогаем? |
+**Scale, and what is actually ours:**
+
+| | lines | % of `bots/` | do we touch it? |
 |---|---:|---:|---|
-| **Наш слой `aibattle_*`** (поведение) | **7171** | — | ✅ ДА — здесь вся логика |
-| Конфиги `Customize/` | 684 | — | ✅ ДА — пресеты архетипов |
-| **Наши патчи ВНУТРИ вендорных файлов** | **217** | — | ⚠️ 21 файл, см. §3 |
-| Вендор OHA (всё остальное в `bots/`) | ~191484 | 96% | ❌ НЕТ — база, синк сверху |
-| Tools (Python) | 4391 | — | ✅ ДА |
-| Docs | измерять утилитой | — | ✅ ДА |
+| **Our layer `aibattle_*`** (behaviour) | **7,829** | 3.9% | YES - all the logic is here |
+| Configs `Customize/` | 683 | 0.3% | YES - archetype presets |
+| **Our patches inside vendored files** | **~469** | 0.2% | CAREFULLY - 21 files, see section 3 |
+| Vendored OHA (everything else in `bots/`) | ~190,000 | ~96% | NO - upstream base, synced from above |
+| Tools (Python) | 4,628 | - | YES |
+| Backend (Python + prompt) | 359 | - | YES |
 
-**Итого Lua в `bots/`: 199031 строк.** Наших из них — 7764 (3.9%), считая патчи в вендоре.
+**Total Lua in `bots/`: ~199,000 lines. Ours: ~8,300 (4.2%)**, counting the vendor patches.
 
-**Вывод для новых технарей:** не пугайтесь 197k строк Lua. **Учить надо ~6.9k** — слой
-`aibattle_*` + конфиги. Остальное — движок OHA, его читают по необходимости, не рефакторят.
+**Conclusion for a new engineer:** do not be scared by 199k lines of Lua. **You need to learn
+about 8.5k** - the `aibattle_*` layer plus the configs. The rest is the OHA engine: read it
+when you need to, never refactor it.
 
 ---
 
-## 1. Слой AIBattle — наш код (`bots/FunLib/aibattle_*.lua`, 7171 строк, 22 файла)
+## 1. The AIBattle layer - our code (`bots/FunLib/aibattle_*.lua`, 7,829 lines, 22 files)
 
-Здесь живёт ВСЁ поведение. Хорошо разложено: один файл — одна ответственность.
+All behaviour lives here. One file, one responsibility.
 
-### Ядро (движок решений и конфиг)
+### Core (decision engine and config)
 
-| Файл | строк | Роль |
+| File | lines | Role |
 |---|---:|---|
-| `aibattle_style.lua` | 1208 | **Центр**: загрузка конфига (rules/dials), item/skill build, ability-harass config; телеметрия `Style.Intent/Diag/TickOwner/Blocked`. Всё зовёт его. |
-| `aibattle_engine.lua` | 254 | Раннер стадий и интентов: `Stage/Intent/Resolve`, `KillWindow`, `RecoveryPolicy`, `PowerRuneState`, `RuneUsePolicy`. |
-| `aibattle_laning_policy.lua` | 345 | **Скоринг десиров**: `Safety/PowerRune/Fight/Recover/Siege` → score; HP-банды, пороги, no-action-капы (П4). |
-| `aibattle_laning_arbiter.lua` | 132 | **Top-desire арбитр**: `Run/Candidate` — гистерезис победителя, tick-owner. Сердце выбора. |
-| `aibattle_constants.lua` | 51 | Инженерные пороги (дистанции, кулдауны, HP-банды) — не LLM-facing. |
-| `aibattle_motor.lua` | 45 | Владение движением `Claim/Active/Release` (v1). Retire в П1-C. |
-| `aibattle_intents.lua` / `_laning_context.lua` | 73 / 37 | Хелперы интентов + билдер контекста тика. |
-| `aibattle_build.lua` | 4 | Штамп sha (перезаписывается деплоем). |
+| `aibattle_style.lua` | 1249 | **The hub**: config loading (rules/dials), item/skill build, ability-harass config, and the telemetry primitives `Style.Intent/Diag/TickOwner/Blocked`. Everything calls it. |
+| `aibattle_engine.lua` | 274 | Stage and intent runner: `Stage/Intent/Resolve`, `KillWindow`, `RecoveryPolicy`, `PowerRuneState`, `RuneUsePolicy`. |
+| `aibattle_laning_policy.lua` | 345 | **Desire scoring**: `Safety/PowerRune/Fight/Recover/Siege` -> score; HP bands, thresholds, no-action caps. |
+| `aibattle_laning_arbiter.lua` | 132 | **Top-desire arbiter**: `Run/Candidate` - winner hysteresis, tick owner. The heart of the choice. |
+| `aibattle_constants.lua` | 51 | Engineering thresholds (distances, cooldowns, HP bands). Not model-facing. |
+| `aibattle_motor.lua` | 45 | Movement ownership `Claim/Active/Release` (v1). Slated for retirement in P1-C. |
+| `aibattle_intents.lua` / `aibattle_laning_context.lua` | 73 / 37 | Intent helpers and the per-tick context builder. |
+| `aibattle_build.lua` | 4 | Build SHA stamp, overwritten by deploy. |
 
-### Поведенческие модули лейнинга
+### Laning behaviour modules
 
-| Файл | строк | Роль |
+| File | lines | Role |
 |---|---:|---|
-| `aibattle_survive.lua` | 1028 | **Хил/реген low-HP**: `fountainRecovery`, `defensiveHeal`, `regenLane`, `recovery` (бутылка/фласка/танго/руна + fallback-цепь, buy-escape). |
-| `aibattle_runes.lua` | 697 | **Руны**: `SeekBottleRune`, `FindWaterRecoveryRune`, стейджинг/пикап, bottle-fill транзакция. |
-| `aibattle_laning_safety.lua` | 583 | `CreepHitReact`, `DamageUnstuck`, `RangedMeleePackSpacing`, `LastHitWatchdog`, visual-hold/AFK anti-idle. |
-| `aibattle_laning_combat.lua` | 451 | `HarassAndChase`, `ContactHero`, `AbilityPressure`, `RunePowerPressure`, `UphillReposition`, `EmergencyKillPriority`, `AbilityHarass`. |
-| `aibattle_laning_tempo.lua` | 464 | `Pregame`, `DivePolicy`, `DeathWindow`, `PreCreepStandoff` (стадии-гарды). |
-| `aibattle_laning_recovery.lua` | 405 | **Low-HP владельцы** (цель П3): `ThinkIfAllowed`, `CriticalLock`, `ActiveLowHp`, `EmergencyRetreat`, `ForwardLowHpPullback`, `LowHpHoldState`. |
-| `aibattle_laning_creeps.lua` | 236 | `GetBestLastHitCreep`, `GetBestDenyCreep`, `HandleCreepWork`. |
-| `aibattle_laning_trade.lua` | 163 | `KillLock`, `HealInterrupt`, `PassingHeroTrade` (урджент-размены). |
-| `aibattle_laning_siege.lua` | 315 | Осада вышки / siege-commit и API владельца latch. |
-| `aibattle_laning_duel.lua` | 237 | `Prewave`, `Pregame` дуэль. |
+| `aibattle_survive.lua` | 1268 | **Healing and low-HP regen**: `fountainRecovery`, `defensiveHeal`, `regenLane`, `recovery` (bottle / flask / tango / rune fallback chain, buy-escape). |
+| `aibattle_runes.lua` | 697 | **Runes**: `SeekBottleRune`, `FindWaterRecoveryRune`, staging and pickup memory, the bottle-fill transaction. |
+| `aibattle_laning_safety.lua` | 648 | `CreepHitReact`, `DamageUnstuck`, `RangedMeleePackSpacing`, `LastHitWatchdog`, visual-hold / AFK anti-idle. |
+| `aibattle_laning_combat.lua` | 518 | `HarassAndChase`, `ContactHero`, `AbilityPressure`, `RunePowerPressure`, `UphillReposition`, `EmergencyKillPriority`, `AbilityHarass`. |
+| `aibattle_laning_tempo.lua` | 470 | `Pregame`, `DivePolicy`, `DeathWindow`, `PreCreepStandoff` - the hard stage guards. |
+| `aibattle_laning_recovery.lua` | 405 | **Low-HP owners** (the P3 target): `ThinkIfAllowed`, `CriticalLock`, `ActiveLowHp`, `EmergencyRetreat`, `ForwardLowHpPullback`, `LowHpHoldState`. |
+| `aibattle_laning_siege.lua` | 379 | Tower siege, siege-commit, and the latch owner API. |
+| `aibattle_laning_creeps.lua` | 275 | `GetBestLastHitCreep`, `GetBestDenyCreep`, `HandleCreepWork`. |
+| `aibattle_laning_duel.lua` | 237 | `Prewave` and `Pregame` duel movement. |
+| `aibattle_utils.lua` | 236 | `SafeRetreatTowerLoc`, `ForwardSurvivingTowerLoc`, `EnemyTowerDanger`, `UphillMiss`, `IsTowerActuallyThreatening`. |
+| `aibattle_laning_trade.lua` | 219 | `KillLock`, `HealInterrupt`, `PassingHeroTrade` - the urgent trades. |
 | `aibattle_item_policy.lua` | 173 | `ShouldUseMango`, `ShouldDelaySpareTpPurchase`. |
-| `aibattle_utils.lua` | 171 | `SafeRetreatTowerLoc`, `ForwardSurvivingTowerLoc`, `EnemyTowerDanger`, `UphillMiss`, `IsTowerActuallyThreatening`. |
 | `aibattle_laning_survival.lua` | 94 | `CreepAggroRelief`. |
 
 ---
 
-## 2. Как течёт решение (тик)
+## 2. How a decision flows (one tick)
 
-Оркестратор: `bots/mode_laning_generic.lua`. `GetDesire()` заявляет желание играть лейнинг,
-`Think()` → `ThinkLaningCore()` прогоняет пайплайн. После P1-A прежний хвост участвует в
-одной election; до неё всё ещё остаётся urgent-голова.
+The orchestrator is `bots/mode_laning_generic.lua`. `GetDesire()` bids for the laning mode;
+`Think()` -> `ThinkLaningCore()` runs the pipeline. After P1-A the old tail participates in a
+single election, but an urgent head still runs before it.
 
 ```
-1. tempo-гарды: respawn / pregame / dive / death-window                                      [tempo]
-2. hard recovery floor + urgent kill/channel interrupt                                       [recovery, trade]
-3. Recovery.Owner + prewave duel / pre-creep standoff                                        [recovery, duel, tempo]
-4. ★ MERGED ELECTION: top desires + lane work + positioning + watchdog/anti-idle candidates  [policy→arbiter]
-5. winner executes lazily; an incapable candidate must report no-action and release the tick
+HEAD - short-circuits, invisible to arbiter telemetry:
+  1. true-emergency survive / emergency-low recovery                     [survive, recovery]
+  2. urgent kill lock / channel interrupt                                [trade]
+  3. early-low recovery / Recovery.Owner                                 [recovery]
+  4. prewave duel / pre-creep standoff                                   [duel, tempo]
+
+ELECTION - one call to Arbiter.Run:
+  5. score every candidate WITHOUT acting: desires 66-126 (capped 40-44),
+     last-hit 140, tail lanework/position/idle 56..2                     [policy -> arbiter]
+  6. sort by score, walk down calling action() until one returns true
+     - a desire that wins but cannot act logs empty_action and loses hysteresis
+     - a tail candidate that yields falls through silently
 ```
 
-Каждое решение логируется: `intent=<key>`, `blocked=<key> reason=<why>`, `tick-owner`,
-`top-arbiter winner/losers` → анализируется инструментами (§5).
+The walk in step 6 is why this is a **priority cascade, not a single-winner election**: the
+fifth-ranked candidate owns the tick if the four above it decline. `ARCHITECTURE.md` carries
+the two calibration traps in this ladder - the no-action caps sitting just under `safe-cs` 56,
+and `last-hit` at 140 being the only candidate that never yields.
 
-**Открытый структурный долг (см. SPECS):** P1-A объединил середину и хвост, но urgent-голова
-ещё short-circuit'ит election (P1-B), а suppress/commit/anti-idle механика всё ещё дублируется
-(P1-C). П3 сводит оставшиеся low-HP движения в один owner. `mode_laning_generic.lua` сейчас
-около 1.6k строк и должен уменьшаться по мере этих ownership-катоверов.
+Every decision is logged as `intent=<key>`, `blocked=<key> reason=<why>`, `tick-owner`, and
+`top-arbiter winner/losers`, then read back by the tools in section 5.
+
+**Open structural debt (see `SPECS.md`):** P1-A merged the middle and the tail, but the urgent
+head still short-circuits the election (P1-B), and the suppress/commit/anti-idle machinery is
+still duplicated (P1-C). P3 folds the remaining low-HP movers into one owner.
+`mode_laning_generic.lua` is about 1.6k lines and should shrink as those ownership cuts land -
+by extraction, not by moving lines around.
 
 ---
 
-## 3. Entry-points и патчи в вендоре (Dota вызывает; мы правили частично)
+## 3. Entry points and patches inside vendored files
 
-**Это самая важная таблица карты.** Каждая строка — место, где наш код живёт внутри чужого.
-При обновлении базы OHA конфликты будут ровно здесь и больше нигде. Считано по `AIB`-маркерам,
-поэтому вставка БЕЗ маркера этому аудиту невидима — маркер это не стиль, а способ мерить границу.
+**This is the most important table in the map.** Each row is a place where our code lives
+inside somebody else's. When the OHA base is updated, merge conflicts will happen here and
+nowhere else.
 
-| Файл | всего строк | наших | доля |
+Counted as lines mentioning `AIB` in a vendored file, which is reproducible:
+
+```bash
+grep -rlE "(^|[^A-Za-z])AIB" --include="*.lua" bots/ | grep -v "FunLib/aibattle_"
+```
+
+A patch that mentions no `AIB` identifier is invisible to this audit, so the marker is a
+measurement tool, not a style preference.
+
+| File | total lines | ours | share |
 |---|---:|---:|---:|
-| `bots/mode_laning_generic.lua` | 1580 | 61 | 3% |
-| `bots/mode_roam_generic.lua` | 2210 | 38 | 1% |
-| `bots/ability_item_usage_generic.lua` | 8483 | 19 | 0% |
-| `bots/mode_retreat_generic.lua` | 857 | 15 | 1% |
-| `bots/item_purchase_generic.lua` | 1404 | 12 | 0% |
-| `bots/mode_push_tower_bot_generic.lua` | 39 | 9 | 23% |
-| `bots/mode_push_tower_mid_generic.lua` | 35 | 8 | 22% |
-| `bots/mode_push_tower_top_generic.lua` | 35 | 8 | 22% |
-| `bots/mode_roshan_generic.lua` | 190 | 6 | 3% |
-| `bots/mode_rune_generic.lua` | 864 | 6 | 0% |
-| `bots/FretBots/SettingsDefault.lua` | 443 | 6 | 1% |
-| `bots/mode_team_roam_generic.lua` | 1719 | 5 | 0% |
-| `bots/mode_ward_generic.lua` | 212 | 4 | 1% |
-| `bots/FunLib/jmz_func.lua` | 6758 | 4 | 0% |
-| `bots/mode_defend_tower_bot_generic.lua` | 18 | 3 | 16% |
-| `bots/mode_defend_tower_mid_generic.lua` | 16 | 3 | 18% |
-| `bots/mode_defend_tower_top_generic.lua` | 18 | 3 | 16% |
-| `bots/BotLib/hero_sniper.lua` | 708 | 3 | 0% |
-| `bots/hero_selection.lua` | 1128 | 2 | 0% |
-| `bots/FunLib/aba_defend.lua` | 1410 | 1 | 0% |
-| `bots/FunLib/aba_role.lua` | 437 | 1 | 0% |
+| `bots/mode_laning_generic.lua` | 1661 | 286 | 17% |
+| `bots/mode_roam_generic.lua` | 2209 | 42 | 1% |
+| `bots/item_purchase_generic.lua` | 1418 | 31 | 2% |
+| `bots/ability_item_usage_generic.lua` | 8482 | 23 | 0% |
+| `bots/mode_retreat_generic.lua` | 856 | 15 | 1% |
+| `bots/mode_push_tower_bot_generic.lua` | 38 | 9 | 23% |
+| `bots/mode_push_tower_mid_generic.lua` | 34 | 8 | 23% |
+| `bots/mode_push_tower_top_generic.lua` | 34 | 8 | 23% |
+| `bots/FretBots/SettingsDefault.lua` | 442 | 6 | 1% |
+| `bots/mode_roshan_generic.lua` | 189 | 6 | 3% |
+| `bots/mode_rune_generic.lua` | 863 | 6 | 0% |
+| `bots/mode_team_roam_generic.lua` | 1718 | 5 | 0% |
+| `bots/FunLib/jmz_func.lua` | 6757 | 4 | 0% |
+| `bots/mode_ward_generic.lua` | 211 | 4 | 1% |
+| `bots/BotLib/hero_sniper.lua` | 707 | 3 | 0% |
+| `bots/mode_defend_tower_bot_generic.lua` | 17 | 3 | 17% |
+| `bots/mode_defend_tower_mid_generic.lua` | 15 | 3 | 20% |
+| `bots/mode_defend_tower_top_generic.lua` | 17 | 3 | 17% |
+| `bots/hero_selection.lua` | 1127 | 2 | 0% |
+| `bots/FunLib/aba_defend.lua` | 1409 | 1 | 0% |
+| `bots/FunLib/aba_role.lua` | 436 | 1 | 0% |
 
-Всего **21 вендорных файлов** несут **217 наших строк**.
+**21 vendored files carry about 469 of our lines.**
 
-⚠️ **Правило:** в вендорные файлы лезть только точечно и по нужде (риск слияния сверху).
-
----
-
-## 4. Конфиги (`bots/Customize/`, 684 строк) — зона Claude
-
-| Файл | строк | Роль |
-|---|---:|---|
-| `canonical_brawler.lua` | 63 | Архетип «драчун» (fight-on-sight, harass 0.90). Radiant/Dire primary. |
-| `canonical_farmer.lua` | 77 | Архетип «фармер» (econ, farm_focus 0.72, hero_priority=default). |
-| `canonical_pusher.lua` | 57 | Архетип «пушер». |
-| `canonical_ganker.lua` | 57 | Архетип «ганкер». |
-| `canonical_oha_default.lua` | 12 | Голый OHA-дефолт (базлайн TOP-0). |
-| `playstyle_radiant.lua` / `_dire.lua` | 1 / 2 | **Байндинг**: какой canonical бежит на стороне. Живой матчап. ⚠️ НЕ коммитить без команды. |
-| `general.lua` | 220 | Общие оверрайды/настройки. Синк только LIVE→репо. |
-
-Пресет = таблица `{ dials, rules, item_build, skill_build }`. Model-facing схема — в
-`backend/style_schema.py`, runtime validation — в `aibattle_style.lua`.
-- **dials** — LLM-facing числа 0..1 (harass_desire, farm_focus, forwardness, push_desire…).
-- **rules** — LLM-facing выборы (hero_priority, low_hp_behavior, tower_aggression…).
-- **constants** — инженерные (в `aibattle_constants.lua`), НЕ в конфиге.
+Rule: patch vendored files only where you must, and only narrowly. Every line here is a future
+merge conflict.
 
 ---
 
-## 5. Tools (`tools/`, Python, 3 052 строки)
+## 4. Configs (`bots/Customize/`, 683 lines)
 
-| Файл | строк | Роль |
+| File | lines | Role |
 |---|---:|---|
-| `postmatch.py` | 70 | ⭐ **Главный разбор матча**: scorecard + сигнатуры фиксов + jitter-breakdown, ~20 строк. |
-| `scorecard.py` | 74 | Голый вердикт PASS/FAIL (jitter/empty_action/bottle/errors). |
-| `match_stats.py` | 1211 | Глубокий анализ (KDA/LH, семейства интентов, арбитр, stationary, fix_candidate). |
-| `betting.py` | 414 | 💰 **Рыночный слой**: кривая преимущества R−D, рыночные линии, in-play база. См. ниже. |
-| `check_all.py` | 396 | Контроль дрейфа: lua-syntax, deploy-манифест, live≠repo, sha. Гонять после деплоя. |
-| `parse_demo.py` / `parse_itembuilds.py` | 336 / 161 | Парсинг демок / билдов. |
-| `check_text_encoding.py` / `test_match_stats.py` | 66 / 324 | Кодировка / тесты. |
+| `canonical_farmer.lua` | 89 | "Farmer" archetype - economy, high `farm_focus`, `hero_priority=default`. |
+| `canonical_brawler.lua` | 72 | "Brawler" archetype - fight on sight, high harass. |
+| `canonical_pusher.lua` | 57 | "Pusher" archetype. |
+| `canonical_ganker.lua` | 57 | "Ganker" archetype. |
+| `canonical_deepseek.lua` | 40 | LLM-generated preset. |
+| `canonical_gemini.lua` | 39 | LLM-generated preset, currently bound to Radiant. |
+| `canonical_grok.lua` | 38 | LLM-generated preset, currently bound to Dire. |
+| `canonical_oha_default.lua` | 12 | Bare OHA default - the baseline to compare against. |
+| `hero/viper.lua` | 57 | Per-hero override. |
+| `playstyle_radiant.lua` / `playstyle_dire.lua` | 1 / 1 | **The binding**: which canonical runs on which side. Live experiment state. Do not commit without an explicit instruction. |
+| `general.lua` | 220 | Lobby and hero-pick settings. Live experiment state. Sync LIVE -> repo only. |
 
-### `betting.py` — зачем он отдельно от `match_stats.py`
+A preset is a table of `{ dials, rules, item_build, skill_build }`. The model-facing schema
+lives in `backend/style_schema.py`; runtime validation lives in `aibattle_style.lua`; the two
+are checked against each other by `tools/check_schema_contract.py`.
 
-Два инструмента отвечают на **разные вопросы** и намеренно не пересекаются:
+- **dials** - model-facing floats 0..1 (`harass_desire`, `farm_focus`, `forwardness`, `push_desire`, ...). Twelve of them.
+- **rules** - model-facing discrete choices (`hero_priority`, `low_hp_behavior`, `tower_aggression`, ...). Eleven of them.
+- **constants** - engineering values in `aibattle_constants.lua`. Never in a config.
+
+---
+
+## 5. Tools (`tools/`, Python, 4,628 lines)
+
+| File | lines | Role |
+|---|---:|---|
+| `match_stats.py` | 1164 | Deep analysis - KDA/LH, intent families, arbiter behaviour, stationary spans, fix candidates. |
+| `betting.py` | 711 | **Market layer**: the Radiant-minus-Dire advantage curve over time, market lines, in-play base. See below. |
+| `check_all.py` | 689 | The repo gate: encoding, Lua/Python syntax, deploy manifest, live drift, schema contract, tests, inventory. |
+| `postmatch.py` | 462 | **Main match report**: scorecard, fix signatures, jitter breakdown. |
+| `binding.py` | 335 | Proves a config knob actually reaches behaviour. |
+| `test_match_stats.py` / `test_betting.py` / `test_project_inventory.py` | 324 / 108 / 12 | Tests. |
+| `scorecard.py` | 143 | Bare PASS/FAIL verdict on watchability criteria. |
+| `project_inventory.py` | 140 | Current sizes, direct action surface, shared-state writers, dead helpers. |
+| `deploy.bat` | 129 | Deploy profiles. |
+| `pathology.py` | 105 | Movement shapes: STALL and YOYO detection from positions alone. |
+| `check_text_encoding.py` | 91 | Mojibake, ASCII-only runtime files, and the no-Cyrillic rule. |
+| `aibattle_log.py` | 89 | The single telemetry parser everything else builds on. |
+
+### Why `betting.py` is separate from `match_stats.py`
+
+They answer **different questions** and deliberately do not overlap:
 
 | | `match_stats.py` | `betting.py` |
 |---|---|---|
-| Вопрос | Работал ли бот? (инженерное QA) | Есть ли здесь рынок и как его прайсить? |
-| Смотрит на | каждую сторону по отдельности | **разницу R−D во времени** |
-| Читатель | разработчик движка | продукт / букмекер |
+| Question | Did the bot work? (engineering QA) | Is there a market here, and how would you price it? |
+| Looks at | each side on its own | the **Radiant-minus-Dire difference over time** |
+| Reader | engine developer | product / bookmaker |
 
-Единственное, чего нет в `match_stats.py`, — **кривая преимущества** (R минус D по времени).
-Все метрики `betting.py` — её производные. Оба инструмента работают офлайн по
-готовому `console.<matchid>.log`: ни Lua, ни движок, ни деплой не затрагиваются.
+The one thing `match_stats.py` does not produce is the **advantage curve**. Every
+`betting.py` metric derives from it. Both run offline against a finished
+`console.<matchid>.log` - no Lua, no engine, no deploy involved.
 
-**По одному матчу** — форма матча во времени:
-- `first_event` — когда матч завёлся (первая кровь либо размен с просадкой HP >20%)
-- `decided_at` / `dead_tail%` — когда исход перестал быть спорным и какая доля матча
-  прошла уже решённой. Прямой замер «интрига держится»
-- `lead_changes` — сколько раз лидерство переходило
-- `amplitude` — размах разрыва. Ловит то, чего не видят смены лидера: разрыв может
-  гулять на 1400 золота ни разу не пересекая ноль — знак не меняется, а коэффициенты
-  ходить должны
-- `deficit_overcome` — какой дефицит отыграл победитель. **Ноль по всей серии = live-рынок
-  умирает после первого отрыва**, ставить после 3-й минуты не на что
+**Per match** - the shape of the match over time:
 
-**По серии** (`--series`) — готовые рыночные линии:
-- **тотал** (распределение длительности → больше/меньше N минут)
-- **фора** (распределение финального разрыва)
-- **раскладка по способу победы** (киллы / вышка+LH) → рынок метода
-- **replay-check** — разброс по 4 осям. Один и тот же победитель это нормально
-  (тяжёлые фавориты есть везде); провал — когда матчи прожиты **одинаково**
-- **in-play база** — эмпирическая P(победа | разрыв на минуте N). На 6 матчах не
-  прайсится, нужно ~25–30; копится с первого дня, чтобы потом не переигрывать серию
+- `first_event` - when the match came alive (first blood, or a trade costing >20% HP)
+- `decided_at` / `dead_tail%` - when the outcome stopped being contested, and how much of the
+  match was already decided. The direct measure of "does the tension hold"
+- `lead_changes` - how often the lead changed hands
+- `amplitude` - the swing of the gap. Catches what lead changes miss: the gap can move 1400
+  gold without crossing zero - the sign never flips, but odds should still move
+- `deficit_overcome` - the largest deficit the winner came back from. **Zero across a whole
+  series means the live market dies after the first break** and there is nothing to bet on
+  past minute three
 
-**НЕ дублирует** `match_stats.py`: победитель/KDA/LH/DN/урон/предметы, экономика бутылки,
-stationary-спаны, доля контакта, диаг- и intent-профили — всё это берётся оттуда.
+**Per series** (`--series`) - ready-made market lines: totals (match-length distribution),
+handicap (final-gap distribution), method-of-victory split (kills vs tower+LH), a replay-check
+across four axes, and an empirical in-play base for P(win | gap at minute N). Six matches do
+not price it; roughly 25-30 do. It accumulates from day one so the series does not have to be
+replayed later.
 
-```bash
-python tools\betting.py <matchid>                    # один матч
-python tools\betting.py --series <id1> <id2> <id3>   # серия + рыночные линии
-```
-
-
-**Деплой:** `tools/deploy.bat` (из cmd) ИЛИ вручную `cp` файлов в LIVE + штамп sha в
-`LIVE/FunLib/aibattle_build.lua`. LIVE:
-`C:\Program Files (x86)\Steam\...\dota 2 beta\game\dota\scripts\vscripts\bots\`.
-Лог матча: `game\dota\console.<matchid>.log` (лобби Solo Mid, читы ON, `-condebug`).
+**Deploy:** `tools/deploy.bat` from `cmd`, or copy the files into LIVE manually and stamp the
+SHA into `LIVE/FunLib/aibattle_build.lua`. LIVE is
+`...\dota 2 beta\game\dota\scripts\vscripts\bots\`. The match log is
+`game\dota\console.<matchid>.log` (Solo Mid lobby, cheats on, `-condebug`).
 
 ---
 
-## 6. Backend — LLM-генератор
+## 6. Backend - the LLM config generator
 
-| Файл | строк | Роль |
+| File | lines | Role |
 |---|---:|---|
-| `generate_playstyle.py` | 166 | API/offline JSON → проверенный Lua config. |
-| `style_schema.py` | 30 | Единая model-facing схема: 12 dials + 11 rules. |
-| `system_prompt.txt` | 306 | Живой промпт генератора. |
-| `test_generate.py` | 100 | Офлайн-тесты sanitizing/JSON/Lua output; ключ не нужен. |
+| `generate_playstyle.py` | 186 | API or offline JSON -> a validated Lua config. |
+| `test_generate.py` | 134 | Offline tests for sanitising, JSON handling and Lua output. No API key needed. |
+| `style_schema.py` | 39 | The single model-facing schema: 12 dials + 11 rules. |
+| `system_prompt.txt` | - | The live generator prompt. |
 
 ---
 
-## 7. Docs — что читать
+## 7. Docs - what to read when
 
-| Файл | Когда открывать |
-|---|---|
-| **`CODE_MAP.md`** (этот) | Первый вход: где что лежит. |
-| **`STATE.md`** | Текущий этап, ограничения и следующий gate. |
-| **`BACKLOG.md`** | Только актуальная очередь работ. |
-| **`SPECS.md`** | Незакрытые работы с дизайном (П1-мандат, П3, ловушки). Что делать дальше. |
-| `ARCHITECTURE.md` | Философия, владение, слои rules/dials/constants. |
-| `HANDOFF.md` | Короткий операционный справочник. |
-| `history/` | Старые handoff, backlog, prompt drift и ручной журнал матчей. |
+| File | Language | Open it when |
+|---|---|---|
+| `../README.md` | EN | First contact: what the product is, how to run the gate, glossary. |
+| `../NOTICE.md` | EN | Before touching or redistributing anything: vendor attribution and licence status. |
+| **`CODE_MAP.md`** (this file) | EN | You need to know where something lives. |
+| `ARCHITECTURE.md` | EN | Conventions: decision order, ownership, telemetry, how to add behaviour. |
+| `STATE.md` | EN | Current plan, open structural work, evidence rules. |
+| `HANDOFF.md` | EN | Operations: paths, gate, deploy, match analysis. |
+| `SPECS.md` | **RU** | Design mandates and open work with rationale. Working notes. |
+| `BACKLOG.md` | **RU** | Current work queue. Working notes. |
+| `history/` | **RU** | Old handoffs, prompt drift, manual match journal. Archive. |
 
 ---
 
-## 8. «Где менять X?» — быстрый справочник
+## 8. "Where do I change X?" - quick reference
 
-| Хочу… | Иду в… |
+| I want to... | Go to... |
 |---|---|
-| Поменять стиль игры бота | `bots/Customize/canonical_*.lua` (диалы/rules) |
-| Сменить матчап (кто против кого) | `bots/Customize/playstyle_radiant/dire.lua` |
-| Как бот скорит desire (safety/fight/…) | `aibattle_laning_policy.lua` |
-| Порядок/арбитраж тика | `aibattle_laning_arbiter.lua` + `mode_laning_generic.lua` |
-| Поведение на низком HP / реген | `aibattle_laning_recovery.lua` + `aibattle_survive.lua` |
-| Ласт-хит / деней / крип-волна | `aibattle_laning_creeps.lua` |
-| Харасс / чейз / способности | `aibattle_laning_combat.lua` |
-| Руны / бутылка | `aibattle_runes.lua` |
-| Осада вышки | `aibattle_laning_siege.lua` |
-| Пороги-числа (дистанции, кулдауны) | `aibattle_constants.lua` |
-| Телеметрия / диаг-сигнатуры | `aibattle_style.lua` (`Intent/Diag/Blocked/TickOwner`) |
-| Разбор матча (работал ли бот) | `python tools/postmatch.py <id>` |
-| Ставочность матча (есть ли рынок) | `python tools/betting.py <id>` |
-| Что делать дальше | `docs/SPECS.md` |
+| Change how the bot plays | `bots/Customize/canonical_*.lua` (dials / rules) |
+| Change the matchup (who plays whom) | `bots/Customize/playstyle_radiant.lua`, `playstyle_dire.lua` |
+| Change how desires are scored (safety/fight/...) | `aibattle_laning_policy.lua` |
+| Change tick order or arbitration | `aibattle_laning_arbiter.lua` + `mode_laning_generic.lua` |
+| Change low-HP behaviour or regen | `aibattle_laning_recovery.lua` + `aibattle_survive.lua` |
+| Change last-hit / deny / creep-wave handling | `aibattle_laning_creeps.lua` |
+| Change harass / chase / ability use | `aibattle_laning_combat.lua` |
+| Change rune and bottle behaviour | `aibattle_runes.lua` |
+| Change tower siege | `aibattle_laning_siege.lua` |
+| Change a threshold (distance, cooldown) | `aibattle_constants.lua` |
+| Add telemetry or a diag signature | `aibattle_style.lua` (`Intent/Diag/Blocked/TickOwner`) |
+| Find out whether the bot worked in a match | `python tools/postmatch.py <id>` |
+| Find out whether a match was worth watching | `python tools/betting.py <id>` |
+| Find out what to do next | `docs/SPECS.md` (Russian), `docs/STATE.md` (English) |

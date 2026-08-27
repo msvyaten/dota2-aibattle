@@ -87,7 +87,9 @@ STALE_LIVE_FILES = [
 
 ACTIVE_DOC_LIMITS = {
     "ARCHITECTURE.md": 250,
-    "BACKLOG.md": 150,
+    # 150 of queue + 2 for the English language banner the handoff requires
+    # on a Russian working doc (see README "Language").
+    "BACKLOG.md": 152,
     "CODE_MAP.md": 350,
     "HANDOFF.md": 180,
     "SPECS.md": 800,

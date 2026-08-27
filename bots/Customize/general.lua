@@ -45,7 +45,7 @@ Customize.Ban = {
 6. Check Appendix to ensure you DO NOT pick more than 1 "weak" heroes in a team for your game experience.
 --]]
 -- SF 1v1: execute_threshold test v3 SWAP (2026-06-09)
--- Radiant exec=0.60 | Dire exec=0.00 (контроль)
+-- Radiant exec=0.60 | Dire exec=0.00 (control side)
 Customize.Radiant_Heros = { "npc_dota_hero_nevermore", "npc_dota_hero_nevermore", "npc_dota_hero_nevermore", "npc_dota_hero_nevermore", "npc_dota_hero_nevermore" }
 
 -- Same notes as above for picking heroes but for the Dire side.
