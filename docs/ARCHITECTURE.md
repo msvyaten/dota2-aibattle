@@ -78,7 +78,8 @@ Do not put implementation details such as rune staging distance, AFK heartbeat s
 
 Current owners:
 
-- `aibattle_engine.lua`: stage runner, candidate arbitration, shared kill/recovery/rune policies.
+- `aibattle_engine.lua`: stage runner, candidate arbitration, and the shared kill/recovery/rune
+  policies, including `PowerRuneState`, `RuneUsePolicy`, and `IsActionPowerRune`.
 - `aibattle_style.lua`: config loading, clamping, diag helpers, model-facing rules/dials.
 - `aibattle_constants.lua`: internal numeric guards and distances.
 - `aibattle_laning_context.lua`: per-tick lane snapshot.
@@ -87,15 +88,24 @@ Current owners:
 - `aibattle_laning_recovery.lua`: low-HP gates, critical recovery, recovery-yield logic.
 - `aibattle_laning_safety.lua`: visual hold/AFK, creep damage reaction, damage unstuck, CS watchdog.
 - `aibattle_laning_tempo.lua`: pregame, pre-creep standoff, tower dive policy, death window.
-- `aibattle_laning_arbiter.lua`: top-level laning desire arbitration; evaluates `safety / power-rune / fight / recover / siege` candidates by score and runs only the winner.
+- `aibattle_laning_arbiter.lua`: the tick election. Scores every candidate without letting
+  it act, sorts by score, then walks down the sorted list calling `action()` until one
+  returns true. It is a priority cascade, not a single-winner election: a candidate that
+  scored fifth owns the tick if the four above it decline. A desire that wins and cannot
+  act logs `blocked=top-arbiter reason=empty_action` and loses its hysteresis; a tail
+  candidate falls through silently, which is what the old sequential tail did.
 - `aibattle_laning_policy.lua`: named HP bands, top-level desire gates, score weights, and forward/siege thresholds.
-- `aibattle_engine.lua`: shared runtime helpers and policy adapters, including `PowerRuneState`, `RuneUsePolicy`, and `IsActionPowerRune`.
 - `aibattle_laning_duel.lua`: pregame/prewave duel movement.
 - `aibattle_laning_siege.lua`: tower pressure and allied-tank rules.
 - `aibattle_laning_survival.lua`: creep aggro relief and combat safety candidates.
 - `aibattle_laning_trade.lua`: hero trade candidates and chase scoring.
 - `aibattle_runes.lua`: bottle rune transaction, staging, pickup memory.
 - `aibattle_item_policy.lua`: AIBattle bottle/mango/TP/purchase guards.
+- `aibattle_survive.lua`: healing and regeneration - fountain recovery, defensive heal,
+  lane regen, and the consumable/bottle/rune fallback chain.
+- `aibattle_utils.lua`: shared geometry helpers - retreat/forward tower locations, uphill
+  miss chance, real tower threat.
+- `aibattle_motor.lua`: movement ownership (`Claim`/`Active`/`Release`).
 - `aibattle_intents.lua`: public intent family taxonomy for summaries.
 
 When adding a new behavior:
@@ -110,24 +120,40 @@ Top-level desire scores must be explainable in telemetry. Prefer details like `b
 
 ## Decision Order
 
-The active laning loop should stay readable in this order:
+A tick has two parts: a head of guards that short-circuit, then one election.
 
-1. hard tempo guards: respawn, pregame, tower-dive policy, death window;
-2. urgent fight arbitration: kill lock and channel interrupt;
-3. recovery policy: true emergency first, then yield to valid kill windows;
-4. critical recovery lock, with explicit power-rune/kill-window yields;
-5. prewave duel and pre-creep contact;
-6. top-level desire arbiter:
-   - `safety`
-   - `power-rune`
-   - `fight`
-   - `recover`
-   - `siege`
-7. last-hit and safe lane work;
-8. lower-priority harass, creep work, watchdogs, spacing, final positioning;
-9. last-resort anti-idle.
+**Head** - each of these returns and ends the tick if it acts. None of them appears in the
+arbiter's telemetry, which is why a tick the head took cannot be explained from the winner
+line. Collapsing the head into the election is the open P1-B work.
 
-If two layers fight for the same tick, add ownership/priority to the existing layer instead of adding a new fallback at the end.
+1. true-emergency survive, then emergency-low recovery;
+2. urgent fight intents: kill lock and channel interrupt;
+3. early-low recovery, then the recovery owner;
+4. prewave duel and pre-creep standoff.
+
+**Election** - everything else competes in one call to `Arbiter.Run` (P1-A). Scores encode
+priority across two bands that were merged, not unified:
+
+| Band | Score range | Where the number lives |
+|---|---|---|
+| desires - `safety`, `power-rune`, `fight`, `recover`, `siege` | 66-126 live, 40-44 when capped | `aibattle_laning_policy.lua`, `M.Score` |
+| `last-hit` | 140 | inline in `mode_laning_generic.lua` |
+| lanework / position / idle tail | 56 down to 2 | inline at each `tail(...)` call |
+
+Two things about that table are load-bearing and easy to break:
+
+- **The no-action caps are calibrated against a number in another file.** When a desire has
+  symptoms but no feasible action, its score is capped (`safetyNoAction` 44, `fightNoAction`
+  40, `recoverNoAction` 44, `siegeNoAction`). Those values are chosen to sit *below*
+  `tail("safe-cs", 56)` so a symptom-only desire yields the tick to farming. Changing either
+  side without the other reintroduces "the bot idles under the tower instead of last-hitting".
+- **`last-hit` is the one candidate that can never yield.** It scores 140, above every desire
+  including `safetyDanger` (126), and its action always returns true. It is safe only because
+  its gate is strict - hp floor, no tower danger, creep within reach, no active siege. Widen
+  that gate and you have given last-hitting absolute priority over safety.
+
+If two layers fight for the same tick, add ownership or priority to the existing layer
+instead of adding a new fallback at the end.
 
 ## Telemetry
 
