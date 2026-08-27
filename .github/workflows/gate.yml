@@ -1,0 +1,24 @@
+name: gate
+
+# The same gate that runs locally before a commit. It is offline by design: no Dota
+# install, no API key, no third-party packages. --skip-live drops only the checks that
+# compare the repository against a live Dota installation (HEAD == LIVE, stale runtime
+# files), which no runner can do.
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: check_all --skip-live
+        run: python tools/check_all.py --skip-live

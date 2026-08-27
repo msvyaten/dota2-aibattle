@@ -22,11 +22,12 @@ watching"** - a match with a contested middle, not a deterministic stomp.
 
 | # | Read | Why |
 |---|---|---|
-| 1 | [`NOTICE.md`](NOTICE.md) | What is vendored, what is ours, and the unresolved licence status. |
-| 2 | [`docs/CODE_MAP.md`](docs/CODE_MAP.md) | File inventory, the vendor boundary, and a "where do I change X" table. |
-| 3 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Decision order, module ownership, telemetry rules, how to add behaviour. |
-| 4 | [`docs/STATE.md`](docs/STATE.md) | Current plan, open structural work, and the evidence rules. |
-| 5 | [`docs/HANDOFF.md`](docs/HANDOFF.md) | Operational reference: paths, gate, deploy, match analysis. |
+| 1 | [`docs/REVIEW_SCOPE.md`](docs/REVIEW_SCOPE.md) | What we are asking a reviewer to answer, what to read for it, and what to ignore. |
+| 2 | [`NOTICE.md`](NOTICE.md) | What is vendored, what is ours, and the unresolved licence status. |
+| 3 | [`docs/CODE_MAP.md`](docs/CODE_MAP.md) | File inventory, the vendor boundary, and a "where do I change X" table. |
+| 4 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Decision order, module ownership, telemetry rules, how to add behaviour. |
+| 5 | [`docs/STATE.md`](docs/STATE.md) | Current plan, open structural work, and the evidence rules. |
+| 6 | [`docs/HANDOFF.md`](docs/HANDOFF.md) | Operational reference: paths, gate, deploy, match analysis. |
 
 `docs/SPECS.md`, `docs/BACKLOG.md` and `docs/history/` are **written in Russian** and are
 working notes, not handoff material. See "Language" below.

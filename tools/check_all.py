@@ -92,6 +92,7 @@ ACTIVE_DOC_LIMITS = {
     "BACKLOG.md": 152,
     "CODE_MAP.md": 350,
     "HANDOFF.md": 180,
+    "REVIEW_SCOPE.md": 200,
     "SPECS.md": 800,
     "STATE.md": 150,
     # Compatibility pointers for old config/code comments. The real content is archived.
