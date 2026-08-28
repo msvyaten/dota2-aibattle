@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 TEST_FILES = (
     ROOT / "tools" / "test_match_stats.py",
     ROOT / "tools" / "test_betting.py",
+    ROOT / "tools" / "test_arbiter_ladder.py",
     ROOT / "tools" / "test_project_inventory.py",
     ROOT / "backend" / "test_generate.py",
 )
