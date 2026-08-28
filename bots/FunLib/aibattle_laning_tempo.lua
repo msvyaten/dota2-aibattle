@@ -48,8 +48,11 @@ end
 -- (DotaTime >= 0) the override releases COMPLETELY and the bots do whatever their config wants
 -- -- no creep-contact handoff, no t=25 cap. (The first version capped at t<=25 and released on
 -- the t=25 backstop, so the bots stood at the tower like statues until 0:25 while the creeps
--- were already fighting -- 8914866663.) Flip PRECREEP_HOLD_AT_TOWER = false to disable.
-M.PRECREEP_HOLD_AT_TOWER = true
+-- were already fighting -- 8914866663.)
+--
+-- This used to sit behind M.PRECREEP_HOLD_AT_TOWER. The flag is gone: no config ever read it,
+-- and turning it off would now fall through to nothing, because the branches it fell back to
+-- were unreachable while it was on and have been deleted. Pre-horn has exactly one owner.
 
 -- The pre-horn anchor, chosen ONCE and then held.
 -- Nobody has levels or abilities before the horn, so there is nothing to gain by repositioning:
@@ -89,7 +92,6 @@ local function pregameAnchor(ctx)
 end
 
 function M.PreCreepHold(ctx)
-	if not M.PRECREEP_HOLD_AT_TOWER then return false end
 	if DotaTime() >= 0 then return false end   -- timer started: full release, config owns
 	local bot = ctx.bot
 	-- Survival still overrides everything (parity with M.Pregame): a bot being bursted retreats.
@@ -219,60 +221,14 @@ function M.PreCreepStandoff(ctx)
 end
 
 function M.Pregame(ctx)
-	local bot = ctx.bot
 	if DotaTime() >= 0 or GetGameMode() ~= GAMEMODE_1V1MID then return false end
-	-- Park-at-tower override owns the whole pre-horn window when on (single owner).
-	if M.PreCreepHold(ctx) then return true end
-	if ctx.surviveThink(bot, ctx.dials, nil) then return true end
-	-- Two uphill retreats mean the river duel can't be taken from our side of the
-	-- ramp; park at the safe pregame spot until creeps spawn instead of feeding the
-	-- retreat/advance dance for the whole pregame.
-	if bot.aib_pgDisengaged then
-		local target = towerLineAnchor(ctx, "safe_tower")
-		if target ~= nil and GetUnitToLocationDistance(bot, target) > 120 then
-			bot:Action_MoveToLocation(target)
-		end
-		Style.DiagRL(bot, "pg-disengage", 5)
-		return true
-	end
-	if ctx.pregameDuel ~= nil and ctx.pregameDuel() then return true end
-	-- Hold the uphill-retreat anchor while the enemy is still around. Without this the
-	-- tower-line anchor below pulls the bot straight back into the duel scan and the
-	-- uphill-retreat cycle restarts every ~2s for the whole pregame.
-	local frozen = bot.aib_pgUphillBackAnchor
-	if frozen ~= nil then
-		local frzRange = ctx.attackRange or bot:GetAttackRange()
-		local frzEnemy = ctx.nearestEnemyHero(frzRange + 700)
-		if frzEnemy ~= nil then
-			if GetUnitToLocationDistance(bot, frozen) > 100 then
-				bot:Action_MoveToLocation(frozen)
-			end
-			Style.DiagRL(bot, "pg-uphill-freeze", 5)
-			return true
-		end
-		bot.aib_pgUphillBackAnchor = nil
-	end
-	Style.DiagRL(bot, "pg-pos", 5)
-	local pgb = (ctx.rules or {}).pregame_behavior
-	if pgb == "water_rune" then
-		local runeLoc, minD = nil, math.huge
-		for _, rid in ipairs({ RUNE_POWERUP_1, RUNE_POWERUP_2 }) do
-			local loc = GetRuneSpawnLocation(rid)
-			if loc then
-				local d = GetUnitToLocationDistance(bot, loc)
-				if d < minD then minD = d; runeLoc = loc end
-			end
-		end
-		if runeLoc and GetUnitToLocationDistance(bot, runeLoc) > 100 then
-			bot:Action_MoveToLocation(runeLoc)
-		end
-	else
-		local target = towerLineAnchor(ctx, pgb)
-		if target ~= nil and GetUnitToLocationDistance(bot, target) > 100 then
-			bot:Action_MoveToLocation(target)
-		end
-	end
-	return true
+	-- Park-at-tower is the ONLY pre-horn owner. Everything this stage used to do below the
+	-- PreCreepHold call -- the disengage park, the pregame duel, the uphill freeze and the
+	-- tower-line/water-rune positioning -- was unreachable: PreCreepHold returns true on every
+	-- pre-horn tick that has an anchor, and the guard above means every tick here is pre-horn.
+	-- It yields only when no anchor point exists at all (a destroyed T1 before the horn), and
+	-- then this stage declines the tick like any other stage that cannot act.
+	return M.PreCreepHold(ctx)
 end
 
 -- Exit point measured FROM THE TOWER, latched once.

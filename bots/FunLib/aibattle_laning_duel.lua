@@ -8,6 +8,9 @@ local Style = require(GetScriptDirectory()..'/FunLib/aibattle_style')
 local AIBUtils = require(GetScriptDirectory()..'/FunLib/aibattle_utils')
 local Motor = require(GetScriptDirectory()..'/FunLib/aibattle_motor')
 
+-- NOTE: `phase` is now always "post_horn" -- Prewave is the only caller since the pregame
+-- duel was retired. The `phase == "pregame"` arms below are vestigial and can be collapsed,
+-- but that touches the live prewave path, so it is deliberately left as its own change.
 local function duelState(ctx, enemy, dist, phase, hpFloor, approachExtra)
 	local bot = ctx.bot
 	if enemy == nil or not enemy:IsAlive() then return false end
@@ -221,17 +224,8 @@ function M.Prewave(ctx)
 	return false
 end
 
-function M.Pregame(ctx)
-	local rules = ctx.rules or {}
-	if (rules.hero_priority or "default") == "never" then return false end
-	local range = ctx.attackRange or ctx.bot:GetAttackRange()
-	local enemy, dist = ctx.nearestEnemyHero(range + 420)
-	if not M.PreEngageAllowed(rules) then
-		-- Passive before the horn still means passive about MOVING, not about standing next
-		-- to the enemy doing nothing. See M.PreHeroFreeHit.
-		return M.PreHeroFreeHit(ctx, enemy, dist, range, "pregame-free-hit")
-	end
-	return duelState(ctx, enemy, dist, "pregame", 0.42, 420)
-end
+-- M.Pregame lived here. Its only caller was the pre-horn tail of laning_tempo's M.Pregame,
+-- which PreCreepHold made unreachable; both are gone. Pre-horn is owned by PreCreepHold now,
+-- and the only duel that runs is Prewave, post-horn.
 
 return M

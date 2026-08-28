@@ -705,7 +705,6 @@ local function AIB_RuntimeCtx(dials, rules, extra)
 	ctx.surviveThink = function(b, ds, creeps) return AIBSurvive.Think(b, ds, creeps) end
 	ctx.clearRecovery = AIB_ClearRecoveryState
 	ctx.towerAggroDrop = AIB_TowerAggroDrop
-	ctx.pregameDuel = function() return AIBLaneDuel.Pregame(AIB_LaningModuleCtx(nil, GetRules())) end
 	if extra ~= nil then
 		for k, v in pairs(extra) do ctx[k] = v end
 	end
