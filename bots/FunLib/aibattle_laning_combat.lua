@@ -82,9 +82,13 @@ local function hitHealSummonFirst(ctx, bot, range)
 	if ward == nil then return false end
 	ctx.diag("ward-seen")
 	if wardDist > range then
-		-- seen but out of reach. If this dominates ward-hit, the answer is a melee approach
-		-- leg, not a wider swing -- do not just raise the number here.
+		-- Seen but out of reach. If this dominates ward-hit, the answer is a melee approach
+		-- leg, not a wider swing -- do not just raise the number here. The DISTANCE decides
+		-- whether that leg is a step or a walk under the enemy, so it is recorded: 71 of 79
+		-- sightings across two Juggernaut matches ended here and none of them said how far.
 		ctx.diag("ward-out-of-reach")
+		ctx.blocked("heal-ward", "out_of_reach",
+			string.format("dist=%.0f range=%.0f short=%.0f", wardDist, range, wardDist - range), 3.0)
 		return false
 	end
 	bot:Action_AttackUnit(ward, true)

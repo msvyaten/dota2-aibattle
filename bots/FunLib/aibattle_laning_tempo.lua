@@ -132,6 +132,21 @@ function M.PreCreepStandoff(ctx)
 	local enemy, dist = ctx.nearestEnemyHero(math.max(900, range + 320))
 	local preMode = (ctx.rules or {}).pregame_behavior or "default"
 	local mayEngage = AIBLaneDuel.PreEngageAllowed(ctx.rules)
+	-- precreep-contact and precreep-trade read ZERO on BOTH sides in every match measured,
+	-- including canonical_grok, which carries the hero_priority="always" licence. Something
+	-- below refuses them and nothing said what, so the three gates each name themselves once
+	-- the enemy is actually in scan range. Cheapest possible read on a live question.
+	if enemy ~= nil then
+		if not mayEngage then
+			ctx.blocked("precreep-engage", "no_licence",
+				string.format("pregame=%s", tostring(preMode)), 5.0)
+		elseif ctx.uphillMiss(enemy) then
+			ctx.blocked("precreep-engage", "uphill", string.format("dist=%.0f", dist), 3.0)
+		elseif J.GetHP(bot) < 0.70 then
+			ctx.blocked("precreep-engage", "hp_below_trade_floor",
+				string.format("hp=%.0f dist=%.0f", J.GetHP(bot) * 100, dist), 3.0)
+		end
+	end
 	if mayEngage and enemy ~= nil and dist <= range + 20
 		and not ctx.uphillMiss(enemy) and J.GetHP(bot) >= 0.70 then
 		bot:Action_AttackUnit(enemy, false)
