@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
-"""Run the repository's small pytest-style test functions without external packages."""
+"""Run the repository's small pytest-style test functions without external packages.
+
+Mutation-probed 28.08 to check the suite bites rather than merely passes. Caught: a dial
+name typo in style_schema, hp halved in the shared telemetry parser, a renamed lead field
+in betting, a sorted() dropped in match_stats. Not caught: a sorted() dropped in
+project_inventory, which only reorders a report. Not a coverage study -- a spot check that
+the gate is not theatre. Re-run it after adding tests, not after adding code.
+"""
 
 from __future__ import annotations
 

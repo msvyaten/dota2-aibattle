@@ -96,14 +96,20 @@ end
 function M.ContactHero(ctx)
 	local bot = ctx.bot
 	local rules = ctx.rules or {}
-	if (rules.hero_priority or "default") == "never" then return false end
+	if (rules.hero_priority or "default") == "never" then
+		ctx.blocked("hero-contact", "prio_never", "", 10.0)
+		return false
+	end
 
 	local range = attackRange(ctx)
 	local enemy, dist = ctx.nearestEnemyHero(math.max(range + 260, 780))
 	if enemy == nil then return false end
 
 	local now = DotaTime()
-	if bot.aib_contactHeroLast ~= nil and now - bot.aib_contactHeroLast < 0.65 then return false end
+	if bot.aib_contactHeroLast ~= nil and now - bot.aib_contactHeroLast < 0.65 then
+		ctx.blocked("hero-contact", "refractory", string.format("since=%.2f", now - bot.aib_contactHeroLast), 3.0)
+		return false
+	end
 
 	local hp = J.GetHP(bot)
 	if hp < 0.32 then
@@ -147,7 +153,10 @@ end
 
 function M.AbilityPressure(ctx)
 	local bot = ctx.bot
-	if J.GetHP(bot) < 0.30 then return false end
+	if J.GetHP(bot) < 0.30 then
+		ctx.blocked("ability-pressure", "hp_floor", string.format("hp=%.0f", J.GetHP(bot) * 100), 3.0)
+		return false
+	end
 	local enemy, dist = ctx.nearestEnemyHero(900)
 	if enemy == nil or not enemy:IsAlive() then return false end
 	local twr = ctx.enemyTowerDanger()
@@ -161,19 +170,29 @@ function M.AbilityPressure(ctx)
 		return false
 	end
 	if Style.AbilityHarass(bot, enemy) then return true end
+	ctx.blocked("ability-pressure", "nothing_castable", "", 3.0)
 	return false
 end
 
 function M.RunePowerPressure(ctx)
 	local bot = ctx.bot
 	local policy = AIBEngine.RuneUsePolicy(bot, ctx.dials, ctx.rules)
-	if policy == nil then return false end
+	if policy == nil then
+		ctx.blocked("rune-pressure", "no_policy", "", 5.0)
+		return false
+	end
 	local hasDamageRune = policy.name == "double_damage"
 	local hasHasteRune = policy.name == "haste"
 	local hasArcaneRune = policy.name == "arcane"
 	local hasActionRune = AIBEngine.IsActionPowerRune(policy.name)
-	if not hasActionRune then return false end
-	if J.GetHP(bot) < (policy.minFightHp or 0.38) then return false end
+	if not hasActionRune then
+		ctx.blocked("rune-pressure", "no_action_rune", "", 5.0)
+		return false
+	end
+	if J.GetHP(bot) < (policy.minFightHp or 0.38) then
+		ctx.blocked("rune-pressure", "hp_floor", string.format("hp=%.0f", J.GetHP(bot) * 100), 3.0)
+		return false
+	end
 	local range = attackRange(ctx)
 	local enemy, dist = ctx.nearestEnemyHero(policy.maxChase or (hasHasteRune and 1150 or 950))
 	if enemy ~= nil and enemy:IsAlive()
@@ -211,6 +230,7 @@ function M.RunePowerPressure(ctx)
 			return true
 		end
 	end
+	ctx.blocked("rune-pressure", "no_target", "", 3.0)
 	return false
 end
 
@@ -266,12 +286,16 @@ function M.HeroOverCreep(ctx)
 		ctx.diag("hero-over-creep")
 		return true
 	end
+	ctx.blocked("hero-over-creep", "no_target", "", 3.0)
 	return false
 end
 
 function M.EmergencyKillPriority(ctx)
 	local bot = ctx.bot
-	if ctx.deathSurvive or (ctx.dials.execute_threshold or 0) <= 0 then return false end
+	if ctx.deathSurvive or (ctx.dials.execute_threshold or 0) <= 0 then
+		ctx.blocked("emergency-kill", "disabled", "", 10.0)
+		return false
+	end
 	local atkHero = bot:GetNearbyHeroes(attackRange(ctx) + 50, true, BOT_MODE_NONE)
 	if atkHero and #atkHero > 0 then
 		local enemy = atkHero[1]
@@ -283,17 +307,25 @@ function M.EmergencyKillPriority(ctx)
 			return true
 		end
 	end
+	ctx.blocked("emergency-kill", "no_target", "", 3.0)
 	return false
 end
 
 function M.UphillReposition(ctx)
-	if ctx.lowHpHold then return false end
+	if ctx.lowHpHold then
+		ctx.blocked("uphill-repo", "low_hp_hold", "", 3.0)
+		return false
+	end
 	local bot = ctx.bot
 	-- Positioning yields while a recovery-class mover owns the motor (P2 v1).
-	if Motor.Active(bot) ~= nil then return false end
+	if Motor.Active(bot) ~= nil then
+		ctx.blocked("uphill-repo", "motor_busy", "", 3.0)
+		return false
+	end
 	-- 6-second cooldown prevents oscillation with lane-line-fallback when bot repeatedly
 	-- enters the low-ground ramp at the enemy side of mid.
 	if bot.aib_uphillRepoLast ~= nil and DotaTime() - bot.aib_uphillRepoLast < 6.0 then
+		ctx.blocked("uphill-repo", "no_step", "", 3.0)
 		return false
 	end
 	local uphEnemy = bot:GetNearbyHeroes(1200, true, BOT_MODE_NONE)
@@ -350,13 +382,17 @@ function M.UphillReposition(ctx)
 			return true
 		end
 	end
+	ctx.blocked("uphill-repo", "no_reposition", "", 3.0)
 	return false
 end
 
 function M.HarassAndChase(ctx)
 	local bot = ctx.bot
 	local heroPrio = ctx.rules.hero_priority or "default"
-	if heroPrio == "never" then return false end
+	if heroPrio == "never" then
+		ctx.blocked("harass", "prio_never", "", 10.0)
+		return false
+	end
 	local range = attackRange(ctx)
 	local atkHero = bot:GetNearbyHeroes(range + 50, true, BOT_MODE_NONE)
 	-- Concede-when-losing floor: don't INITIATE harass/chase right after a death or when
@@ -448,7 +484,10 @@ function M.HarassAndChase(ctx)
 		local rc = ctx.dials.retreat_caution or 0.5
 		local regenThresh = 0.40 + 0.15 * rc
 		local shouldRegen = ctx.rules.low_hp_behavior == "regen_lane" and J.GetHP(bot) < regenThresh
-		if shouldRegen then return false end
+		if shouldRegen then
+			ctx.blocked("harass", "regen_wanted", "", 3.0)
+			return false
+		end
 		local chase = bot:GetNearbyHeroes(1500, true, BOT_MODE_NONE)
 		if chase and #chase > 0 and chase[1]:IsAlive() then
 			local chaseDist = GetUnitToUnitDistance(bot, chase[1])
@@ -500,6 +539,7 @@ function M.HarassAndChase(ctx)
 				string.format("dist=%.0f cs=%s creep=%s hp_adv=%s kill_pressure=%s close=%s low_farm=%s lane_override=%s", chaseDist, tostring(ctx.csAllowed), tostring(creepNear), tostring(hpAdvChase), tostring(killPressureChase), tostring(closeVisibleChase), tostring(lowFarmHeroChase), tostring(laneOverrideChase)), 3.0)
 		end
 	end
+	ctx.blocked("harass", "no_target", "", 3.0)
 	return false
 end
 
@@ -512,6 +552,7 @@ function M.AbilityHarass(ctx)
 		local hpDisadvAbil = J.GetHP(abilEnemy) - J.GetHP(bot) > 0.40
 		if not hpDisadvAbil and Style.AbilityHarass(bot, abilEnemy) then return true end
 	end
+	ctx.blocked("ability-harass", "nothing_castable", "", 3.0)
 	return false
 end
 
