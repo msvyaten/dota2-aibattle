@@ -8,16 +8,13 @@ local Style = require(GetScriptDirectory()..'/FunLib/aibattle_style')
 local AIBUtils = require(GetScriptDirectory()..'/FunLib/aibattle_utils')
 local Motor = require(GetScriptDirectory()..'/FunLib/aibattle_motor')
 
--- NOTE: `phase` is now always "post_horn" -- Prewave is the only caller since the pregame
--- duel was retired. The `phase == "pregame"` arms below are vestigial and can be collapsed,
--- but that touches the live prewave path, so it is deliberately left as its own change.
-local function duelState(ctx, enemy, dist, phase, hpFloor, approachExtra)
+local function duelState(ctx, enemy, dist, hpFloor, approachExtra)
 	local bot = ctx.bot
 	if enemy == nil or not enemy:IsAlive() then return false end
 	local range = ctx.attackRange or bot:GetAttackRange()
 	local hp = J.GetHP(bot)
-	local keyPrefix = (phase == "pregame") and "pg-duel" or "prewave-duel"
-	ctx.state("prewave-duel", string.format("ttl=2 phase=%s dist=%.0f hp=%.0f", phase, dist, hp * 100), 2.0)
+	local keyPrefix = "prewave-duel"
+	ctx.state("prewave-duel", string.format("ttl=2 dist=%.0f hp=%.0f", dist, hp * 100), 2.0)
 
 	-- An enemy who is hitting us has already opened the trade, so the uphill miss chance is the
 	-- cost of answering, not a reason to decline. bee3dd8 established this, but only at the uphill
@@ -35,25 +32,25 @@ local function duelState(ctx, enemy, dist, phase, hpFloor, approachExtra)
 	local concede, concedeReason = AIBUtils.ShouldConcedeLane(bot, enemy)
 	if concede then
 		ctx.blocked("prewave-duel", "concede_" .. tostring(concedeReason),
-			string.format("phase=%s dist=%.0f hp=%.0f", phase, dist, hp * 100), 4.0)
+			string.format("dist=%.0f hp=%.0f", dist, hp * 100), 4.0)
 		return false
 	end
 
 	-- Post-horn: after 2 uphill retreats, stop feeding the retreat/re-approach loop.
 	-- Yield to laning-core so the bot settles at the (downhill) creep line and last-hits
 	-- instead of being stepped back 300u every second by the unwinnable uphill duel.
-	if phase ~= "pregame" and bot.aib_phDisengageUntil ~= nil
+	if bot.aib_phDisengageUntil ~= nil
 		and DotaTime() < bot.aib_phDisengageUntil and not hitRightNow then
 		ctx.blocked("prewave-duel", "uphill_disengage", string.format("dist=%.0f", dist), 3.0)
 		return false
 	end
 
 	if hp < hpFloor then
-		ctx.blocked("prewave-duel", "low_hp", string.format("phase=%s dist=%.0f hp=%.0f", phase, dist, hp * 100), 3.0)
+		ctx.blocked("prewave-duel", "low_hp", string.format("dist=%.0f hp=%.0f", dist, hp * 100), 3.0)
 		return false
 	end
 	if ctx.enemyTowerDanger() ~= nil then
-		ctx.blocked("prewave-duel", "tower", string.format("phase=%s dist=%.0f", phase, dist), 3.0)
+		ctx.blocked("prewave-duel", "tower", string.format("dist=%.0f", dist), 3.0)
 		return false
 	end
 	-- Same exception as hero-prio-always in combat.lua: an enemy that is hitting us has
@@ -62,7 +59,7 @@ local function duelState(ctx, enemy, dist, phase, hpFloor, approachExtra)
 	-- `blocked=prewave-duel reason=uphill` x15 and `prewave-duel-uphill-back` x23 --
 	-- config `hero_priority="always"`, and terrain silently overruled it.
 	if dist > range and AIBUtils.UphillMiss(bot, enemy) and not hitRightNow then
-		ctx.blocked("prewave-duel", "uphill", string.format("phase=%s dist=%.0f", phase, dist), 3.0)
+		ctx.blocked("prewave-duel", "uphill", string.format("dist=%.0f", dist), 3.0)
 		local now = DotaTime()
 		if bot.aib_preDuelBackUntil ~= nil and now < bot.aib_preDuelBackUntil then
 			local dest = bot.aib_preDuelBackDest
@@ -75,39 +72,23 @@ local function duelState(ctx, enemy, dist, phase, hpFloor, approachExtra)
 			end
 			return true
 		end
-		local back = ctx.towardFountain(bot:GetLocation(), (phase == "pregame") and 360 or 300)
+		local back = ctx.towardFountain(bot:GetLocation(), 300)
 		if back ~= nil then
 			bot.aib_preDuelBackDest = back
-			bot.aib_preDuelBackUntil = now + ((phase == "pregame") and 1.6 or 1.0)
+			bot.aib_preDuelBackUntil = now + 1.0
 			-- Uphill hysteresis: UphillMiss flickers while both bots move across the
 			-- river ramps, so without this hold the duel alternates retreat/approach
 			-- every ~2s all pregame (pg-duel-uphill-back=172-179 per match).
 			bot.aib_duelUphillHoldUntil = now + 5.0
-			if phase == "pregame" then
-				-- Two uphill retreats in one pregame = the river duel is unwinnable
-				-- from low ground; disengage fully (tempo parks us at the safe spot).
-				bot.aib_pgUphillEpisodes = (bot.aib_pgUphillEpisodes or 0) + 1
-				if bot.aib_pgUphillEpisodes >= 2 then
-					bot.aib_pgDisengaged = true
-				end
-			else
-				-- Post-horn equivalent: count episodes in a rolling window; after 2,
-				-- disengage from the duel for 6s and let laning-core hold the creep line.
-				if bot.aib_phUphillWindowStart == nil or now - bot.aib_phUphillWindowStart > 8.0 then
-					bot.aib_phUphillWindowStart = now
-					bot.aib_phUphillEpisodes = 0
-				end
-				bot.aib_phUphillEpisodes = (bot.aib_phUphillEpisodes or 0) + 1
-				if bot.aib_phUphillEpisodes >= 2 then
-					bot.aib_phDisengageUntil = now + 6.0
-				end
+			-- Count episodes in a rolling window; after 2, disengage from the duel for
+			-- 6s and let laning-core hold the creep line.
+			if bot.aib_phUphillWindowStart == nil or now - bot.aib_phUphillWindowStart > 8.0 then
+				bot.aib_phUphillWindowStart = now
+				bot.aib_phUphillEpisodes = 0
 			end
-			if phase == "pregame" then
-				-- Freeze the pregame anchor here. Otherwise the retreat drops the enemy
-				-- out of the duel scan, tower-line positioning pulls us forward again,
-				-- and the uphill-retreat loop repeats all pregame (pg-duel-uphill-back
-				-- was ~177 events per pregame in mirror matches).
-				bot.aib_pgUphillBackAnchor = back
+			bot.aib_phUphillEpisodes = (bot.aib_phUphillEpisodes or 0) + 1
+			if bot.aib_phUphillEpisodes >= 2 then
+				bot.aib_phDisengageUntil = now + 6.0
 			end
 			Motor.Claim(bot, "prewave-duel", 70, 1.5)
 			bot:Action_MoveToLocation(back)
@@ -131,12 +112,12 @@ local function duelState(ctx, enemy, dist, phase, hpFloor, approachExtra)
 		-- Recently retreated from an uphill spot: hold instead of walking straight
 		-- back up. Enemy entering our attack range is handled by the trade branch above.
 		if bot.aib_duelUphillHoldUntil ~= nil and DotaTime() < bot.aib_duelUphillHoldUntil then
-			ctx.blocked("prewave-duel", "uphill_hold", string.format("phase=%s dist=%.0f", phase, dist), 3.0)
+			ctx.blocked("prewave-duel", "uphill_hold", string.format("dist=%.0f", dist), 3.0)
 			return true
 		end
 		return ctx.moveToAttackEdge(enemy, keyPrefix .. "-approach", 0)
 	end
-	ctx.blocked("prewave-duel", "too_far", string.format("phase=%s dist=%.0f", phase, dist), 3.0)
+	ctx.blocked("prewave-duel", "too_far", string.format("dist=%.0f", dist), 3.0)
 	return false
 end
 
@@ -198,7 +179,7 @@ function M.Prewave(ctx)
 	local range = ctx.attackRange or bot:GetAttackRange()
 	local enemy, dist = ctx.nearestEnemyHero(range + 360)
 	if M.PreEngageAllowed(rules) then
-		return duelState(ctx, enemy, dist, "post_horn", 0.35, 360)
+		return duelState(ctx, enemy, dist, 0.35, 360)
 	end
 	if M.PreHeroFreeHit(ctx, enemy, dist, range, "prewave-free-hit") then return true end
 	-- Passive prewave defend (non-aggressive_mid presets never enter the duel above): give
