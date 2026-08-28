@@ -19,7 +19,7 @@
 --     early feed, but 8885499372 showed 0.65 over-corrects -- the farmer paces/misses CS;
 --     reverted to 0.55. Early feed is handled by the engine concede-when-losing floor,
 --     not by blunt caution.)
---   ability_aggro 0.45 (vs 0.65): spend spells on securing CS / finishing, not harass
+--   ability_timing save_for_execute: spend spells on securing CS / finishing, not harass
 --
 -- NEEDS MATCH VALIDATION: dials are a judgment call; tune if games run long or the
 -- farmer never converts its lead. Reversible (config only).
@@ -72,9 +72,9 @@ return {
 		healing_style       = "active",
 		ability_usage       = "aggressive",
 		-- save_for_execute (vs brawler on_cooldown): disables AbilityHarass entirely
-		-- (style.lua:907), so razes go only to securing/finishing -- exactly what the
-		-- ability_aggro 0.45 note above asks for ("spend spells on securing CS / finishing,
-		-- not harass"). Previously unset -> silently defaulted to on_cooldown.
+		-- (style.lua:907), so spells go only to securing/finishing -- exactly what the
+		-- note at the top of this file asks for. Previously unset -> silently defaulted to
+		-- on_cooldown.
 		ability_timing      = "save_for_execute",
 		creep_wave_priority = "last_hit_only",
 		hero_priority       = "default",

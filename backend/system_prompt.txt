@@ -184,8 +184,11 @@ discarded, and the engine then falls back to its own default without telling any
   healing_style : "active" | "default" | "never"
       active = use healing items and step back to recover when hurt; never = do not heal.
   ability_usage : "aggressive" | "default"
-      aggressive = allowed to spend Shadowraze on harassing the enemy. default = never
-      harasses with it; the spell is kept for finishing.
+      aggressive = allowed to spend spells on harassing the enemy, where the engine has a
+      harass entry for that hero. default = never harasses with them; spells are kept for
+      finishing. NOTE for Shadow Fiend: there is no harass entry, so "aggressive" does not
+      produce Shadowraze poking -- the hero's razes are cast by the engine's own hero logic
+      either way. Setting it changes mana planning, not razing.
   ability_timing : "on_cooldown" | "save_for_execute" | "harass_only"
       on_cooldown = cast it whenever it is ready; save_for_execute = hold the mana for the
       kill; harass_only = only ever poke with it, never use it as a finisher.

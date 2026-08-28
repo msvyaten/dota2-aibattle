@@ -6,7 +6,7 @@ small numeric config; the bot engine executes that config; the match log has to 
 the bot wanted, what it did, and what stopped it.
 
 ```
-plain-English strategy  ->  LLM  ->  config (12 dials + 11 rules + item build)
+plain-English strategy  ->  LLM  ->  config (11 dials + 11 rules + item build)
                                         |
                                         v
                      Lua bot engine in Dota 2, 1v1 solo mid
@@ -134,7 +134,7 @@ The code comments cite real matches and real arguments. Some shorthand recurs:
 |---|---|
 | **Claude**, **Codex** | AI coding agents that wrote parts of this repository, not people. "Codex's audit" means a review pass, not a colleague. |
 | Dates like `03.08` | Day.Month, 2026. `03.08` is 3 August 2026. |
-| **dial** | A model-facing float, 0.0-1.0 (e.g. `harass_desire`). Twelve of them. |
+| **dial** | A model-facing float, 0.0-1.0 (e.g. `harass_desire`). Eleven of them. |
 | **rule** | A model-facing discrete choice (e.g. `low_hp_behavior`). Eleven of them. |
 | **constant** | An engine threshold in `aibattle_constants.lua`. Never model-facing. |
 | **tick** | One `Think()` call. Exactly one owner acts per tick. |

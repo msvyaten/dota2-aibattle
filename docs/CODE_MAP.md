@@ -184,7 +184,7 @@ A preset is a table of `{ dials, rules, item_build, skill_build }`. The model-fa
 lives in `backend/style_schema.py`; runtime validation lives in `aibattle_style.lua`; the two
 are checked against each other by `tools/check_schema_contract.py`.
 
-- **dials** - model-facing floats 0..1 (`harass_desire`, `farm_focus`, `forwardness`, `push_desire`, ...). Twelve of them.
+- **dials** - model-facing floats 0..1 (`harass_desire`, `farm_focus`, `forwardness`, `push_desire`, ...). Eleven of them.
 - **rules** - model-facing discrete choices (`hero_priority`, `low_hp_behavior`, `tower_aggression`, ...). Eleven of them.
 - **constants** - engineering values in `aibattle_constants.lua`. Never in a config.
 
@@ -252,7 +252,7 @@ SHA into `LIVE/FunLib/aibattle_build.lua`. LIVE is
 |---|---:|---|
 | `generate_playstyle.py` | 186 | API or offline JSON -> a validated Lua config. |
 | `test_generate.py` | 134 | Offline tests for sanitising, JSON handling and Lua output. No API key needed. |
-| `style_schema.py` | 39 | The single model-facing schema: 12 dials + 11 rules. |
+| `style_schema.py` | 39 | The single model-facing schema: 11 dials + 11 rules. |
 | `system_prompt.txt` | - | The live generator prompt. |
 
 ---
