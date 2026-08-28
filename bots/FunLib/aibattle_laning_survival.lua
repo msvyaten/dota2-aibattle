@@ -43,14 +43,37 @@ function M.CreepAggroRelief(ctx)
 	end
 	local repeatedDamage = (bot.aib_creepDmgCount or 0) >= 2
 
-	for _, creep in pairs(enemyCreeps or {}) do
-		local dist = J.IsValid(creep) and GetUnitToUnitDistance(bot, creep) or math.huge
-		if J.IsValid(creep) and J.CanBeAttacked(creep)
-			and (dist <= range - 60 or AIBUtils.IsMelee(bot) or (repeatedDamage and dist <= range + 80)) then
-			return Engine.Intent("creep-aggro", 112, "creep_hitting", function()
-				bot:Action_AttackUnit(creep, true)
-				Style.Diag(bot, "creep-aggro-hit")
-			end, string.format("hp=%.0f", hp*100))
+	-- Punishing the chip is only correct while nobody bigger is on us. 8969965270 t=159-165:
+	-- Dire fell 67% -> 10% in six seconds with this branch owning every tick -- a creep was
+	-- chipping it (hits=7, then 9, inside_melee_pack count=2) and the enemy SF stood at 582-602
+	-- free-hitting, so `winner=creep-aggro:112 losers=hero-pass:60` repeated and the bot answered
+	-- the CREEP. Hitting a creep back does not drop creep aggro -- only walking away does, which
+	-- is the step-out branch BELOW -- and it does not answer the hero either, so the exchange was
+	-- one-sided by construction. Yield the shortcut while a hero is actually trading with us and
+	-- let the rest of the ladder own the tick: above the relief threshold that means `chip_ignored`
+	-- at 10 and hero-pass takes the trade at 105/90, below it the step-out at 95 leaves the wave.
+	-- Same hero-in-band idiom as PassingHeroTrade, so the two candidates agree on "a hero is here".
+	local heroTrading = bot:WasRecentlyDamagedByAnyHero(2.0)
+	if heroTrading then
+		local nearby = bot:GetNearbyHeroes(range + 220, true, BOT_MODE_NONE)
+		heroTrading = nearby ~= nil and #nearby > 0 and nearby[1]:IsAlive()
+	end
+
+	if heroTrading then
+		-- Plain counter, same scale as creep-aggro-hit, so the pair is directly comparable.
+		Style.Diag(bot, "creep-aggro-hero-yield")
+		Style.Blocked(bot, "creep-aggro", "hero_trading",
+			string.format("hp=%.0f hits=%d", hp * 100, bot.aib_creepDmgCount or 0), 3.0)
+	else
+		for _, creep in pairs(enemyCreeps or {}) do
+			local dist = J.IsValid(creep) and GetUnitToUnitDistance(bot, creep) or math.huge
+			if J.IsValid(creep) and J.CanBeAttacked(creep)
+				and (dist <= range - 60 or AIBUtils.IsMelee(bot) or (repeatedDamage and dist <= range + 80)) then
+				return Engine.Intent("creep-aggro", 112, "creep_hitting", function()
+					bot:Action_AttackUnit(creep, true)
+					Style.Diag(bot, "creep-aggro-hit")
+				end, string.format("hp=%.0f", hp*100))
+			end
 		end
 	end
 	if bot.aib_creepReliefLast ~= nil and now - bot.aib_creepReliefLast < 1.2 then
