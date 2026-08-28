@@ -38,21 +38,24 @@ staging windows, AFK timing, and tower leashes must not leak into model-facing r
 Bettability requires repeated runs with frozen code and a side swap. A single win, or an 8/8
 deterministic stomp, is not enough evidence that two generated agents make a good product.
 
+`mutual low` - seconds where both heroes are in danger at once - is the number this hangs on.
+It read `0s in 0 windows` in every match until `8968270421` (build `81547c2`, 27.08): **10s in
+2 windows**, one commit after the previous match, with that commit's own signature landed
+(`ranged spacing hold` 32/22 -> 0/0). A first signal, not a result - 10s is 2% of a short,
+one-sided match with zero lead changes.
+
 ## Current Architecture Status
 
-Completed:
-
-- Gate 0 technical runtime gate.
-- Gate 1 comparison against the phase-22 monolith.
-- Stage 0.5 watchability package.
-- P3-A recovery owner skeleton and P3-B.1 episode telemetry.
-- P1-A phase A (`a2bc9a9`): top desires and the old tail participate in one election.
-- Real 1v1 rune schedule, pregame anchor, bounded uphill reposition, tower-range licence,
-  fountain-trip ownership, and recovery `canAct` alignment through current HEAD.
+Completed: Gate 0 runtime gate, Gate 1 against the phase-22 monolith, Stage 0.5 watchability,
+the P3-A recovery owner skeleton with P3-B.1 episode telemetry, and P1-A phase A (`a2bc9a9`) -
+top desires and the old tail now share one election. Behaviour landed through HEAD: 1v1 rune
+schedule, pregame anchor, bounded uphill reposition, tower-range licence, fountain-trip
+ownership, recovery `canAct` alignment.
 
 Open structural work, in order:
 
-1. Validate the current code stack in a match before stacking more gameplay changes.
+1. Validate the current stack in a match. The last five logs are read (`8927375253`,
+   `8940466473`, `8964702771`, `8964741391`, `8968270421`); `pre_match_state.py` sizes the rest.
 2. P1-B: migrate urgent head-of-tick decisions into the same arbiter.
 3. P3-B.2: make recovery destination-aware and remove remaining parallel low-HP movers.
 4. P3-C: windup protection, safe CS in soft recovery, and the remaining rune/recovery semantics.
@@ -63,22 +66,23 @@ owns a tick makes review harder and cures nothing.
 
 ## Current Watchlist
 
-- `rune_control` binding is weak: diagnose from complete transaction telemetry, not from
-  bottle-empty percentage.
+- `rune_control` binding is weak: diagnose from transaction telemetry, not bottle-empty %.
 - Recovery can still win while having no useful action; verify `empty_action by winner` and
   low-HP episode traces after every recovery change.
-- Anti-idle still contains gameplay actions; its long-term job is detection only. Measured
-  (`8926148548`): largest tick owner on both sides, 109/106 against 65/68 for fight, and empty
-  in 66-67% of activations. It wins because nothing above it is a candidate at all — `fight`
-  was absent from the loser list in 103 of 117 of its wins.
+- **`fight` wins the tick and cannot act, on every build measured.** Top empty-action winner
+  in 9 of 10 side-matches across 03.08-27.08, emptying at its LIVE scores (78, 96, 98, 106,
+  114, 116, 124), never at the 40 cap. Build-independent, and the mechanism that kept
+  `mutual low` at zero: both bots want the fight, own the tick, and neither engages.
+  `test_arbiter_ladder.py` pins the ladder arithmetic; why the cap is never reached is open.
+- Anti-idle still holds gameplay actions; its job is detection only. It empties 40-73% of
+  its activations in every match on both sides, never below 40%.
 - Two owners can deadlock by deferring to each other, and neither logs an error. Open case:
   `blocked=heal-item reason=fountain_trip_committed` with `blocked=fountain-floor
-  reason=heal_in_hand` on one tick — drink waits for trip, trip waits for drink, bot leaves
-  lane holding an unused salve. Adding a guard that defers? Read what that owner does back.
-- Cross-module `bot.aib_*` state is ownership debt; move writes behind owner APIs when touching
-  those systems (`tools/project_inventory.py` lists the writers).
-- `mode_laning_generic.lua`, `aibattle_style.lua`, `aibattle_survive.lua` stay large; shrink by
-  ownership extraction, not line-count targets.
+  reason=heal_in_hand` on one tick, and the bot leaves lane holding an unused salve. Writing a
+  guard that defers? Read what that owner does back first.
+- Cross-module `bot.aib_*` state is ownership debt; move writes behind owner APIs when
+  touching those systems (`project_inventory.py` lists the writers).
+- The three largest files shrink by ownership extraction, never by line-count targets.
 
 ## Telemetry Volume: Deliberate, Not Debt
 
@@ -89,9 +93,8 @@ is the only source that says who owned a tick and why, and it is what located th
 the last match was decided. Do not "clean it up".
 
 It becomes a product problem once a match has a spectator, since telemetry and watchability
-share one channel. Then: a switch in `Customize/general.lua` (a silent show match teaches us
-nothing), or thin the `intent=` traffic, ~3000 of those 4400 lines. Counter dumps are already
-once per 60s at 30 lines a match -- the dense data is disciplined, the per-event data is not.
+share one channel. Then: a switch in `Customize/general.lua`, or thin the `intent=` traffic,
+~3000 of those 4400 lines. The dense counter dumps are disciplined; the per-event data is not.
 
 ## Evidence Rules
 
@@ -103,10 +106,9 @@ Use evidence in this order:
 4. rate-limited intent strings, which are lower bounds only;
 5. visual observation, tied to a match timestamp.
 
-Never divide two counters without checking both rate limits in the source. `Style.Diag` is
-plain and `Style.DiagRL(bot, key, sec)` fires once per `sec`; putting them side by side invites
-a ratio that does not exist. In the anti-idle block the only honest pair is `anti-idle-enter`
-against `idle`, both `DiagRL(3s)`.
+Never divide two counters without checking both rate limits in the source: `Style.Diag` is
+plain, `Style.DiagRL(bot, key, sec)` fires once per `sec`, and side by side they invite a ratio
+that does not exist. In anti-idle the only honest pair is `anti-idle-enter` against `idle`.
 
 Grep locates code; it never justifies a claim about it. Before writing that a function is dead,
 unreachable, or never fires, read the whole body — the actual conditions, not the `return`
@@ -116,11 +118,9 @@ lines a grep happens to surface — and enumerate every definition that reads li
 python tools\check_all.py --twins <FunctionName>
 ```
 
-Two similarly named functions in different files are two functions. On 02.08 the mechanism of
-`MissingBuildCheckpoint` (`aibattle_item_policy.lua`, genuinely dead — it reads an empty
-`Style.GetItemBuild`) was assumed to hold for `missingCheckpointItem` (`aibattle_survive.lua`,
-hardcoded list, very much alive). It held a second consumable cap and made a shipped fix half
-work. `--twins` prints both.
+Two similarly named functions in different files are two functions: on 02.08 the dead
+`MissingBuildCheckpoint` was assumed to explain the very-much-alive `missingCheckpointItem`,
+which held a second consumable cap and made a shipped fix half work. `--twins` prints both.
 
 Compare rates per minute, not raw counters. Attribute every match to the build SHA written in
 its log. Validation debt is `git log <match-build>..HEAD`; do not carry a hand-written count.
