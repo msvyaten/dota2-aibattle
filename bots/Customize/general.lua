@@ -84,7 +84,7 @@ Customize.Trash_Talk_Level = 1
 -- To set the names for the Radiant bots. Don't need to provide a value for all 5 bots, missing names will have a Random value.
 Customize.Radiant_Names = {
     '1',
-    'ChatGPT',
+    'Gemini',
     '2',
     '3',
     '4',
@@ -93,7 +93,7 @@ Customize.Radiant_Names = {
 -- Same notes as above for setting the bots' names but for the Dire side.
 Customize.Dire_Names = {
     '6',
-    'Gemini',
+    'Grok',
     '7',
     '8',
     '9',

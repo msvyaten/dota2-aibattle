@@ -30,7 +30,6 @@ local DEFAULT_DIALS = {
     harass_desire     = 0.5,
     farm_focus        = 0.5,
     forwardness       = 0.5,
-    ability_aggro     = 0.5,
     rune_control      = 0.5,
     retreat_caution   = 0.5,
     -- Finish/ultimate aggression: cast Assassinate on a fleeing enemy below this HP
@@ -122,7 +121,9 @@ local HEALING_STYLE_VALUES = { active = true, default = true, never = true }
 local DEFAULT_HEALING_STYLE = "default"
 
 -- ability_usage: controls whether our AbilityHarass system fires.
--- aggressive = use abilities for harass, gated by ability_aggro dial (was: improvements.ability_on_dials=true).
+-- aggressive = use our AbilityHarass for harass. It used to be throttled by an ability_aggro
+-- dial as well; that dial was retired 28.08 (see the SF block below) and the rule is now the
+-- whole switch.
 -- default / basic = OHA default ability casting only (basic kept for backward compat).
 local ABILITY_USAGE_VALUES = { aggressive = true, default = true, basic = true }
 local DEFAULT_ABILITY_USAGE = "default"
@@ -907,7 +908,7 @@ function M.AntiIdleGlobal(bot)
 end
 
 -- Hero ability config
--- Declares which abilities each hero uses for harass (ability_aggro dial) and
+-- Declares which abilities each hero uses for harass (ability_usage rule) and
 -- execute (execute_threshold dial). Four targeting types:
 --   "unit"        -> Action_UseAbilityOnEntity(ab, enemy)
 --   "point"       -> Action_UseAbilityOnLocation(ab, enemy:GetLocation())
@@ -919,14 +920,19 @@ end
 -- execute.max_range: don't cast if enemy is farther than this.
 M.HeroAbilityConfig = {
     ["npc_dota_hero_nevermore"] = {
-        -- Shadowraze is point-targeted (aim anywhere within range), not directional.
-        -- Using "point" casts Action_UseAbilityOnLocation(enemy:GetLocation()); accurate aim.
-        -- Old "directional" used Action_UseAbility() which fired wherever the bot was facing.
-        -- raze1 excluded; range 200 is melee distance, not worth rushing in for.
-        harass = {
-            { name = "nevermore_shadowraze3", type = "point", range = 700 },
-            { name = "nevermore_shadowraze2", type = "point", range = 450 },
-        },
+        -- NO harass entries on purpose. Shadowraze is NOT point-targeted: it fires at a fixed
+        -- distance in front of the hero and cannot take a position. Typing it "point" (82aa8ee,
+        -- 10.06) made every cast an Action_UseAbilityOnLocation the server rejected with
+        -- "invalid order (101). Ability can't be cast with a position" -- 293 of them in
+        -- 8968270421, matching this path's own cast counter 1:1, across 188 matches.
+        --
+        -- The hero razes anyway, and always did: BotLib/hero_nevermore.lua casts all three with
+        -- ActionQueue_UseAbility and its own distance checks. So this path was never the one
+        -- doing the razing -- it was a second, broken one that still returned true and took the
+        -- tick. Removing the entries hands the job back to the owner that does it correctly.
+        --
+        -- Re-adding them means answering first: what does OUR path do that the vendor's does
+        -- not, and how do the two avoid fighting over the same cooldown.
         -- Requiem of Souls: no-target AoE; souls travel 1300 but damage drops off.
         -- Only execute when close so the burst reliably kills.
         execute = { name = "nevermore_requiem",           type = "no_target", max_range = 700 },
@@ -1044,7 +1050,7 @@ M.HeroAbilityConfig = {
     },
 }
 
--- AbilityHarass: use a hero-specific ability on the enemy, gated by ability_aggro dial.
+-- AbilityHarass: use a hero-specific ability on the enemy, gated by the ability_usage rule.
 -- Walks through HeroAbilityConfig[hero].harass (highest-to-lowest range) and casts the
 -- first ability that can reach the enemy:
 --   unit/point   -> cast immediately if in range
@@ -1054,8 +1060,6 @@ M.HeroAbilityConfig = {
 function M.AbilityHarass(bot, enemy)
     if M.Get().rules.ability_usage ~= "aggressive" then return false end
     if M.Get().rules.ability_timing == "save_for_execute" then return false end
-    local dial = M.Get().dials.ability_aggro
-    if dial == nil or math.random() >= dial then return false end
     local cfg = M.HeroAbilityConfig[bot:GetUnitName()]
     if not cfg or not cfg.harass then return false end
     local dist = GetUnitToUnitDistance(bot, enemy)

@@ -87,7 +87,6 @@ BINDINGS = [
     ("farm_focus",          "dial", "harass-seek",      -1, "IMPLEMENTED: it only gates hero-seeking, inversely"),
     ("forwardness",         "dial", "fwd-at-position",  +1, "how often it holds the forward spot"),
     ("retreat_caution",     "dial", "time_hp_low",      -1, "more caution -> less time under 45%"),
-    ("ability_aggro",       "dial", "ability-harass",   +1, "same observable as harass, by design"),
     ("rune_control",        "dial", "bottle-rune",      +1, "rune contests"),
     ("execute_threshold",   "dial", "kill-lock-atk",    +1, "committing to a finishable enemy"),
     ("push_desire",         "dial", "siege-commit-tower", +1, "tower pressure"),
@@ -117,7 +116,7 @@ def side_rows(path):
     build = re.search(r"AIB\[[RD]\] build=(\S+?)'", text)
     rows = []
     for side in ("R", "D"):
-        d = re.search(r"AIB\[%s\] harass=([\d.]+) farm=([\d.]+) fwd=([\d.]+) abil=([\d.]+) "
+        d = re.search(r"AIB\[%s\] harass=([\d.]+) farm=([\d.]+) fwd=([\d.]+)(?: abil=[\d.]+)? "
                       r"rune=([\d.]+) retreat=([\d.]+) exec=([\d.]+) gank=([\d.]+) push=([\d.]+)"
                       % side, text)
         r2 = re.search(r"AIB\[%s\] defend=([\d.]+) ward=[\d.]+ roshan=[\d.]+ dive=(\S+) heal=\S+ "
@@ -126,10 +125,10 @@ def side_rows(path):
             continue
         cfg = {
             "harass_desire": float(d.group(1)), "farm_focus": float(d.group(2)),
-            "forwardness": float(d.group(3)), "ability_aggro": float(d.group(4)),
-            "rune_control": float(d.group(5)), "retreat_caution": float(d.group(6)),
-            "execute_threshold": float(d.group(7)), "gank_desire": float(d.group(8)),
-            "push_desire": float(d.group(9)), "defend_desire": float(r2.group(1)),
+            "forwardness": float(d.group(3)),
+            "rune_control": float(d.group(4)), "retreat_caution": float(d.group(5)),
+            "execute_threshold": float(d.group(6)), "gank_desire": float(d.group(7)),
+            "push_desire": float(d.group(8)), "defend_desire": float(r2.group(1)),
             "dive_policy": r2.group(2), "creep_wave_priority": r2.group(3),
             "ability_timing": r2.group(4), "pregame_behavior": r2.group(5),
             "tower_aggression": r2.group(6).rstrip("'"),

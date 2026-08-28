@@ -697,5 +697,9 @@ mode_laning tail; П3-B.2 = recovery/survive + recover-кандидат). Пар
 **⚠️ ПОПРАВКА 06.07 (прошлый аудит был НЕВЕРЕН):** `ability_usage` — **НЕ no-op, НЕ депрецировать**.
 `aibattle_style.lua:882` (`M.AbilityHarass`): `if rules.ability_usage ~= "aggressive" then return false`
 — правило гейтит ВСЮ раз-харасс-систему. `basic` уже маппится в `default` (style.lua:342), поэтому
-промпт (`aggressive|default`) корректен. Диал `ability_aggro` — это ИНТЕНСИВНОСТЬ внутри
-aggressive, не замена правила. Оставить как есть.
+промпт (`aggressive|default`) корректен. ⛔ **Диал `ability_aggro` ВЫВЕДЕН 28.08.** Он был интенсивностью внутри правила, но гейтил
+только `Style.AbilityHarass`, чьи SF-записи кастовали no-target способность в точку и
+отвергались сервером (293 отказа в `8968270421`, 1:1 со своим счётчиком, 188 матчей).
+Рейзит вендорный `BotLib/hero_nevermore.lua` через `ActionQueue_UseAbility` — то есть
+диал не менял ничего наблюдаемого, а путь жёг тики. Правило `ability_usage` осталось
+выключателем. **Диал надо ПЕРЕРАБОТАТЬ и вернуть**, а не считать закрытым.

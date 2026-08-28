@@ -75,7 +75,7 @@ Health regenerates very slowly on its own. Real healing comes from three places:
   - walking home to the fountain, which heals fully but costs about 30 seconds each way, all
     of it spent farming nothing.
 
-"dials" — twelve floats, each 0.0-1.0. For each one the anchors say what 0.0, 0.5 and 1.0
+"dials" — eleven floats, each 0.0-1.0. For each one the anchors say what 0.0, 0.5 and 1.0
 look like on screen, and COST says what it is paid for.
 
   harass_desire : how much the hero attacks the enemy PLAYER instead of creeps.
@@ -125,14 +125,6 @@ look like on screen, and COST says what it is paid for.
       wrongly is how heroes die, and a death is half of a loss. Remember one kill is half of
       a win, so this dial is directly about how the match is decided.
 
-  ability_aggro : how freely the hero spends Shadowraze on the enemy player.
-      0.0 = never casts it at the enemy
-      0.5 = casts it when the enemy is already in the right spot
-      1.0 = repositions in order to land it whenever it is available
-      COST: mana, which refills slowly, and the fixed 200/450/700 distance means landing it
-      often requires stepping to a specific spot -- which is a positioning commitment.
-      Has NO effect unless ability_usage="aggressive" AND ability_timing is not
-      "save_for_execute" -- see COUPLINGS.
 
   gank_desire : how far the hero will follow the enemy out of the lane.
       0.0 = never leaves the lane to chase
@@ -192,8 +184,8 @@ discarded, and the engine then falls back to its own default without telling any
   healing_style : "active" | "default" | "never"
       active = use healing items and step back to recover when hurt; never = do not heal.
   ability_usage : "aggressive" | "default"
-      aggressive = allowed to spend Shadowraze on harassing the enemy (how much is set by
-      ability_aggro). default = never harasses with it; the spell is kept for finishing.
+      aggressive = allowed to spend Shadowraze on harassing the enemy. default = never
+      harasses with it; the spell is kept for finishing.
   ability_timing : "on_cooldown" | "save_for_execute" | "harass_only"
       on_cooldown = cast it whenever it is ready; save_for_execute = hold the mana for the
       kill; harass_only = only ever poke with it, never use it as a finisher.
@@ -247,14 +239,13 @@ Unknown or misspelled item ids are dropped silently, and a hero with an empty or
 list falls back to a generic long-game build that is wrong for this mod -- so an incorrect
 name is not a small mistake, it costs the whole plan.
 
-{"dials": {"harass_desire": 0.9, "farm_focus": 0.15, "forwardness": 0.8, "retreat_caution": 0.3, "rune_control": 0.85, "execute_threshold": 0.42, "ability_aggro": 0.7, "gank_desire": 0.9, "push_desire": 0.3, "defend_desire": 0.25, "ward_desire": 0.5, "roshan_desire": 0.5}, "rules": {"respawn_behavior": "tp_to_lane", "pregame_behavior": "aggressive_mid", "dive_policy": "finish_only", "low_hp_behavior": "regen_lane", "healing_style": "active", "ability_usage": "aggressive", "ability_timing": "on_cooldown", "creep_wave_priority": "last_hit_only", "hero_priority": "always", "deny_policy": "default"}, "item_build": {"npc_dota_hero_juggernaut": ["item_tango", "item_quelling_blade", "item_magic_wand", "item_power_treads", "item_bfury"], "npc_dota_hero_nevermore": ["item_tango", "item_circlet", "item_bottle", "item_power_treads", "item_blade_mail"]}}
+{"dials": {"harass_desire": 0.9, "farm_focus": 0.15, "forwardness": 0.8, "retreat_caution": 0.3, "rune_control": 0.85, "execute_threshold": 0.42, "gank_desire": 0.9, "push_desire": 0.3, "defend_desire": 0.25, "ward_desire": 0.5, "roshan_desire": 0.5}, "rules": {"respawn_behavior": "tp_to_lane", "pregame_behavior": "aggressive_mid", "dive_policy": "finish_only", "low_hp_behavior": "regen_lane", "healing_style": "active", "ability_usage": "aggressive", "ability_timing": "on_cooldown", "creep_wave_priority": "last_hit_only", "hero_priority": "always", "deny_policy": "default"}, "item_build": {"npc_dota_hero_juggernaut": ["item_tango", "item_quelling_blade", "item_magic_wand", "item_power_treads", "item_bfury"], "npc_dota_hero_nevermore": ["item_tango", "item_circlet", "item_bottle", "item_power_treads", "item_blade_mail"]}}
 
 COUPLINGS — settings that silently cancel each other. Check these before answering.
-- ability_timing="save_for_execute" DISABLES Shadowraze harassment entirely, whatever
-  ability_aggro says. It means "spend the spell only on the kill". Do not combine it with a
-  high ability_aggro and expect poking -- pick one.
-- ability_usage="default" also means no Shadowraze harassment; ability_aggro then only
-  matters for finishing. "aggressive" + "on_cooldown" is the combination that actually pokes.
+- ability_timing="save_for_execute" DISABLES Shadowraze harassment entirely. It means
+  "spend the spell only on the kill".
+- ability_usage="default" also means no Shadowraze harassment; the spell then only matters
+  for finishing. "aggressive" + "on_cooldown" is the combination that actually pokes.
 - pregame_behavior other than "aggressive_mid" caps how far forward the hero stands before
   creeps arrive. If the strategy wants the middle contested from the start, "aggressive_mid"
   has to be set explicitly.
@@ -283,8 +274,6 @@ strategy gives you cause to move it.
                           in recorded games the Bottle sat empty 50-80% of the match
   execute_threshold 0.40  a kill is half a win, so a clearly wounded enemy should not be let
                           go; a wrong commit is half a loss, so nothing more optimistic
-  ability_aggro     0.50  Shadowraze is the hero's only real threat, but it costs mana and
-                          forces you to stand at a fixed distance
   gank_desire       0.20  in this mod there is nowhere else to go; time out of the lane is
                           pure lost income
   push_desire       0.40  the tower is a win condition, but pushing drags the fight toward it
@@ -320,7 +309,7 @@ it as far as the text warrants -- including 0.0 or 1.0, and do not feel bound by
 that is to the baseline number. If the text says nothing about that dimension, the baseline
 value stands. Do the same for each rule.
 
-Always emit all twelve dials, the full set of rules, and an item_build for both heroes. Returning the baseline unchanged is
+Always emit all eleven dials, the full set of rules, and an item_build for both heroes. Returning the baseline unchanged is
 the right answer only for a text that genuinely specifies nothing -- "try to win" is such a
 text, and it should produce exactly the baseline. Any text with actual content must move
 something; if you find yourself returning the baseline for a strategy that clearly says

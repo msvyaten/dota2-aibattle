@@ -7,7 +7,7 @@ generated Lua so the engine applies its own default.
 
 DIAL_KEYS = (
     "harass_desire", "farm_focus", "forwardness", "retreat_caution",
-    "rune_control", "execute_threshold", "ability_aggro", "gank_desire",
+    "rune_control", "execute_threshold", "gank_desire",
     "push_desire", "defend_desire", "ward_desire", "roshan_desire",
 )
 

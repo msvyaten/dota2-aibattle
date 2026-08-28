@@ -414,9 +414,9 @@ local function ThinkAnnounce(dials)
 	bot:ActionImmediate_Chat("AIB[" .. AIB_SIDE .. "] build=" .. tostring(AIBBuild.sha or "unknown"), true)
 	bot:ActionImmediate_Chat("> " .. bot:GetUnitName() .. " [" .. AIB_SIDE .. "]", false)
 	bot:ActionImmediate_Chat(string.format(
-		"AIB[%s] harass=%.2f farm=%.2f fwd=%.2f abil=%.2f rune=%.2f retreat=%.2f exec=%.2f gank=%.2f push=%.2f",
+		"AIB[%s] harass=%.2f farm=%.2f fwd=%.2f rune=%.2f retreat=%.2f exec=%.2f gank=%.2f push=%.2f",
 		AIB_SIDE,
-		dials.harass_desire, dials.farm_focus, dials.forwardness, dials.ability_aggro,
+		dials.harass_desire, dials.farm_focus, dials.forwardness,
 		dials.rune_control, dials.retreat_caution, dials.execute_threshold,
 		dials.gank_desire, dials.push_desire), true)
 	local r = Style.Get().rules

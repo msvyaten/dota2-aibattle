@@ -16,7 +16,6 @@ return {
 		retreat_caution   = 0.55,
 		rune_control      = 0.60,
 		execute_threshold = 0.60,
-		ability_aggro     = 0.65,
 		gank_desire       = 0.20,
 		push_desire       = 0.60,
 		defend_desire     = 0.55,

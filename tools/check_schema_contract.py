@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 import sys
 from pathlib import Path
@@ -70,6 +71,22 @@ def main():
         for value in values:
             if value not in prompt:
                 problems.append(f"system prompt omits {rule} value {value}")
+
+    # The worked example is what the model actually imitates, so a stale one is worse than a
+    # stale sentence. 28.08: ability_aggro was retired and the example still handed the model
+    # twelve dials; nothing here noticed.
+    for match in re.finditer(r'^\{"dials".*\}$', prompt, re.M):
+        try:
+            example = json.loads(match.group(0))
+        except ValueError as exc:
+            problems.append(f"system prompt example is not valid JSON: {exc}")
+            continue
+        shown = set(example.get("dials", {}))
+        if shown != set(DIAL_KEYS):
+            problems.append(
+                "system prompt example dials drifted: extra=%s missing=%s"
+                % (sorted(shown - set(DIAL_KEYS)), sorted(set(DIAL_KEYS) - shown))
+            )
 
     allowed_dials = set(DIAL_KEYS)
     allowed_rules = set(RULE_VALUES)

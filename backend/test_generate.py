@@ -5,7 +5,13 @@ from generate_playstyle import (
 from style_schema import ITEM_BUILD_HEROES
 
 def test_schema_is_full_engine_surface():
-    assert len(DIAL_KEYS) == 12
+    # 11 since 28.08: ability_aggro was retired. It gated only Style.AbilityHarass, whose
+    # Shadow Fiend entries cast a no-target ability at a position and were rejected by the
+    # server 293 times in a single match. The hero razes through the vendor hero file either
+    # way, so the dial throttled nothing a player could see. A dial that reaches no behaviour
+    # must not be model-facing -- that is this project's own invariant, applied to itself.
+    assert len(DIAL_KEYS) == 11
+    assert "ability_aggro" not in DIAL_KEYS
     assert len(RULE_VALUES) == 11
 
 def test_sanitize_clamps_dials_into_range():
