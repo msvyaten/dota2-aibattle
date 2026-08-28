@@ -317,6 +317,64 @@ def lua_structure_problems(src):
     return problems
 
 
+# A tick owner that declines without saying why is invisible in a match log. ARCHITECTURE.md
+# has required a blocked reason instead of a silent return for a long time; this is the ratchet
+# that makes the requirement real. The numbers are the count of silent `return false` points in
+# each owner today -- they may fall, never rise. Lower one when you instrument, and never raise
+# one to make a commit pass. Predicate/helper modules (style, utils, item_policy, engine, motor,
+# policy) are absent on purpose: a predicate returning false is an answer, not a refusal to act.
+SILENT_REFUSAL_BUDGET = {
+    "aibattle_laning_safety.lua": 37,
+    "aibattle_survive.lua": 24,
+    "aibattle_laning_recovery.lua": 18,
+    "aibattle_runes.lua": 17,
+    "aibattle_laning_duel.lua": 11,
+    "aibattle_laning_tempo.lua": 10,
+    "aibattle_laning_siege.lua": 9,
+    "aibattle_laning_combat.lua": 7,
+    "aibattle_laning_trade.lua": 6,
+    "aibattle_laning_creeps.lua": 1,
+    "aibattle_laning_survival.lua": 0,
+}
+
+# Any of these within three lines above the return counts as "it said why".
+_REFUSAL_LOGGERS = ("blocked(", "Blocked(", "Style.Intent(", "ctx.diag(", "Style.Diag",
+                    "ctx.state(", "noteRecoveryEpisode(", "runeResult(")
+
+
+def count_silent_refusals(path):
+    lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
+    silent = 0
+    for i, line in enumerate(lines):
+        if re.search(r"^\s*return false\s*$|then return false end", line):
+            window = lines[max(0, i - 3):i + 1]
+            if not any(k in l for l in window for k in _REFUSAL_LOGGERS):
+                silent += 1
+    return silent
+
+
+def check_silent_refusals():
+    print("[check] silent refusals in tick owners", flush=True)
+    bad = []
+    for name, budget in sorted(SILENT_REFUSAL_BUDGET.items()):
+        path = ROOT / "bots" / "FunLib" / name
+        if not path.exists():
+            bad.append(f"{name}: listed in the budget but missing")
+            continue
+        found = count_silent_refusals(path)
+        if found > budget:
+            bad.append(f"{name}: {found} silent refusals, budget {budget}"
+                       f" -- give the new one a blocked reason, do not raise the number")
+    if bad:
+        print("[fail] silent refusal budget exceeded:", flush=True)
+        for b in bad:
+            print("   ", b, flush=True)
+        return False
+    total = sum(count_silent_refusals(ROOT / "bots" / "FunLib" / n) for n in SILENT_REFUSAL_BUDGET)
+    print(f"[ok] silent refusals: {total} across {len(SILENT_REFUSAL_BUDGET)} owners", flush=True)
+    return True
+
+
 def check_lua_syntax():
     """Structural sanity check (no luac available): balanced delimiters and block keywords.
 
@@ -664,6 +722,7 @@ def main():
     ok = check_aibattle_runtime_modules() and ok
     ok = check_top_desire_policy_boundary() and ok
     ok = run_step("style schema contract", [sys.executable, "tools/check_schema_contract.py"]) and ok
+    ok = check_silent_refusals() and ok
     ok = run_step("python tests", [sys.executable, "tools/run_tests.py"]) and ok
     ok = run_step("project inventory", [sys.executable, "tools/project_inventory.py", "--check"]) and ok
 

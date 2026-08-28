@@ -74,6 +74,43 @@ def recovery_owner_counts(text, side):
     return counts
 
 
+def empty_action_causes(text, side, window=1.0):
+    """For every tick a desire won and could not act, what refused first on that tick.
+
+    The interesting number is how often NOTHING refused out loud: that is the share of the
+    problem still invisible. 28.08 baseline, five matches: a cause was named for 15% of 616
+    fight empties, and 19 refusal points in aibattle_laning_combat.lua were instrumented to
+    move it. Read `named%` as the coverage of the instrumentation, and the causes under it
+    as the actual answer to "why does the bot want a fight it never takes".
+    """
+    stamp = re.compile(r"^(\d\d/\d\d \d\d:\d\d:\d\d)")
+    line_re = re.compile(r"'AIB\[([RD])\] (.*)'\s*$")
+    blocked_re = re.compile(r"blocked=([a-z0-9-]+) reason=([a-z0-9_]+)")
+
+    ticks = collections.defaultdict(list)
+    for line in text.splitlines():
+        s, m = stamp.match(line), line_re.search(line)
+        if s and m and m.group(1) == side:
+            ticks[s.group(1)].append(m.group(2))
+
+    named, empties = 0, 0
+    causes = collections.Counter()
+    for payloads in ticks.values():
+        idx = next((i for i, b in enumerate(payloads)
+                    if "reason=empty_action" in b), None)
+        if idx is None:
+            continue
+        empties += 1
+        hit = False
+        for b in payloads[:idx]:
+            m = blocked_re.match(b)
+            if m and m.group(1) != "top-arbiter":
+                causes["%s/%s" % (m.group(1), m.group(2))] += 1
+                hit = True
+        named += 1 if hit else 0
+    return empties, named, causes
+
+
 def report(match_id):
     ok = sc.scorecard(match_id)
     path = sc.DOTA_LOG_DIR / ("console.%s.log" % match_id)
@@ -166,6 +203,17 @@ def report(match_id):
         top = collections.Counter("%s@%s" % (w, s) for w, s in pairs).most_common(4)
         print("  [%s] empty_action=%d | top: %s"
               % (side, tot, ", ".join("%s x%d" % (k, n) for k, n in top) or "none"))
+
+    print("----- watch: why the empty winners could not act (28.08 instrumentation) -----")
+    for side in ("R", "D"):
+        empties, named, causes = empty_action_causes(text, side)
+        pct = (100.0 * named / empties) if empties else 0.0
+        print("  [%s] empty ticks=%d | a cause was logged on %d (%.0f%%)"
+              % (side, empties, named, pct))
+        if causes:
+            print("       %s" % ", ".join("%s=%d" % (k, v) for k, v in causes.most_common(6)))
+        if empties and pct < 60:
+            print("       ^ most refusals are still silent; instrument before widening any canAct")
 
     print("----- watch: 21.07 fix batch (one signature per fix) -----")
     for side in ("R", "D"):
