@@ -40,6 +40,99 @@ def _minutes(text):
     return (max(vals) / 60.0) if vals else 0.0
 
 
+# --- what moved, measured against the previous match -------------------------------------
+#
+# Every fixed list of keys in this repo has rotted. scorecard's JITTER_KEYS carried two names
+# nothing has ever emitted, and the metric built on them read a comfortable PASS through the
+# match where the bots visibly walked back and forth: jitter 3.4/min against a limit of 8, while
+# one owner alone issued 140 step orders. So this panel picks no keys and sets no threshold. It
+# enumerates whatever counters the log contains, normalises per minute, and diffs against the
+# previous match in the same folder. A branch that did not exist last match and fires 15 times a
+# minute in this one reaches the top of the list on its own -- which is how the wave-watch
+# regression was actually found, and the only thing besides the user's eyes that found it.
+_COUNTER = re.compile(r"\b([a-z][a-z0-9]*(?:-[a-z0-9]+)+)=(\d+)\b")
+
+
+def counter_maxima(text, side):
+    """Every cumulative `key=N` counter for one side, at its per-match maximum.
+
+    Cumulative counters only ever go up inside a match; per-sample fields like `enemy-dist`
+    and `hp` move both ways and would otherwise dominate this panel with the largest and least
+    interesting numbers. Monotonicity separates them without a hand-written exclusion list --
+    which is the whole point, since the hand-written list is what rotted in the first place.
+    """
+    seen = collections.defaultdict(list)
+    for line in re.findall(r"AIB\[%s\][^\n']*" % side, text):
+        for key, value in _COUNTER.findall(line):
+            seen[key].append(int(value))
+    return {key: max(values) for key, values in seen.items()
+            if all(b >= a for a, b in zip(values, values[1:]))}
+
+
+def previous_match_ids(match_id, count=3):
+    """Up to `count` logs written before this one, newest first, by file time.
+
+    More than one on purpose. Against a single predecessor every counter that simply did not
+    get a chance in a short match reads as brand new -- comparing 9.1 minutes against 3.5
+    marked all eight rows NEW, which is noise wearing the strongest label on the panel.
+    """
+    try:
+        logs = sorted(sc.DOTA_LOG_DIR.glob("console.*.log"), key=lambda p: p.stat().st_mtime)
+    except OSError:
+        return []
+    ids = [p.name[len("console."):-len(".log")] for p in logs]
+    if match_id not in ids:
+        return []
+    index = ids.index(match_id)
+    return list(reversed(ids[max(0, index - count):index]))
+
+
+def changed_counters(text, match_id, side, top=8):
+    """Per-minute counter rates against the recent baseline, most-changed first."""
+    prev_ids = previous_match_ids(match_id)
+    if not prev_ids:
+        return None, []
+    now_minutes = _minutes(text)
+    if now_minutes <= 0:
+        return None, []
+    # Baseline is the highest per-minute rate any recent match reached, so a key only counts as
+    # absent when none of them produced it.
+    before = {}
+    used = []
+    for prev_id in prev_ids:
+        try:
+            prev_text = (sc.DOTA_LOG_DIR / ("console.%s.log" % prev_id)).read_text(
+                encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
+        prev_minutes = _minutes(prev_text)
+        if prev_minutes <= 0:
+            continue
+        used.append(prev_id)
+        for key, value in counter_maxima(prev_text, side).items():
+            rate = value / prev_minutes
+            if rate > before.get(key, 0):
+                before[key] = rate
+    if not used:
+        return None, []
+    now = counter_maxima(text, side)
+    rows = []
+    for key in set(now) | set(before):
+        rate_now = now.get(key, 0) / now_minutes
+        rate_before = before.get(key, 0)
+        if abs(rate_now - rate_before) < 0.5:
+            continue
+        is_new = key not in before
+        # Ranked by how many times over it changed, not by how far. A scan counter drifting
+        # 490 -> 163 a minute is arithmetic; a branch going 0 -> 15 is a new behaviour, and it
+        # is the second kind that a regression looks like. A key absent last match sorts first
+        # regardless: nothing else in this panel is as strong a signal.
+        ratio = max(rate_now, rate_before) / max(min(rate_now, rate_before), 0.05)
+        rows.append((is_new, ratio, key, now.get(key, 0), rate_now, rate_before))
+    rows.sort(key=lambda r: (r[0], r[1]), reverse=True)
+    return ", ".join(used), rows[:top]
+
+
 def buy_loop(text, side):
     """Both ways the buy loop can stop spending, kept apart.
 
@@ -493,6 +586,21 @@ def report(match_id):
                 cells.append("-" if v is None else ("(n/a)" if base is not None and v == base else str(v)))
             print("  front[%s]: " % s + " ".join("%5s" % c for c in cells))
         print("             (n/a = the no-wave default this side reports at minute 0)")
+
+    print("----- what changed against the recent baseline (per minute, no threshold) -----")
+    for side in ("R", "D"):
+        baseline, rows = changed_counters(text, match_id, side)
+        if baseline is None:
+            print("  [%s] no earlier logs in the folder to compare against" % side)
+            continue
+        if not rows:
+            print("  [%s] vs %s: nothing moved by more than 0.5/min" % (side, baseline))
+            continue
+        print("  [%s] vs %s:" % (side, baseline))
+        for is_new, ratio, key, total, rate_now, rate_before in rows:
+            print("      %-26s %5d  %5.1f/min  (was %.1f, x%.1f)%s"
+                  % (key, total, rate_now, rate_before, ratio,
+                     "  <- NEW" if is_new else ""))
 
     print("----- archetype contrast (bind check: R vs D) -----")
     for side in ("R", "D"):
