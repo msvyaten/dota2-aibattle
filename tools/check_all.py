@@ -324,18 +324,28 @@ def lua_structure_problems(src):
 # each owner today -- they may fall, never rise. Lower one when you instrument, and never raise
 # one to make a commit pass. Predicate/helper modules (style, utils, item_policy, engine, motor,
 # policy) are absent on purpose: a predicate returning false is an answer, not a refusal to act.
+#
+# Keys are paths under bots/. They used to be bare names resolved against bots/FunLib, which
+# quietly fixed the scope to the aibattle layer and left the orchestrator out -- so the headline
+# "N across M owners" was reported as a total while mode_laning_generic.lua, where the arbiter
+# and every canAct probe live, was never counted. It carries 26 of them. The rest of bots/ is
+# the vendored OpenHyperAI engine (see .gitattributes, which un-vendors exactly FunLib/aibattle_*,
+# Customize/** and this one file), and a vendor update must not be made to fail this gate, so
+# mode_roam/retreat/rune, item_purchase and ability_item_usage stay out on the same principle
+# that keeps predicates out: their silent returns are not ours to ratchet.
 SILENT_REFUSAL_BUDGET = {
-    "aibattle_laning_safety.lua": 37,
-    "aibattle_survive.lua": 24,
-    "aibattle_laning_recovery.lua": 18,
-    "aibattle_runes.lua": 17,
-    "aibattle_laning_duel.lua": 11,
-    "aibattle_laning_tempo.lua": 10,
-    "aibattle_laning_siege.lua": 9,
-    "aibattle_laning_combat.lua": 7,
-    "aibattle_laning_trade.lua": 6,
-    "aibattle_laning_creeps.lua": 1,
-    "aibattle_laning_survival.lua": 0,
+    "FunLib/aibattle_laning_safety.lua": 37,
+    "mode_laning_generic.lua": 26,
+    "FunLib/aibattle_survive.lua": 24,
+    "FunLib/aibattle_laning_recovery.lua": 18,
+    "FunLib/aibattle_runes.lua": 17,
+    "FunLib/aibattle_laning_duel.lua": 11,
+    "FunLib/aibattle_laning_tempo.lua": 10,
+    "FunLib/aibattle_laning_siege.lua": 9,
+    "FunLib/aibattle_laning_combat.lua": 7,
+    "FunLib/aibattle_laning_trade.lua": 6,
+    "FunLib/aibattle_laning_creeps.lua": 1,
+    "FunLib/aibattle_laning_survival.lua": 0,
 }
 
 # Any of these within three lines above the return counts as "it said why".
@@ -358,7 +368,7 @@ def check_silent_refusals():
     print("[check] silent refusals in tick owners", flush=True)
     bad = []
     for name, budget in sorted(SILENT_REFUSAL_BUDGET.items()):
-        path = ROOT / "bots" / "FunLib" / name
+        path = ROOT / "bots" / name
         if not path.exists():
             bad.append(f"{name}: listed in the budget but missing")
             continue
@@ -371,7 +381,7 @@ def check_silent_refusals():
         for b in bad:
             print("   ", b, flush=True)
         return False
-    total = sum(count_silent_refusals(ROOT / "bots" / "FunLib" / n) for n in SILENT_REFUSAL_BUDGET)
+    total = sum(count_silent_refusals(ROOT / "bots" / n) for n in SILENT_REFUSAL_BUDGET)
     print(f"[ok] silent refusals: {total} across {len(SILENT_REFUSAL_BUDGET)} owners", flush=True)
     return True
 
