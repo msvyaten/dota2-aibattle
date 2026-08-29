@@ -545,17 +545,44 @@ function M.WaveWatch(ctx)
 			or (lh == 0 and now >= Const.Visual.waveWatchZeroLhStart and noGainFor >= Const.Visual.waveWatchZeroLhSeconds))
 	if stalled and not (ctx.enemyTowerDanger() ~= nil and ctx.towerThreatening(ctx.enemyTowerDanger())) then
 		local creep, dist, hp = ctx.weakestAttackableEnemyCreep(range * 1.8)
-		if creep ~= nil then
+		-- `finishable` gated the attack but not the step, and one `else` covered two different
+		-- situations: "the creep is killable but out of reach" and "the creep is at full HP".
+		-- Only the first is a reason to walk. Walking at a healthy creep does not produce a last
+		-- hit, so the stall that triggered the walk is still true on the next tick and the branch
+		-- fires again -- a loop treating its own symptom. There was no hold either, so the move
+		-- order went out every tick this owner won. Live in 8972598364 at t=405s that read
+		-- wave-watch-step=107 against wave-watch-atk=18 for Radiant (44 against 2 for Dire), about
+		-- 16 orders a minute from a branch that did not exist two matches ago -- larger than the
+		-- fwd-position (10.0/min) and hero-prio-chase (12.1/min) twitch this project already spent
+		-- commits removing, and it showed on screen as the bots walking back and forth. It also
+		-- took the motor from the positioner: fwd-suppressed-motor=18/16, and visual-hold-still
+		-- came off zero for the first time.
+		-- So the step now requires a creep that is ALREADY killable -- then the walk ends in an
+		-- attack, the last hit lands, and the stall clears by itself. A healthy creep means there
+		-- is nothing to walk toward yet: fall through to the hold below, which is what this owner
+		-- did before the stall branch existed.
+		local finishable = creep ~= nil and (hp or math.huge) <= (bot:GetAttackDamage() or 50) * 2
+		if finishable then
 			Style.Intent(bot, "wave-watch-work",
 				string.format("lh=%d idle=%.0f creep_hp=%.0f dist=%.0f", lh, noGainFor, hp or -1, dist or -1), 2.0)
-			local finishable = (hp or math.huge) <= (bot:GetAttackDamage() or 50) * 2
-			if dist <= range + 35 and finishable then
+			if dist <= range + 35 then
 				bot:Action_AttackUnit(creep, true)
 				ctx.diag("wave-watch-atk")
-			else
-				ctx.moveToAttackEdge(creep, "wave-watch-step", 35)
+				return true
 			end
+			-- One order per second, not one per tick: the bot needs time to walk there, and
+			-- re-issuing the move every tick is what the motor contention was made of.
+			if bot.aib_waveWatchStepUntil == nil or now >= bot.aib_waveWatchStepUntil then
+				bot.aib_waveWatchStepUntil = now + Const.Visual.waveWatchStepHoldSeconds
+				ctx.moveToAttackEdge(creep, "wave-watch-step", 35)
+				return true
+			end
+			Style.Blocked(bot, "wave-watch", "step_hold", string.format("dist=%.0f", dist or -1), 3.0)
 			return true
+		end
+		if creep ~= nil then
+			Style.Blocked(bot, "wave-watch", "not_finishable",
+				string.format("creep_hp=%.0f dist=%.0f idle=%.0f", hp or -1, dist or -1, noGainFor), 3.0)
 		end
 	end
 

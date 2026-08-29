@@ -11,6 +11,10 @@ M.Visual = {
 	waveWatchNoGainSeconds = 6.0,
 	waveWatchZeroLhSeconds = 4.0,
 	waveWatchZeroLhStart = 35.0,
+	-- Minimum gap between two wave-watch step orders. Without it the branch re-issued the move
+	-- every tick it owned, which is how one owner produced ~16 orders a minute and took the
+	-- motor away from the positioner (8972598364).
+	waveWatchStepHoldSeconds = 1.0,
 }
 
 M.Rune = {
