@@ -28,12 +28,19 @@ def live_build():
 
 
 def playstyle(side):
-    path = ROOT / "bots" / "Customize" / f"playstyle_{side}.lua"
+    return read_playstyle(ROOT / "bots" / "Customize" / f"playstyle_{side}.lua")
+
+
+def read_playstyle(path):
     if not path.exists():
         return "missing"
     text = path.read_text(encoding="utf-8", errors="ignore")
     match = re.search(r"Customize/(canonical_[A-Za-z0-9_]+)", text)
     return match.group(1) if match else "custom/unknown"
+
+
+def live_playstyle(side):
+    return read_playstyle(DOTA_BOTS_DIR / "Customize" / f"playstyle_{side}.lua")
 
 
 def main():
@@ -49,8 +56,15 @@ def main():
     print(f"upstream: {upstream}")
     print(f"live:   {live}")
     print(f"live_matches_head: {str(live == head).lower()}")
-    print(f"radiant: {playstyle('radiant')}")
-    print(f"dire:    {playstyle('dire')}")
+    repo_radiant = playstyle("radiant")
+    repo_dire = playstyle("dire")
+    live_radiant = live_playstyle("radiant")
+    live_dire = live_playstyle("dire")
+    playstyle_drift = repo_radiant != live_radiant or repo_dire != live_dire
+
+    print(f"radiant: {repo_radiant} (live {live_radiant})")
+    print(f"dire:    {repo_dire} (live {live_dire})")
+    print(f"live_playstyles_match_repo: {str(not playstyle_drift).lower()}")
     print("dirty:")
     if dirty:
         for line in dirty.splitlines():
@@ -60,9 +74,11 @@ def main():
     print("before match:")
     if live != head:
         print("  - deploy code or explicitly record that this match uses a custom live marker")
+    if playstyle_drift:
+        print("  - sync live playstyle bindings back to repo, or deploy the repo bindings")
     if dirty:
         print("  - commit configs or explicitly record them as a local experiment")
-    if live == head and not dirty:
+    if live == head and not dirty and not playstyle_drift:
         print("  - ok")
 
 
