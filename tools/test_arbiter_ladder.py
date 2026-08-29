@@ -11,6 +11,16 @@ They are static on purpose: `Arbiter.Run` is Lua and there is no Lua runtime in 
 toolchain, but every invariant below is a property of the numbers and of the guards that
 use them, not of a running match.
 
+WHAT GREEN HERE DOES NOT MEAN. Nothing in this file runs the bot. These are text assertions
+over Lua source: they can prove that `KillLock` still names `MayDive`, never that the bot
+dives correctly. A guard rewritten with the condition inverted passes every test below. On
+29.08 the whole suite was green while the bots visibly walked back and forth on screen, and
+the two real defects that day were found by a person watching the match and by reading a diff
+by hand -- the tests found neither. Their job is narrow and worth stating plainly: stop a
+decision we already paid a match to learn from being deleted silently by the next refactor.
+That is a ratchet against re-loss, not a safety net, and the count is not a quality metric --
+a test nobody has broken on purpose is decoration. Break it, watch it go red, then keep it.
+
 Evidence these exist to protect (five matches, 03.08-27.08): `fight` is the top empty
 winner in 9 of 10 side-matches, and the scores it empties at are the LIVE fight scores
 (78, 96, 98, 106, 114, 116, 124), never the 40 cap. Whatever else changes, the ladder's
