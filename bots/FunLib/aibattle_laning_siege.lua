@@ -278,11 +278,18 @@ function M.Think(ctx)
 		ctx.diag("siege-tower")
 		return true
 	end
+	-- Both step legs read moveToAttackEdge's answer before claiming the tick: it returns false,
+	-- and emits no key, when there is no attack edge to walk to. The throttle and the commit are
+	-- armed only after an order actually goes out -- setting them first spent a second of siege
+	-- cadence and 1.6s of commit on a move that never happened.
 	if bot.aib_siegeLast == nil or now - bot.aib_siegeLast >= 1.0 then
+		ctx.towerOpportunity("step", string.format("phase=default wave=%d tower=%.0f", waveCount, twrDist), 2.0)
+		if not ctx.moveToAttackEdge(twr, "siege-step", 30) then
+			ctx.diag("siege-step-no-edge")
+			return false
+		end
 		bot.aib_siegeLast = now
 		M.Commit(bot, 1.6, now)
-		ctx.towerOpportunity("step", string.format("phase=default wave=%d tower=%.0f", waveCount, twrDist), 2.0)
-		ctx.moveToAttackEdge(twr, "siege-step", 30)
 	else
 		local pushCreep = ctx.nearestAttackableEnemyCreep(attackRange + 40)
 		if pushCreep ~= nil then
@@ -290,7 +297,10 @@ function M.Think(ctx)
 			ctx.diag("siege-hold-creep")
 		else
 			ctx.towerOpportunity("step", string.format("phase=hold wave=%d tower=%.0f", waveCount, twrDist), 2.0)
-			ctx.moveToAttackEdge(twr, "siege-hold-step", 30)
+			if not ctx.moveToAttackEdge(twr, "siege-hold-step", 30) then
+				ctx.diag("siege-hold-no-edge")
+				return false
+			end
 		end
 	end
 	return true

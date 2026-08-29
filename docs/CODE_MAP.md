@@ -67,12 +67,12 @@ All behaviour lives here. One file, one responsibility.
 |---|---:|---|
 | `aibattle_survive.lua` | 1268 | **Healing and low-HP regen**: `fountainRecovery`, `defensiveHeal`, `regenLane`, `recovery` (bottle / flask / tango / rune fallback chain, buy-escape). |
 | `aibattle_runes.lua` | 709 | **Runes**: `SeekBottleRune`, `FindWaterRecoveryRune`, staging and pickup memory, the bottle-fill transaction. |
-| `aibattle_laning_safety.lua` | 743 | `CreepHitReact`, `DamageUnstuck`, `RangedMeleePackSpacing`, `LastHitWatchdog`, visual-hold / AFK anti-idle. |
+| `aibattle_laning_safety.lua` | 747 | `CreepHitReact`, `DamageUnstuck`, `RangedMeleePackSpacing`, `LastHitWatchdog`, visual-hold / AFK anti-idle. |
 | `aibattle_laning_combat.lua` | 563 | `HarassAndChase`, `ContactHero`, `AbilityPressure`, `RunePowerPressure`, `UphillReposition`, `EmergencyKillPriority`, `AbilityHarass`. |
 | `aibattle_laning_tempo.lua` | 441 | `Pregame`, `DivePolicy`, `DeathWindow`, `PreCreepStandoff` - the hard stage guards. |
 | `aibattle_laning_recovery.lua` | 426 | **Low-HP owners** (the P3 target): `ThinkIfAllowed`, `CriticalLock`, `ActiveLowHp`, `EmergencyRetreat`, `ForwardLowHpPullback`, `LowHpHoldState`. |
-| `aibattle_laning_siege.lua` | 379 | Tower siege, siege-commit, and the latch owner API. |
-| `aibattle_laning_creeps.lua` | 275 | `GetBestLastHitCreep`, `GetBestDenyCreep`, `HandleCreepWork`. |
+| `aibattle_laning_siege.lua` | 389 | Tower siege, siege-commit, and the latch owner API. |
+| `aibattle_laning_creeps.lua` | 290 | `GetBestLastHitCreep`, `GetBestDenyCreep`, `HandleCreepWork`. |
 | `aibattle_laning_duel.lua` | 212 | `Prewave` and `Pregame` duel movement. |
 | `aibattle_utils.lua` | 236 | `SafeRetreatTowerLoc`, `ForwardSurvivingTowerLoc`, `EnemyTowerDanger`, `UphillMiss`, `IsTowerActuallyThreatening`. |
 | `aibattle_laning_trade.lua` | 234 | `KillLock`, `HealInterrupt`, `PassingHeroTrade` - the urgent trades. |

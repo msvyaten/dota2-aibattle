@@ -208,11 +208,11 @@ STYLE = ROOT / "bots" / "FunLib" / "aibattle_style.lua"
 # location to walk to. A caller that drops that return and answers true has claimed the tick for
 # a move that never went out. These are the sites that still do it, by file. The number may fall
 # and never rise: fix one and lower the count, do not raise it to make a commit pass.
-DISCARDED_EDGE_RETURN_BUDGET = {
-    "aibattle_laning_creeps.lua": 4,
-    "aibattle_laning_siege.lua": 2,
-    "aibattle_laning_safety.lua": 1,
-}
+# Emptied 29.08, the day after it was recorded: creeps (the local wrapper and its three
+# callers), siege (siege-step, siege-hold-step) and safety (cs-watchdog-step) all read the
+# answer now. The budget stays as a dict rather than a bare zero so the next one that appears
+# is written down where it can be paid off, not argued about.
+DISCARDED_EDGE_RETURN_BUDGET = {}
 
 _EDGE_CALL = re.compile(r"^\s*(?:ctx\.)?moveToAttackEdge\s*\(", re.M)
 

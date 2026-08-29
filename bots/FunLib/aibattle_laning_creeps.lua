@@ -111,12 +111,16 @@ function M.AlliedCreepsAtTower(allyCreeps, tower, distLimit)
 	return count
 end
 
+-- Returns whether an order actually went out. ctx.moveToAttackEdge answers false, without
+-- emitting its diag key, when there is no attack-edge location to walk to; swallowing that
+-- turned every caller below into an owner claiming a tick for a move that never happened.
+-- The Action_MoveToUnit fallback always issues one, so it is unconditionally true.
 local function moveToAttackEdge(ctx, creep, extraBack)
 	if ctx.moveToAttackEdge ~= nil then
-		ctx.moveToAttackEdge(creep, nil, extraBack or 20)
-	else
-		ctx.bot:Action_MoveToUnit(creep)
+		return ctx.moveToAttackEdge(creep, nil, extraBack or 20) and true or false
 	end
+	ctx.bot:Action_MoveToUnit(creep)
+	return true
 end
 
 function M.HandleCreepWork(ctx)
@@ -180,7 +184,10 @@ function M.HandleCreepWork(ctx)
 			ctx.diag("cs-walk-into-pack")
 			return false
 		end
-		moveToAttackEdge(ctx, hitCreep, 20)
+		if not moveToAttackEdge(ctx, hitCreep, 20) then
+			ctx.diag("cs-walk-no-edge")
+			return false
+		end
 		return true
 	end
 	bot.aib_csWaitStart = nil
@@ -195,8 +202,12 @@ function M.HandleCreepWork(ctx)
 				Style.DiagRL(bot, "cw-push-protect-cs", 2)
 				return true
 			end
+			-- The counter goes after the order, not before it: it is read as "this leg walked".
+			if not moveToAttackEdge(ctx, hitCreep, 20) then
+				ctx.diag("cw-push-cs-no-edge")
+				return false
+			end
 			ctx.diag("cw-push-cs-step")
-			moveToAttackEdge(ctx, hitCreep, 20)
 			return true
 		end
 		local allyNear = false
@@ -258,9 +269,13 @@ function M.HandleCreepWork(ctx)
 				if GetUnitToUnitDistance(bot, denyCreep) <= attackRange + 40 then
 					bot:Action_AttackUnit(denyCreep, true)
 					ctx.diag("deny-act-atk")
-				else
-					moveToAttackEdge(ctx, denyCreep, 20)
+				elseif moveToAttackEdge(ctx, denyCreep, 20) then
 					ctx.diag("deny-act-walk")
+				else
+					-- deny-act is read as atk + walk. Counting a walk that never left keeps the
+					-- identity true on paper and false in the match.
+					ctx.diag("deny-act-no-edge")
+					return false
 				end
 				ctx.diag("deny-act")
 				return true

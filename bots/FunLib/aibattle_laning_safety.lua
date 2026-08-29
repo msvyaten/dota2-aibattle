@@ -501,8 +501,12 @@ function M.LastHitWatchdog(ctx)
 	if dist <= range + 35 and finishable then
 		bot:Action_AttackUnit(creep, true)
 		ctx.diag("cs-watchdog-atk")
-	else
-		ctx.moveToAttackEdge(creep, "cs-watchdog-step", 30)
+	elseif not ctx.moveToAttackEdge(creep, "cs-watchdog-step", 30) then
+		-- No attack edge to walk to, so nothing went out. A watchdog that answers "handled"
+		-- here ends the tick and starves everything below it, which is the failure this
+		-- watchdog exists to detect.
+		ctx.diag("cs-watchdog-no-edge")
+		return false
 	end
 	return true
 end
