@@ -20,6 +20,40 @@ def line_count(path: Path) -> int:
     return len(path.read_text(encoding="utf-8", errors="ignore").splitlines())
 
 
+# CODE_MAP.md is the reading map a reviewer starts from: every table row carries a file and the
+# size it claims. Nothing was checking those numbers, and 24 of the 44 had drifted -- by +83 on
+# aibattle_laning_safety.lua and -56 on binding.py -- so the first thing an outside reader
+# measured was wrong. A size that lies is worse than no size: it is what decides whether someone
+# opens the file at all. The doc-size limits in check_all guard how long the docs are; this
+# guards what they claim about the code.
+CODE_MAP = ROOT / "docs" / "CODE_MAP.md"
+CODE_MAP_ROW_RE = re.compile(r"\|\s*`([A-Za-z0-9_.]+\.(?:lua|py))`\s*\|\s*(\d+)\s*\|")
+
+
+def resolve_mapped_file(name: str) -> Path | None:
+    for candidate in (ROOT / "tools" / name, ROOT / "bots" / "FunLib" / name,
+                      ROOT / "bots" / name, ROOT / name):
+        if candidate.is_file():
+            return candidate
+    hits = [h for h in ROOT.rglob(name) if "archive" not in h.parts and ".git" not in h.parts]
+    return hits[0] if hits else None
+
+
+def code_map_drift() -> list[tuple[str, int, int]]:
+    """Rows in CODE_MAP whose claimed line count no longer matches the file."""
+    if not CODE_MAP.is_file():
+        return []
+    drift = []
+    for name, claimed in CODE_MAP_ROW_RE.findall(CODE_MAP.read_text(encoding="utf-8", errors="ignore")):
+        path = resolve_mapped_file(name)
+        if path is None:
+            continue
+        real = line_count(path)
+        if real != int(claimed):
+            drift.append((name, int(claimed), real))
+    return drift
+
+
 def rel(path: Path) -> str:
     return path.relative_to(ROOT).as_posix()
 
@@ -119,11 +153,19 @@ def main() -> int:
     args = parser.parse_args()
     data = build_inventory()
     if args.check:
+        drift = code_map_drift()
+        if drift:
+            print("[fail] CODE_MAP.md line counts are stale:")
+            for name, claimed, real in drift:
+                print(f"    {name}: says {claimed}, file has {real}")
+            print("    fix the numbers in docs/CODE_MAP.md -- a reviewer picks files by them")
+            return 1
         print(
             "[ok] project inventory: "
             f"{data['aibattle_lua']['files']} AIBattle Lua files, "
             f"{data['direct_action_sites']} direct action sites, "
-            f"{len(data['dead_local_helpers'])} dead local helpers"
+            f"{len(data['dead_local_helpers'])} dead local helpers, "
+            "CODE_MAP sizes match"
         )
     elif args.json:
         print(json.dumps(data, ensure_ascii=False, indent=2))

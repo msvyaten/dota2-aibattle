@@ -52,11 +52,11 @@ All behaviour lives here. One file, one responsibility.
 
 | File | lines | Role |
 |---|---:|---|
-| `aibattle_style.lua` | 1249 | **The hub**: config loading (rules/dials), item/skill build, ability-harass config, and the telemetry primitives `Style.Intent/Diag/TickOwner/Blocked`. Everything calls it. |
+| `aibattle_style.lua` | 1296 | **The hub**: config loading (rules/dials), item/skill build, ability-harass config, and the telemetry primitives `Style.Intent/Diag/TickOwner/Blocked`. Everything calls it. |
 | `aibattle_engine.lua` | 274 | Stage and intent runner: `Stage/Intent/Resolve`, `KillWindow`, `RecoveryPolicy`, `PowerRuneState`, `RuneUsePolicy`. |
 | `aibattle_laning_policy.lua` | 345 | **Desire scoring**: `Safety/PowerRune/Fight/Recover/Siege` -> score; HP bands, thresholds, no-action caps. |
 | `aibattle_laning_arbiter.lua` | 132 | **Top-desire arbiter**: `Run/Candidate` - winner hysteresis, tick owner. The heart of the choice. |
-| `aibattle_constants.lua` | 51 | Engineering thresholds (distances, cooldowns, HP bands). Not model-facing. |
+| `aibattle_constants.lua` | 59 | Engineering thresholds (distances, cooldowns, HP bands). Not model-facing. |
 | `aibattle_motor.lua` | 45 | Movement ownership `Claim/Active/Release` (v1). Slated for retirement in P1-C. |
 | `aibattle_intents.lua` / `aibattle_laning_context.lua` | 73 / 37 | Intent helpers and the per-tick context builder. |
 | `aibattle_build.lua` | 4 | Build SHA stamp, overwritten by deploy. |
@@ -67,17 +67,17 @@ All behaviour lives here. One file, one responsibility.
 |---|---:|---|
 | `aibattle_survive.lua` | 1268 | **Healing and low-HP regen**: `fountainRecovery`, `defensiveHeal`, `regenLane`, `recovery` (bottle / flask / tango / rune fallback chain, buy-escape). |
 | `aibattle_runes.lua` | 697 | **Runes**: `SeekBottleRune`, `FindWaterRecoveryRune`, staging and pickup memory, the bottle-fill transaction. |
-| `aibattle_laning_safety.lua` | 648 | `CreepHitReact`, `DamageUnstuck`, `RangedMeleePackSpacing`, `LastHitWatchdog`, visual-hold / AFK anti-idle. |
-| `aibattle_laning_combat.lua` | 518 | `HarassAndChase`, `ContactHero`, `AbilityPressure`, `RunePowerPressure`, `UphillReposition`, `EmergencyKillPriority`, `AbilityHarass`. |
-| `aibattle_laning_tempo.lua` | 470 | `Pregame`, `DivePolicy`, `DeathWindow`, `PreCreepStandoff` - the hard stage guards. |
-| `aibattle_laning_recovery.lua` | 405 | **Low-HP owners** (the P3 target): `ThinkIfAllowed`, `CriticalLock`, `ActiveLowHp`, `EmergencyRetreat`, `ForwardLowHpPullback`, `LowHpHoldState`. |
+| `aibattle_laning_safety.lua` | 731 | `CreepHitReact`, `DamageUnstuck`, `RangedMeleePackSpacing`, `LastHitWatchdog`, visual-hold / AFK anti-idle. |
+| `aibattle_laning_combat.lua` | 563 | `HarassAndChase`, `ContactHero`, `AbilityPressure`, `RunePowerPressure`, `UphillReposition`, `EmergencyKillPriority`, `AbilityHarass`. |
+| `aibattle_laning_tempo.lua` | 441 | `Pregame`, `DivePolicy`, `DeathWindow`, `PreCreepStandoff` - the hard stage guards. |
+| `aibattle_laning_recovery.lua` | 426 | **Low-HP owners** (the P3 target): `ThinkIfAllowed`, `CriticalLock`, `ActiveLowHp`, `EmergencyRetreat`, `ForwardLowHpPullback`, `LowHpHoldState`. |
 | `aibattle_laning_siege.lua` | 379 | Tower siege, siege-commit, and the latch owner API. |
 | `aibattle_laning_creeps.lua` | 275 | `GetBestLastHitCreep`, `GetBestDenyCreep`, `HandleCreepWork`. |
-| `aibattle_laning_duel.lua` | 237 | `Prewave` and `Pregame` duel movement. |
+| `aibattle_laning_duel.lua` | 212 | `Prewave` and `Pregame` duel movement. |
 | `aibattle_utils.lua` | 236 | `SafeRetreatTowerLoc`, `ForwardSurvivingTowerLoc`, `EnemyTowerDanger`, `UphillMiss`, `IsTowerActuallyThreatening`. |
-| `aibattle_laning_trade.lua` | 219 | `KillLock`, `HealInterrupt`, `PassingHeroTrade` - the urgent trades. |
+| `aibattle_laning_trade.lua` | 234 | `KillLock`, `HealInterrupt`, `PassingHeroTrade` - the urgent trades. |
 | `aibattle_item_policy.lua` | 173 | `ShouldUseMango`, `ShouldDelaySpareTpPurchase`. |
-| `aibattle_laning_survival.lua` | 94 | `CreepAggroRelief`. |
+| `aibattle_laning_survival.lua` | 117 | `CreepAggroRelief`. |
 
 ---
 
@@ -168,13 +168,13 @@ merge conflict.
 
 | File | lines | Role |
 |---|---:|---|
-| `canonical_farmer.lua` | 89 | "Farmer" archetype - economy, high `farm_focus`, `hero_priority=default`. |
+| `canonical_farmer.lua` | 88 | "Farmer" archetype - economy, high `farm_focus`, `hero_priority=default`. |
 | `canonical_brawler.lua` | 72 | "Brawler" archetype - fight on sight, high harass. |
-| `canonical_pusher.lua` | 57 | "Pusher" archetype. |
-| `canonical_ganker.lua` | 57 | "Ganker" archetype. |
-| `canonical_deepseek.lua` | 40 | LLM-generated preset. |
-| `canonical_gemini.lua` | 39 | LLM-generated preset, currently bound to Radiant. |
-| `canonical_grok.lua` | 38 | LLM-generated preset, currently bound to Dire. |
+| `canonical_pusher.lua` | 56 | "Pusher" archetype. |
+| `canonical_ganker.lua` | 56 | "Ganker" archetype. |
+| `canonical_deepseek.lua` | 39 | LLM-generated preset. |
+| `canonical_gemini.lua` | 38 | LLM-generated preset, currently bound to Radiant. |
+| `canonical_grok.lua` | 37 | LLM-generated preset, currently bound to Dire. |
 | `canonical_oha_default.lua` | 12 | Bare OHA default - the baseline to compare against. |
 | `hero/viper.lua` | 57 | Per-hero override. |
 | `playstyle_radiant.lua` / `playstyle_dire.lua` | 1 / 1 | **The binding**: which canonical runs on which side. Live experiment state. Do not commit without an explicit instruction. |
@@ -198,16 +198,16 @@ are checked against each other by `tools/check_schema_contract.py`.
 | `betting.py` | 711 | **Market layer**: the Radiant-minus-Dire advantage curve over time, market lines, in-play base. See below. |
 | `product_scorecard.py` | 106 | Product gate: dead-tail, bottle economy, first event, lead changes, and mutual-low tension. |
 | `hero_readiness.py` | 71 | Hero expansion matrix: what is covered for SF/Juggernaut and what is still risky. |
-| `check_all.py` | 750 | The repo gate: encoding, Lua/Python syntax, deploy manifest, live drift, schema contract, tests, inventory. |
-| `postmatch.py` | 462 | **Main match report**: scorecard, fix signatures, jitter breakdown. |
-| `binding.py` | 335 | Proves a config knob actually reaches behaviour. |
+| `check_all.py` | 760 | The repo gate: encoding, Lua/Python syntax, deploy manifest, live drift, schema contract, tests, inventory. |
+| `postmatch.py` | 510 | **Main match report**: scorecard, fix signatures, jitter breakdown. |
+| `binding.py` | 279 | Proves a config knob actually reaches behaviour. |
 | `test_match_stats.py` / `test_betting.py` / `test_project_inventory.py` | 324 / 108 / 12 | Tests. |
-| `scorecard.py` | 143 | Bare PASS/FAIL verdict on watchability criteria. |
-| `project_inventory.py` | 140 | Current sizes, direct action surface, shared-state writers, dead helpers. |
+| `scorecard.py` | 123 | Bare PASS/FAIL verdict on watchability criteria. |
+| `project_inventory.py` | 178 | Current sizes, direct action surface, shared-state writers, dead helpers. |
 | `deploy.bat` | 129 | Deploy profiles. |
-| `pathology.py` | 105 | Movement shapes: STALL and YOYO detection from positions alone. |
-| `check_text_encoding.py` | 91 | Mojibake, ASCII-only runtime files, and the no-Cyrillic rule. |
-| `aibattle_log.py` | 89 | The single telemetry parser everything else builds on. |
+| `pathology.py` | 98 | Movement shapes: STALL and YOYO detection from positions alone. |
+| `check_text_encoding.py` | 104 | Mojibake, ASCII-only runtime files, and the no-Cyrillic rule. |
+| `aibattle_log.py` | 83 | The single telemetry parser everything else builds on. |
 
 ### Why `betting.py` is separate from `match_stats.py`
 
@@ -253,7 +253,7 @@ SHA into `LIVE/FunLib/aibattle_build.lua`. LIVE is
 | File | lines | Role |
 |---|---:|---|
 | `generate_playstyle.py` | 186 | API or offline JSON -> a validated Lua config. |
-| `test_generate.py` | 134 | Offline tests for sanitising, JSON handling and Lua output. No API key needed. |
+| `test_generate.py` | 140 | Offline tests for sanitising, JSON handling and Lua output. No API key needed. |
 | `style_schema.py` | 39 | The single model-facing schema: 11 dials + 11 rules. |
 | `system_prompt.txt` | - | The live generator prompt. |
 

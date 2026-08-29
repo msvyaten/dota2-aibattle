@@ -41,6 +41,20 @@ are calibrated to sit below `tail("safe-cs", 56)`, which is written inline in
 `mode_laning_generic.lua`. And `last-hit` scores 140 - above `safetyDanger` at 126 - with an
 action that always returns true, making it the only candidate that cannot yield.
 
+One thing to know before reading any match log for this question: **the cascade is only half
+visible in telemetry.** `empty_action` is logged when a candidate in the *desire* band wins and
+declines; tail candidates in the lanework, position and idle bands fall through silently, on
+purpose, because they replaced an older sequential tail that logged nothing. So `empty/min` on
+the scorecard is not "ticks wasted" - the tick is handed straight down and something lower
+usually acts. What it actually measures is how often the top of the ladder wins an election it
+cannot honour, and the cost is that the score is a lie, not that the tick is lost: the election
+is won at 124 and the work is done at 40.
+
+The reverse case is the one that does cost a tick, and it is invisible: an owner that returns
+`true` having done nothing ends the loop, and everything below it - including the anti-AFK
+backstops at scores 8 and 2 - never runs. `wave-watch` was doing exactly that until `1c458c5`
+gave it an action and `d377da7` bounded it.
+
 We want to know whether this should become explicit priority tiers, a real utility function,
 or stay as it is.
 
@@ -64,6 +78,18 @@ ladder always find a reason for somebody to disengage first? The evidence lives 
 `aibattle_laning_trade.lua` (kill lock, heal interrupt, passing trades),
 `aibattle_laning_combat.lua` (hero contact, chase, ability pressure) and the recover/safety
 scores in `aibattle_laning_policy.lua`.
+
+There is now a third possibility, and it should be tested before the other two: **the metric may
+be measuring the wrong thing.** `8972520526` held its outcome to the final second - decided at
+95% of the match, 4.8% dead tail, the loser ahead on last hits - and scored `mutual low = 0s`.
+That match had whatever "worth watching" means, and the number did not move, while `decided_at`,
+`dead_tail` and `deficit_overcome` all tracked it correctly. Simultaneous near-death is one
+specific way a match gets tense, not the only one.
+
+So the question splits. If simultaneous danger is the real goal, the disengage question above
+stands. If we picked it as a proxy for tension because it was cheap to compute, the fix is in
+`betting.py`, not in the ladder - and chasing it through combat code would be optimising a
+metric instead of the product. One match is not an answer, but it makes the proxy look weak.
 
 ### 4. What should change before expanding to more heroes and 5v5?
 
@@ -155,18 +181,20 @@ helpers. Trust this over any number written in a document.
 
 ## Evidence set
 
-Use these matches before proposing gameplay changes:
+Use these matches before proposing gameplay changes. The first three are the newest and carry
+most of the evidence for questions 1 and 3; the last three are the older baseline.
 
-- `8964702771` - accepted technical gate, two lead changes, mutual low still zero.
-- `8968270421` - first non-zero mutual low: `10s in 2 windows`, but short and one-sided.
-- `8926148548` - accepted scorecard, but betting shape is weak: zero lead changes and a long
-  dead tail.
-
-Run:
+- `8972520526` - **the one that reframes question 3.** Best tension profile in the series
+  (decided at 95% of the match, 4.8% dead tail, loser ahead on last hits) and `mutual low = 0`.
+- `8972598364` - the kill lock broke off a finish at `ehp=10` under `chase_into_tower` (fixed
+  since); the fountain return walked because `fountain-floor reason=heal_in_hand` kept the trip
+  owner out of the tick; the rune scan read `nearest=inf` all match for Dire while Radiant
+  committed and arrived late twice - same code, different result, not yet diagnosed.
+- `8969965270` - decided at 78s with an 87% dead tail: the one-sided end of the range.
+- `8964702771` - accepted technical gate, two lead changes, mutual low still zero. The only
+  match here that passed the gate; `8968270421` and `8926148548` are older and superseded.
 
 ```bash
-python tools/postmatch.py 8964702771
-python tools/postmatch.py 8968270421
-python tools/postmatch.py 8926148548
-python tools/betting.py 8964702771 8968270421 8926148548
+python tools/postmatch.py 8972520526   # then 8972598364, 8969965270
+python tools/betting.py 8972520526 8972598364 8969965270 8964702771
 ```
