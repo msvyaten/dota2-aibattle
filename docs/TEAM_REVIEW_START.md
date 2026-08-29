@@ -114,20 +114,15 @@ especially for hero expansion and 5v5. A good memo should save implementation ti
 
 ## Evidence Set
 
-Run these for context before making gameplay recommendations:
+`REVIEW_SCOPE.md` holds it, with the commands and what each match is there to show. It is not
+repeated here: this file carried its own copy, the two drifted apart, and a reviewer following
+the stale one would have started from three matches that newer logs supersede.
 
-```powershell
-python tools\postmatch.py 8964702771
-python tools\postmatch.py 8968270421
-python tools\postmatch.py 8926148548
-python tools\betting.py 8964702771 8968270421 8926148548
-```
-
-Useful contrast:
-
-- `8964702771`: accepted technical gate, two lead changes, but mutual-low still zero.
-- `8968270421`: first non-zero mutual-low signal, short and one-sided.
-- `8926148548`: accepted scorecard, but weak betting shape: zero lead changes and long dead tail.
+Two things about that set are worth knowing before you read any of it. The Juggernaut logs and
+the Shadow Fiend mirror are separate populations - matches got twice as short and every result
+flipped to kills at that boundary, and it is the hero swap, not a change in the code. And in the
+Shadow Fiend five, the configs never changed sides, so config and side are perfectly confounded
+and none of those matches can tell you which one won.
 
 ## Deliverable Format
 

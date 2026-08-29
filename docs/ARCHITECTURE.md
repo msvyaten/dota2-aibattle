@@ -1,6 +1,6 @@
 # AIBattle Architecture
 
-Last updated: 2026-08-01.
+Last updated: 2026-08-29.
 
 > This is the **conventions / philosophy** doc (how to add behavior, telemetry rules,
 > decision order). For the **file inventory** (what lives where + line counts + a
