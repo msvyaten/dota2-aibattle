@@ -54,6 +54,22 @@ def code_map_drift() -> list[tuple[str, int, int]]:
     return drift
 
 
+# Checking the numbers on the rows that exist says nothing about the rows that do not. The first
+# version of this check passed while CODE_MAP was missing five tools outright -- series.py, which
+# is what keeps a side effect from masquerading as a model effect, and pre_match_state.py, which
+# every session is told to run first among them. The scope of a check is part of its answer.
+def code_map_missing_tools() -> list[str]:
+    """Tools under tools/ that CODE_MAP does not mention at all."""
+    if not CODE_MAP.is_file():
+        return []
+    text = CODE_MAP.read_text(encoding="utf-8", errors="ignore")
+    missing = []
+    for path in sorted((ROOT / "tools").glob("*.py")):
+        if f"`{path.name}`" not in text:
+            missing.append(path.name)
+    return missing
+
+
 def rel(path: Path) -> str:
     return path.relative_to(ROOT).as_posix()
 
@@ -154,11 +170,14 @@ def main() -> int:
     data = build_inventory()
     if args.check:
         drift = code_map_drift()
-        if drift:
-            print("[fail] CODE_MAP.md line counts are stale:")
+        missing = code_map_missing_tools()
+        if drift or missing:
+            print("[fail] CODE_MAP.md no longer matches the tree:")
             for name, claimed, real in drift:
                 print(f"    {name}: says {claimed}, file has {real}")
-            print("    fix the numbers in docs/CODE_MAP.md -- a reviewer picks files by them")
+            for name in missing:
+                print(f"    {name}: exists in tools/ but CODE_MAP does not mention it")
+            print("    fix docs/CODE_MAP.md -- a reviewer picks what to open by that table")
             return 1
         print(
             "[ok] project inventory: "

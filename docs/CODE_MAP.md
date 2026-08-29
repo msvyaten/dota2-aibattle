@@ -203,11 +203,16 @@ are checked against each other by `tools/check_schema_contract.py`.
 | `binding.py` | 279 | Proves a config knob actually reaches behaviour. |
 | `test_match_stats.py` / `test_betting.py` / `test_project_inventory.py` | 324 / 108 / 12 | Tests. |
 | `scorecard.py` | 123 | Bare PASS/FAIL verdict on watchability criteria. |
-| `project_inventory.py` | 178 | Current sizes, direct action surface, shared-state writers, dead helpers. |
+| `project_inventory.py` | 197 | Current sizes, direct action surface, shared-state writers, dead helpers. |
 | `deploy.bat` | 129 | Deploy profiles. |
 | `pathology.py` | 98 | Movement shapes: STALL and YOYO detection from positions alone. |
 | `check_text_encoding.py` | 104 | Mojibake, ASCII-only runtime files, and the no-Cyrillic rule. |
 | `aibattle_log.py` | 83 | The single telemetry parser everything else builds on. |
+| `test_arbiter_ladder.py` | 293 | Ladder arithmetic and owner contracts, read as text; see its docstring for what green does not mean. |
+| `check_schema_contract.py` | 110 | Python/Lua/prompt/config schema agreement, including the worked example the model copies. |
+| `run_tests.py` | 104 | Runs the test files above without pytest. |
+| `series.py` | 91 | Sets the sides for match N of a round robin, so a side effect cannot masquerade as a model effect. |
+| `pre_match_state.py` | 86 | Branch, HEAD, live build, repo vs live playstyles, dirty files. Run before every match. |
 
 ### Why `betting.py` is separate from `match_stats.py`
 

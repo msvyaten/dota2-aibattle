@@ -35,27 +35,31 @@ must turn that config into distinct, competent, explainable 1v1-mid behavior. Th
 strategy; the engine owns mechanics and safety. Engine constants such as distances, rune
 staging windows, AFK timing, and tower leashes must not leak into model-facing rules.
 
-Bettability requires repeated runs with frozen code and a side swap. A single win, or an 8/8
-deterministic stomp, is not enough evidence that two generated agents make a good product.
+Bettability requires repeated runs with frozen code and a side swap, and that went unmet for
+five matches: SF mirror, gemini fixed on Radiant, grok fixed on Dire, a different build each
+time, and the same result five for five - Radiant wins 2:0 on kills and never dies. Side and
+config are perfectly confounded, so none of the five says which one won. First swap running now
+via `tools/series.py 1` (grok Radiant, gemini Dire), build frozen.
 
-`mutual low` - seconds where both heroes are in danger at once - is the number this hangs on.
-It read `0s in 0 windows` in every match until `8968270421` (build `81547c2`, 27.08): **10s in
-2 windows**, one commit after the previous match, with that commit's own signature landed
-(`ranged spacing hold` 32/22 -> 0/0). A first signal, not a result - 10s is 2% of a short,
-one-sided match with zero lead changes.
+`mutual low` - seconds where both heroes are in danger at once - was picked as the number this
+hangs on, and read `0s` everywhere except `8968270421` (10s) and `8972598364` (5s). ⚠️ Now
+suspect as a proxy: `8972520526` held its outcome to 95% of the match, 4.8% dead tail, loser
+ahead on last hits, and still scored `0s`. REVIEW_SCOPE question 3 - the fix may belong in
+`betting.py`, not in the ladder.
 
 ## Current Architecture Status
 
-Completed: Gate 0 runtime gate, Gate 1 against the phase-22 monolith, Stage 0.5 watchability,
-the P3-A recovery owner skeleton with P3-B.1 episode telemetry, and P1-A phase A (`a2bc9a9`) -
-top desires and the old tail now share one election. Behaviour landed through HEAD: 1v1 rune
-schedule, pregame anchor, bounded uphill reposition, tower-range licence, fountain-trip
-ownership, recovery `canAct` alignment.
+Completed stages are not listed here any more - this file is the current plan, and a growing
+record of finished work is what pushed it against its budget. `git log --oneline` and the
+commit bodies hold it; the last structural one is P1-A phase A (`a2bc9a9`), where top desires
+and the old tail began sharing one election.
 
 Open structural work, in order:
 
-1. Validate the current stack in a match. Read logs include `8927375253`, `8940466473`,
-   `8964702771`, `8964741391`, `8968270421`, and `8926148548`.
+1. Validate the current stack in a match. Read logs split into two populations that must not
+   be compared in one row: Juggernaut (`8926148548`, `8927375253`, `8940466473`, `8964702771` -
+   15.9-17.0 min, decided on towers and last hits) and the Shadow Fiend mirror (`8964741391`,
+   `8968270421`, `8969965270`, `8972520526`, `8972598364` - 3.5-10.2 min, all five 0:2 on kills).
 2. P1-B: migrate urgent head-of-tick decisions into the same arbiter.
 3. P3-B.2: make recovery destination-aware and remove remaining parallel low-HP movers.
 4. P3-C: windup protection, safe CS in soft recovery, and the remaining rune/recovery semantics.
@@ -69,13 +73,16 @@ owns a tick makes review harder and cures nothing.
 - `rune_control` binding is weak: diagnose from transaction telemetry, not bottle-empty %.
 - Recovery can still win while having no useful action; verify `empty_action by winner` and
   low-HP episode traces after every recovery change.
-- **`fight` wins the tick and cannot act, on every build measured.** Top empty-action winner
-  in 9 of 10 side-matches across 03.08-27.08, emptying at its LIVE scores (78, 96, 98, 106,
-  114, 116, 124), never at the 40 cap. Build-independent, and the mechanism that kept
-  `mutual low` at zero: both bots want the fight, own the tick, and neither engages.
-  `test_arbiter_ladder.py` pins the ladder arithmetic; why the cap is never reached is open.
-- Anti-idle still holds gameplay actions; its job is detection only. It empties 40-73% of
-  its activations in every match on both sides, never below 40%.
+- **`fight` wins the tick and cannot act, on every build measured.** Top empty-action winner in
+  9 of 10 side-matches, always at its live scores, never at the 40 cap (BACKLOG has the numbers;
+  `test_arbiter_ladder.py` pins the arithmetic). ⛔ Corrected 29.08: this was also written up as
+  the mechanism holding `mutual low` at zero - "both want the fight and neither engages". It
+  does not follow. `Arbiter.Run` falls through on a false return, so a lower candidate usually
+  acts, and `empty_action` is logged only for the desire band. The cost is a score that lies,
+  not a lost tick; splitting `fight` would fix telemetry, not behaviour.
+- Anti-idle still holds gameplay actions; its job is detection only. It empties **33-47%** of
+  its activations on both sides (the older "never below 40%" is wrong: 33, 37, 38, 38 of six
+  readings across the last three matches).
 - Two owners can deadlock by deferring to each other, and neither logs an error. Open case:
   `blocked=heal-item reason=fountain_trip_committed` with `blocked=fountain-floor
   reason=heal_in_hand` on one tick, and the bot leaves lane holding an unused salve. Writing a
@@ -88,13 +95,12 @@ owns a tick makes review harder and cures nothing.
 
 Diag/Intent/Blocked all post to ALL CHAT (`ActionImmediate_Chat(msg, true)`); the console log
 is a record of chat, and `print()` does not reach it, so chat is a bot script's only channel.
-About 4400 lines a match, five a second. **User's call, 03.08: keep it while debugging** -- it
-is the only source that says who owned a tick and why, and it is what located the window where
-the last match was decided. Do not "clean it up".
-
-It becomes a product problem once a match has a spectator, since telemetry and watchability
-share one channel. Then: a switch in `Customize/general.lua`, or thin the `intent=` traffic,
-~3000 of those 4400 lines. The dense counter dumps are disciplined; the per-event data is not.
+Measured 29.08: 4301 and 4789 AIB lines over 9-10 minute matches, ~8 a second. **User's call,
+03.08: keep it while debugging** - it is the only source that says who owned a tick and why.
+Do not "clean it up". It becomes a product problem once a match has a spectator, since
+telemetry and watchability share one channel; then thin the per-event `intent=`/`blocked=`
+traffic, which is the bulk of it. The dense counter dumps are not: 18 lines and 2% of the file.
+`2cc71fc` throttles the pregame share (~6% of a log) and deliberately leaves the match alone.
 
 ## Evidence Rules
 
@@ -130,17 +136,10 @@ batch. Tooling, tests, documentation, and behavior-preserving deduplication may 
 
 ## Toolchain
 
-- `tools/postmatch.py <matchid>`: main post-match report.
-- `tools/pathology.py <matchid>`: movement/watchability shapes.
-- `tools/betting.py <matchid>`: betting/product metrics.
-- `tools/product_scorecard.py <matchid>`: product gate - dead-tail, bottle, tension.
-- `tools/binding.py`: prove that config knobs reach behavior.
-- `tools/hero_readiness.py [hero]`: SF/Juggernaut expansion matrix.
-- `tools/project_inventory.py`: sizes, direct action surface, shared state writers.
-- `tools/check_schema_contract.py`: Python/Lua/prompt/config schema agreement.
-- `tools/check_all.py --skip-live`: local pre-deploy gate.
-- `tools/check_all.py --twins NAME`: similar Lua definitions, with file and line.
-- `tools/deploy.bat [code|playstyle|all|general|check]`: explicit deployment profiles.
+`CODE_MAP.md` sections 6-7 list every tool with its size and a "how do I ..." table, and that
+listing is gate-checked. A second copy here had already gone stale - it was missing
+`tools/series.py`, which is what sets the sides for a match and keeps a side effect from
+masquerading as a model effect.
 
 ## Collaboration
 
