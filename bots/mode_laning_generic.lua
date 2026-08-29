@@ -863,7 +863,10 @@ local function AIB_LaneLineFallback(dials)
 	end
 	-- Commit this lane walk for 1.5s so uphill-reposition yields and the bot stops
 	-- flip-flopping forward<->back between the two positioners every tick.
-	AIBMotor.Claim(bot, "lane-line", 20, 1.5)
+	if not AIBMotor.Claim(bot, "lane-line", 20, 1.5) then
+		Style.DiagRL(bot, "lane-line-suppressed-motor", 5)
+		return false
+	end
 	bot:Action_MoveToLocation(dest + RandomVector(45))
 	AIB_Diag("lane-line-fallback")
 	-- Episode honesty (SPECS 3.10 step 1, metric only): the raw diag above counts every
@@ -1497,7 +1500,10 @@ local function ThinkLaningCore(dials, rules)
 					-- lane-line uses so the two positioners can no longer both move the hero
 					-- in the same second. fwd-position was the one positioner never wired
 					-- into Motor, which is exactly the pair Motor was built to kill.
-					AIBMotor.Claim(bot, "fwd-position", 20, 1.5)
+					if not AIBMotor.Claim(bot, "fwd-position", 20, 1.5) then
+						Style.DiagRL(bot, "fwd-suppressed-motor", 5)
+						return false
+					end
 					bot:Action_MoveToLocation(dest)
 					AIB_Diag("fwd-position")
 					return true
@@ -1543,18 +1549,7 @@ local function ThinkLaningCore(dials, rules)
 	-- cs candidates above all yielded), so OWN the tick STANDING instead of letting anti-idle
 	-- push the wave / pace between creeps. Standing between last-hits is the correct, watchable
 	-- behavior; this closes the niche that fell through to the (now disciplined) idle watchdog.
-	tail("wave-watch", 10, "idle", "ready", function()
-		local r = botAttackRange or bot:GetAttackRange()
-		local near = false
-		for _, c in pairs(nEnemyCreeps or {}) do
-			if J.IsValid(c) and J.CanBeAttacked(c) and GetUnitToUnitDistance(bot, c) <= r + 250 then
-				near = true; break
-			end
-		end
-		if not near then return false end
-		Style.DiagRL(bot, "wave-watch", 5)
-		return true
-	end)
+	tail("wave-watch", 10, "idle", "ready", function() return AIBLaneSafety.WaveWatch(runtimeCtx) end)
 	tail("visual-afk", 8, "idle", "ready", function() return AIBLaneSafety.VisualAFK(runtimeCtx) end)
 	tail("anti-idle", 2, "idle", "ready", function()
 		Style.DiagRL(bot, "pre-aig", 3)

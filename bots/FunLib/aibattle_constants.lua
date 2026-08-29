@@ -8,6 +8,9 @@ M.Visual = {
 	afkDistance = 90.0,
 	holdSeconds = 2.0,
 	holdDistance = 55.0,
+	waveWatchNoGainSeconds = 6.0,
+	waveWatchZeroLhSeconds = 4.0,
+	waveWatchZeroLhStart = 35.0,
 }
 
 M.Rune = {

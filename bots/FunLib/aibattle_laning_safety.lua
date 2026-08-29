@@ -507,6 +507,62 @@ function M.LastHitWatchdog(ctx)
 	return true
 end
 
+function M.WaveWatch(ctx)
+	local bot = ctx.bot
+	local now = DotaTime()
+	if now <= 0 then
+		Style.DiagRL(bot, "wave-watch-not-started", 5)
+		return false
+	end
+
+	local range = attackRange(ctx)
+	local near = false
+	for _, creep in pairs(ctx.enemyCreeps or {}) do
+		if J.IsValid(creep) and J.CanBeAttacked(creep)
+			and GetUnitToUnitDistance(bot, creep) <= range + 250 then
+			near = true
+			break
+		end
+	end
+	if not near then
+		Style.DiagRL(bot, "wave-watch-no-wave", 5)
+		return false
+	end
+
+	local lh = ctx.safeCounter("GetLastHits")
+	if lh ~= nil then
+		if bot.aib_waveWatchLH == nil or lh > bot.aib_waveWatchLH then
+			bot.aib_waveWatchLH = lh
+			bot.aib_waveWatchNoGainSince = now
+		elseif bot.aib_waveWatchNoGainSince == nil then
+			bot.aib_waveWatchNoGainSince = now
+		end
+	end
+
+	local noGainFor = now - (bot.aib_waveWatchNoGainSince or now)
+	local stalled = lh ~= nil
+		and (noGainFor >= Const.Visual.waveWatchNoGainSeconds
+			or (lh == 0 and now >= Const.Visual.waveWatchZeroLhStart and noGainFor >= Const.Visual.waveWatchZeroLhSeconds))
+	if stalled and not (ctx.enemyTowerDanger() ~= nil and ctx.towerThreatening(ctx.enemyTowerDanger())) then
+		local creep, dist, hp = ctx.weakestAttackableEnemyCreep(range * 1.8)
+		if creep ~= nil then
+			Style.Intent(bot, "wave-watch-work",
+				string.format("lh=%d idle=%.0f creep_hp=%.0f dist=%.0f", lh, noGainFor, hp or -1, dist or -1), 2.0)
+			local finishable = (hp or math.huge) <= (bot:GetAttackDamage() or 50) * 2
+			if dist <= range + 35 and finishable then
+				bot:Action_AttackUnit(creep, true)
+				ctx.diag("wave-watch-atk")
+			else
+				ctx.moveToAttackEdge(creep, "wave-watch-step", 35)
+			end
+			return true
+		end
+	end
+
+	Style.DiagRL(bot, "wave-watch", 5)
+	return true
+end
+
 function M.VisualHoldHeartbeat(ctx)
 	local bot = ctx.bot
 	local now = DotaTime()
