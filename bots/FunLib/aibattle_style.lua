@@ -524,6 +524,12 @@ function M.Intent(bot, name, detail, sec)
     bot.aib_intentLast = bot.aib_intentLast or {}
     local now = DotaTime()
     local gap = sec or 5.0
+    if now < 0 then
+        -- Pregame diagnostics are useful for audits, but per-tick intent chat floods the
+        -- Dota console with Localization noise before the match starts. Keep breadcrumbs,
+        -- not a scrolling wall.
+        gap = math.max(gap, 12.0)
+    end
     if bot.aib_intentLast[name] ~= nil and now - bot.aib_intentLast[name] < gap then
         return
     end
@@ -552,6 +558,9 @@ function M.Blocked(bot, name, reason, detail, sec)
     local key = tostring(name) .. ":" .. tostring(reason or "unknown")
     local now = DotaTime()
     local gap = sec or 5.0
+    if now < 0 then
+        gap = math.max(gap, 12.0)
+    end
     if bot.aib_blockedLast[key] ~= nil and now - bot.aib_blockedLast[key] < gap then
         return
     end
