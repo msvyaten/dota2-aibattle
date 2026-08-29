@@ -88,7 +88,22 @@ function M.KillLock(ctx)
 	end
 	-- A kill worth walking under a tower for is a kill we can land from outside it. Finishing
 	-- from where we already stand keeps its own leg below (win.dist <= range + 80).
-	if win.dist > (ctx.attackRange or bot:GetAttackRange()) + 80 and chaseIntoTower(enemy) then
+	--
+	-- But chaseIntoTower is bare geometry -- is the enemy within the tower's range + 150, is the
+	-- tower alive -- and it asks nothing about the kill it is refusing or about the dial that
+	-- owns this decision. Style.MayDive is that owner: it reads dive_policy and keeps the engine
+	-- survival floors on top of it (never below 30% HP, never below 40% once we have died), and
+	-- "finish_only" means precisely "dive to finish", true when an enemy inside 900 is under 35%.
+	-- Both live configs set finish_only, and in 8972598364 the dial reached nothing: Dire stood at
+	-- 46-47% with Radiant at 10-11%, `intent=kill-lock dist=569 ehp=11` and one tick later
+	-- `blocked=kill-lock reason=chase_into_tower dist=638 ehp=10`. It broke off and walked away
+	-- from a hero it could kill -- which is what a viewer sees as running away, and it cost
+	-- Radiant six empty fight ticks of its own on the same gate. MayDive would have said yes.
+	-- So geometry no longer decides alone: it refuses only while the dive licence is absent. Every
+	-- other caller of chaseIntoTower is untouched -- the channel-interrupt chase and hero-pass are
+	-- trades, not finishes, and walking a healthy bot under a tower for those stays refused.
+	if win.dist > (ctx.attackRange or bot:GetAttackRange()) + 80 and chaseIntoTower(enemy)
+		and not Style.MayDive(bot) then
 		return Engine.Blocked("kill-lock", 90, "chase_into_tower", string.format("dist=%.0f ehp=%.0f", win.dist, win.ehp*100))
 	end
 	if not win.inCommitRange then
