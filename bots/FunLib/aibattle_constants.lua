@@ -29,6 +29,7 @@ M.Recovery = {
 	laneLowHp = 0.55,
 	criticalLockClearHp = 0.34,
 	criticalRuneYieldHp = 0.30,
+	noActionFloor = 0.30,
 }
 
 M.Fight = {

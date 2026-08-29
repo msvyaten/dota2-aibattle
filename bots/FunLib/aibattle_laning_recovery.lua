@@ -213,7 +213,7 @@ end
 
 function M.IsUselessBehindSafe(ctx, hp, recentHeroDamage, recentCreepDamage)
 	local hasResources = ctx.hasRecoveryResources ~= nil and ctx.hasRecoveryResources()
-	return hp >= AIBConst.Recovery.criticalRuneYieldHp
+	return hp >= AIBConst.Recovery.noActionFloor
 		and not recentHeroDamage
 		and not recentCreepDamage
 		and not hasResources
