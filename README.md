@@ -18,14 +18,14 @@ plain-English strategy  ->  LLM  ->  config (11 dials + 11 rules + item build)
 The product question is not "does the bot win". It is **"are two generated agents worth
 watching"** - a match with a contested middle, not a deterministic stomp.
 
-Current paid-review goal: audit the existing system, propose the next improvements, review
+Current team-review goal: audit the existing system, propose the next improvements, review
 the path from Shadow Fiend 1v1 to more heroes, and sketch the staged return to 5v5.
 
 ## Start here (in this order)
 
 | # | Read | Why |
 |---|---|---|
-| 1 | [`docs/CONTRACTOR_START.md`](docs/CONTRACTOR_START.md) | Short path for a paid external reviewer: commands, evidence set, deliverable shape. |
+| 1 | [`docs/TEAM_REVIEW_START.md`](docs/TEAM_REVIEW_START.md) | Short path for a teammate joining the project: commands, evidence set, deliverable shape. |
 | 2 | [`docs/REVIEW_SCOPE.md`](docs/REVIEW_SCOPE.md) | What we are asking a reviewer to answer, what to read for it, and what to ignore. |
 | 3 | [`NOTICE.md`](NOTICE.md) | What is vendored, what is ours, and the unresolved licence status. |
 | 4 | [`docs/CODE_MAP.md`](docs/CODE_MAP.md) | File inventory, the vendor boundary, and a "where do I change X" table. |

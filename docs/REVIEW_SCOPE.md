@@ -1,7 +1,7 @@
 # Review scope
 
-What we are asking for, what to read to answer it, and what to ignore. Written so an
-external reviewer does not have to spend billable hours working out where the project is.
+What we are asking for, what to read to answer it, and what to ignore. Written so a teammate
+can move from the global picture to local code without rediscovering the project map.
 
 ## The one number this product hangs on
 
@@ -26,7 +26,7 @@ Four tracks, in priority order. Answers we can act on beat a list of style findi
 
 ### 0. Are the current documents, code boundaries and tools enough to work efficiently?
 
-Before gameplay advice, tell us what still wastes paid review time: stale docs, duplicated
+Before gameplay advice, tell us what still wastes review time: stale docs, duplicated
 ownership, missing tests, unclear metrics, or places where the vendor boundary leaks.
 
 ### 1. Is "one owner per tick" still the right model, or has it become a cascade we should cut?
@@ -85,7 +85,7 @@ About 1,000 lines of documentation and 2,400 lines of code. Not 199,000.
 |---|---:|
 | `README.md` | 151 |
 | `NOTICE.md` | 47 |
-| `docs/CONTRACTOR_START.md` | short |
+| `docs/TEAM_REVIEW_START.md` | short |
 | `docs/CODE_MAP.md` | 293 |
 | `docs/ARCHITECTURE.md` | 203 |
 | `docs/STATE.md` | 150 |

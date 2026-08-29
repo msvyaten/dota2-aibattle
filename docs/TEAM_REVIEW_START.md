@@ -1,9 +1,9 @@
-# Contractor Start
+# Team Review Start
 
-This is the shortest path for a paid external reviewer. The goal is to spend billable time on
-architecture and product questions, not repository orientation.
+This is the shortest path for a teammate joining the project. The goal is to start from the
+global product and architecture picture, then zoom into local code hot spots with evidence.
 
-## Budget Discipline
+## Review Discipline
 
 Start with a fixed evidence pass before proposing code:
 
@@ -63,8 +63,8 @@ Those files are live matchup state. Do not commit or clean them unless explicitl
 
 ## High-Value Questions
 
-The engagement has four tracks. Keep findings grouped by track so hourly work stays easy to
-approve or stop.
+The work has four tracks. Keep findings grouped by track so we can approve or stop each
+thread cleanly.
 
 ### Track 1 - Review the current system
 
@@ -98,10 +98,10 @@ Treat 5v5 as a product mode, not a bigger 1v1. Identify which systems are 1v1-on
 and which OHA/vendor systems should remain owners. Propose a staged 5v5 plan with one
 measurable gate per stage.
 
-## Hourly Work Triage
+## Work Triage
 
-Buy these first: a written architecture answer, a small patch with one match signature, or a
-tooling check that prevents a known class of regression.
+Prioritize these first: a written architecture answer, a small patch with one match
+signature, or a tooling check that prevents a known class of regression.
 
 Push back on these until scoped: broad file splitting, vendor refactors, style-only Lua
 cleanup, new fallbacks at the end of the tick, and claims based only on grep.
@@ -109,8 +109,8 @@ cleanup, new fallbacks at the end of the tick, and claims based only on grep.
 Ask for a stop/go checkpoint after any finding that changes tick ownership, recovery, combat
 gates, rune economy, or the schema seen by the LLM.
 
-For hourly work, prefer written decision memos over speculative patches when the scope crosses
-tracks, especially for hero expansion and 5v5. A good memo should save code hours.
+Prefer written decision memos over speculative patches when the scope crosses tracks,
+especially for hero expansion and 5v5. A good memo should save implementation time.
 
 ## Evidence Set
 

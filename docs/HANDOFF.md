@@ -24,8 +24,8 @@ upstream, live marker, bindings and dirty files as they are on this machine righ
 
 The working branch is `phase-2-team-dials`, not `main`.
 
-For an external reviewer, start with [`CONTRACTOR_START.md`](CONTRACTOR_START.md). It is the
-billable-time checklist: commands, evidence set, and deliverable format.
+For a teammate joining the project, start with [`TEAM_REVIEW_START.md`](TEAM_REVIEW_START.md).
+It is the checklist for commands, evidence set, and deliverable format.
 
 ## Paths
 
