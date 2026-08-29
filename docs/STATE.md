@@ -133,13 +133,13 @@ batch. Tooling, tests, documentation, and behavior-preserving deduplication may 
 - `tools/postmatch.py <matchid>`: main post-match report.
 - `tools/pathology.py <matchid>`: movement/watchability shapes.
 - `tools/betting.py <matchid>`: betting/product metrics.
+- `tools/product_scorecard.py <matchid>`: product gate - dead-tail, bottle, tension.
 - `tools/binding.py`: prove that config knobs reach behavior.
-- `tools/project_inventory.py`: current sizes, direct action surface, shared state writers,
-  and dead local helpers.
+- `tools/hero_readiness.py [hero]`: SF/Juggernaut expansion matrix.
+- `tools/project_inventory.py`: sizes, direct action surface, shared state writers.
 - `tools/check_schema_contract.py`: Python/Lua/prompt/config schema agreement.
 - `tools/check_all.py --skip-live`: local pre-deploy gate.
-- `tools/check_all.py --twins NAME`: every Lua definition whose name reads like NAME, with
-  file and line. Run before claiming any function is dead or unreachable.
+- `tools/check_all.py --twins NAME`: similar Lua definitions, with file and line.
 - `tools/deploy.bat [code|playstyle|all|general|check]`: explicit deployment profiles.
 
 ## Collaboration

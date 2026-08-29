@@ -702,6 +702,7 @@ local function AIB_RuntimeCtx(dials, rules, extra)
 	ctx.hasAttackableEnemyCreep = AIB_HasAttackableEnemyCreep
 	ctx.weakestAttackableEnemyCreep = AIB_WeakestAttackableEnemyCreep
 	ctx.bottleIfUseful = AIB_BottleIfUseful
+	ctx.hasRecoveryResources = AIB_HasRecoveryResources
 	ctx.surviveThink = function(b, ds, creeps) return AIBSurvive.Think(b, ds, creeps) end
 	ctx.clearRecovery = AIB_ClearRecoveryState
 	ctx.towerAggroDrop = AIB_TowerAggroDrop
@@ -984,6 +985,7 @@ local function AIB_BuildDesireCandidates(dials, rules, runtimeCtx, intentCtx)
 	local enemyHp = enemy ~= nil and J.GetHP(enemy) or 1.0
 	local powerRune = AIBEngine.PowerRuneState(bot)
 	local actionPowerRune = AIBEngine.IsActionPowerRune(powerRune)
+	local abilityReady = enemy ~= nil and Style.FightAbilityReady(bot, enemy)
 	local recentCreepDamage = bot:WasRecentlyDamagedByCreep(AIBLanePolicy.RecentDamage.creepSeconds)
 	local recentHeroDamage = bot:WasRecentlyDamagedByAnyHero(AIBLanePolicy.RecentDamage.heroSeconds)
 	local attackableCreep = AIB_NearestAttackableEnemyCreep(range + AIBLanePolicy.Scan.safetyCreepExtra) ~= nil
@@ -1117,11 +1119,9 @@ local function AIB_BuildDesireCandidates(dials, rules, runtimeCtx, intentCtx)
 	-- defensive response there at all and twice fell 68->18 and 59->20 in seconds while farming.
 	-- This is a probe correction, not a balance choice: a canAct probe that under-reports what
 	-- its own action would do is simply wrong. The max() keeps the post-death widening.
-	local recoverCanAct = AIB_HasRecoveryResources()
-		or ((bot:WasRecentlyDamagedByAnyHero(2.0) or bot:WasRecentlyDamagedByCreep(2.0))
-			and hp < math.max(recoverFallbackHp, Style.LowHpHoldThreshold()))
-		or (hp < AIBLanePolicy.Hp.danger
-			and not AIBUtils.IsCloserToFountain(bot, AIBUtils.SafeRetreatTowerLoc(bot)))
+	local recoverCanAct = AIBLaneRecovery.CanRecoverNow(runtimeCtx, hp,
+		bot:WasRecentlyDamagedByAnyHero(2.0), bot:WasRecentlyDamagedByCreep(2.0),
+		recoverFallbackHp)
 	-- canAct probe for the siege desire: true only when the siege module would ACT this
 	-- tick (mirrors its gate chain without side effects).
 	local siegeCanAct = AIBLaneSiege.CanAct(AIB_LaningModuleCtx(dials, rules))
@@ -1144,6 +1144,7 @@ local function AIB_BuildDesireCandidates(dials, rules, runtimeCtx, intentCtx)
 		enemyHp = enemyHp,
 		powerRune = powerRune,
 		actionPowerRune = actionPowerRune,
+		abilityReady = abilityReady,
 		recentCreepDamage = recentCreepDamage,
 		recentHeroDamage = recentHeroDamage,
 		attackableCreep = attackableCreep,
@@ -1250,10 +1251,8 @@ local function AIB_BuildDesireCandidates(dials, rules, runtimeCtx, intentCtx)
 		-- its safe anchor while not being hit, recover has no possible action. Letting it
 		-- win the arbiter anyway froze lane work for 10-40s in the 40-55% HP band
 		-- (8880453130 t=436-449, 8880823408 t=264-299: LH frozen, 2000u ping-pong).
-		local recoverUseless = hp >= 0.30
-			and not recentHeroDamage and not recentCreepDamage
-			and not AIB_HasRecoveryResources()
-			and AIBUtils.IsCloserToFountain(bot, AIBUtils.SafeRetreatTowerLoc(bot))
+		local recoverUseless = AIBLaneRecovery.IsUselessBehindSafe(runtimeCtx, hp,
+			recentHeroDamage, recentCreepDamage)
 		if recoverUseless then
 			Style.Blocked(bot, "recover-candidate", "no_resources_behind_safe",
 				string.format("hp=%.0f score=%.0f", hp * 100, recoverPolicy.score or 0), 3.0)

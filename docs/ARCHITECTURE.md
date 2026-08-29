@@ -186,6 +186,11 @@ The Python side follows the same contract: telemetry parsing belongs in `tools/a
 and the generator schema belongs in `backend/style_schema.py`. Reports may derive different
 metrics, but they must parse the same source telemetry identically.
 
+Keep technical gates and product gates separate. `scorecard.py` answers whether a match was
+runtime-clean enough to trust. `product_scorecard.py` answers whether it had enough tension,
+bottle economy, early action, and mutual danger to be worth showing or pricing. A product gate
+failure is a watchlist signal, not a reason to reject an unrelated syntax/runtime fix.
+
 Use deploy profiles carefully:
 
 - `code`: runtime code only;

@@ -199,6 +199,27 @@ function M.Owner(ctx)
 	return handled
 end
 
+function M.CanRecoverNow(ctx, hp, recentHeroDamage, recentCreepDamage, recoverFallbackHp)
+	local bot = ctx.bot
+	if ctx.hasRecoveryResources ~= nil and ctx.hasRecoveryResources() then return true end
+	if (recentHeroDamage or recentCreepDamage)
+		and hp < math.max(recoverFallbackHp or 0, Style.LowHpHoldThreshold()) then
+		return true
+	end
+	local safe = AIBUtils.SafeRetreatTowerLoc(bot)
+	return hp < AIBConst.Recovery.earlyLowHp
+		and not AIBUtils.IsCloserToFountain(bot, safe)
+end
+
+function M.IsUselessBehindSafe(ctx, hp, recentHeroDamage, recentCreepDamage)
+	local hasResources = ctx.hasRecoveryResources ~= nil and ctx.hasRecoveryResources()
+	return hp >= AIBConst.Recovery.criticalRuneYieldHp
+		and not recentHeroDamage
+		and not recentCreepDamage
+		and not hasResources
+		and AIBUtils.IsCloserToFountain(ctx.bot, AIBUtils.SafeRetreatTowerLoc(ctx.bot))
+end
+
 -- retreatOnly=true skips the fight/CS branches and goes straight to positional retreat.
 -- Used by ThinkIfAllowed's no-items fallback so the recover desire produces movement, not combat.
 function M.ActiveLowHp(ctx, hpThreshOverride, retreatOnly)

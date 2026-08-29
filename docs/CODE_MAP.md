@@ -33,7 +33,7 @@ python tools\pre_match_state.py
 | Configs `Customize/` | 683 | 0.3% | YES - archetype presets |
 | **Our patches inside vendored files** | **~469** | 0.2% | CAREFULLY - 21 files, see section 3 |
 | Vendored OHA (everything else in `bots/`) | ~190,000 | ~96% | NO - upstream base, synced from above |
-| Tools (Python) | 4,628 | - | YES |
+| Tools (Python) | 5,115 | - | YES |
 | Backend (Python + prompt) | 359 | - | YES |
 
 **Total Lua in `bots/`: ~199,000 lines. Ours: ~8,300 (4.2%)**, counting the vendor patches.
@@ -196,7 +196,9 @@ are checked against each other by `tools/check_schema_contract.py`.
 |---|---:|---|
 | `match_stats.py` | 1164 | Deep analysis - KDA/LH, intent families, arbiter behaviour, stationary spans, fix candidates. |
 | `betting.py` | 711 | **Market layer**: the Radiant-minus-Dire advantage curve over time, market lines, in-play base. See below. |
-| `check_all.py` | 689 | The repo gate: encoding, Lua/Python syntax, deploy manifest, live drift, schema contract, tests, inventory. |
+| `product_scorecard.py` | 106 | Product gate: dead-tail, bottle economy, first event, lead changes, and mutual-low tension. |
+| `hero_readiness.py` | 71 | Hero expansion matrix: what is covered for SF/Juggernaut and what is still risky. |
+| `check_all.py` | 750 | The repo gate: encoding, Lua/Python syntax, deploy manifest, live drift, schema contract, tests, inventory. |
 | `postmatch.py` | 462 | **Main match report**: scorecard, fix signatures, jitter breakdown. |
 | `binding.py` | 335 | Proves a config knob actually reaches behaviour. |
 | `test_match_stats.py` / `test_betting.py` / `test_project_inventory.py` | 324 / 108 / 12 | Tests. |
@@ -287,7 +289,8 @@ SHA into `LIVE/FunLib/aibattle_build.lua`. LIVE is
 | Change rune and bottle behaviour | `aibattle_runes.lua` |
 | Change tower siege | `aibattle_laning_siege.lua` |
 | Change a threshold (distance, cooldown) | `aibattle_constants.lua` |
+| Check SF/Juggernaut expansion readiness | `python tools/hero_readiness.py` |
 | Add telemetry or a diag signature | `aibattle_style.lua` (`Intent/Diag/Blocked/TickOwner`) |
 | Find out whether the bot worked in a match | `python tools/postmatch.py <id>` |
-| Find out whether a match was worth watching | `python tools/betting.py <id>` |
+| Find out whether a match was worth watching | `python tools/betting.py <id>` + `python tools/product_scorecard.py <id>` |
 | Find out what to do next | `docs/SPECS.md` (Russian), `docs/STATE.md` (English) |

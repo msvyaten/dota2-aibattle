@@ -1157,6 +1157,40 @@ function M.ExecuteReady(bot, enemy)
     return true
 end
 
+local function abilityEntryReady(bot, enemy, abCfg, dist, index)
+    local ab = bot:GetAbilityByName(abCfg.name)
+    if not ab or not ab:IsFullyCastable() then return false end
+    if abCfg.type == "unit" or abCfg.type == "point" then
+        return dist <= (abCfg.range or abCfg.max_range or 0)
+    end
+    if abCfg.type == "no_target" then
+        return abCfg.max_range == nil or dist <= abCfg.max_range
+    end
+    if abCfg.type == "directional" then
+        local hitMax = (abCfg.range or 0) + (abCfg.aoe or 0)
+        return dist <= hitMax or index == 1
+    end
+    return false
+end
+
+-- Side-effect-free version of FightAbilities(). Top-level fight scoring uses this to avoid
+-- winning a tick just because the enemy is inside the 900u ability scan when no ability can
+-- actually be cast or positioned for this hero.
+function M.FightAbilityReady(bot, enemy)
+    if bot == nil or enemy == nil or not enemy:IsAlive() then return false end
+    if M.ExecuteReady(bot, enemy) then return true end
+    local rules = M.Get().rules
+    if rules.ability_usage ~= "aggressive" then return false end
+    if rules.ability_timing == "save_for_execute" then return false end
+    local cfg = M.HeroAbilityConfig[bot:GetUnitName()]
+    if not cfg or not cfg.harass then return false end
+    local dist = GetUnitToUnitDistance(bot, enemy)
+    for i, abCfg in ipairs(cfg.harass) do
+        if abilityEntryReady(bot, enemy, abCfg, dist, i) then return true end
+    end
+    return false
+end
+
 -- How much more than a right-click a commit can actually deliver.
 --
 -- "enemy:GetHealth() <= GetAttackDamage() * 3.0" is the kill window used by both the engine's

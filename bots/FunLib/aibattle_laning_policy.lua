@@ -143,7 +143,7 @@ function M.EnemyActionable(args)
 	local powerRune = args.powerRune
 	local combatRune = args.actionPowerRune == true
 	return dist <= range + M.Scan.attackExtra
-		or (hp >= M.Hp.critical and dist <= M.Scan.abilityThreat)
+		or (args.abilityReady == true and hp >= M.Hp.critical and dist <= M.Scan.abilityThreat)
 		or (enemyHp <= execHp and dist <= range + M.Scan.killChaseExtra)
 		or (hp >= enemyHp + M.Combat.hpAdvantage and dist <= range + M.Scan.advantageChaseExtra)
 		or (combatRune and hp >= M.Hp.danger and dist <= ((powerRune == "haste") and M.Scan.hasteChase or M.Scan.runeChase))
