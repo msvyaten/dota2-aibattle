@@ -572,15 +572,27 @@ function M.WaveWatch(ctx)
 			end
 			-- One order per second, not one per tick: the bot needs time to walk there, and
 			-- re-issuing the move every tick is what the motor contention was made of.
+			--
+			-- moveToAttackEdge returns false without emitting its key when there is no edge
+			-- location to walk to, so the return value has to be read. Claiming the tick anyway
+			-- would be the exact thing this branch was fixed for -- an owner returning true
+			-- having done nothing, which ends the arbiter loop and starves visual-afk and
+			-- anti-idle below -- and it would burn the one-second hold on a move that never
+			-- happened. On failure, fall through to the plain hold instead and say why.
 			if bot.aib_waveWatchStepUntil == nil or now >= bot.aib_waveWatchStepUntil then
-				bot.aib_waveWatchStepUntil = now + Const.Visual.waveWatchStepHoldSeconds
-				ctx.moveToAttackEdge(creep, "wave-watch-step", 35)
+				if ctx.moveToAttackEdge(creep, "wave-watch-step", 35) then
+					bot.aib_waveWatchStepUntil = now + Const.Visual.waveWatchStepHoldSeconds
+					return true
+				end
+				Style.Blocked(bot, "wave-watch", "no_edge", string.format("dist=%.0f", dist or -1), 3.0)
+			else
+				Style.Blocked(bot, "wave-watch", "step_hold", string.format("dist=%.0f", dist or -1), 3.0)
 				return true
 			end
-			Style.Blocked(bot, "wave-watch", "step_hold", string.format("dist=%.0f", dist or -1), 3.0)
-			return true
-		end
-		if creep ~= nil then
+		elseif creep ~= nil then
+			-- elseif, not a second if: after the no_edge fall-through above the creep IS
+			-- finishable, and reporting not_finishable there would name the wrong reason in the
+			-- one panel this branch is read through.
 			Style.Blocked(bot, "wave-watch", "not_finishable",
 				string.format("creep_hp=%.0f dist=%.0f idle=%.0f", hp or -1, dist or -1, noGainFor), 3.0)
 		end
