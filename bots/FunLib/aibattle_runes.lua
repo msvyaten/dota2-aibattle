@@ -446,8 +446,17 @@ function M.SeekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 
 	local bestRune, bestLoc, bestDist, bestScore = nil, nil, math.huge, math.huge
 	local nearestDist, nearestWaterDist = math.huge, math.huge
+	-- What this scan actually read, for the refusal line at the bottom. `nearest=inf` alone
+	-- cannot say whether there was no rune or whether we looked at the wrong instant, and in
+	-- 8972598364 it was inf on all 62 observations across both sides while M.Observe recorded
+	-- the same rune id changing status twice inside one second. Observe only logs on change, so
+	-- it cannot answer for the ticks the scan ran on; this can. Two characters per rune, in a
+	-- line that is already rate limited to once per 8s.
+	local seenStatus = ""
 	for _, runeId in ipairs({ RUNE_POWERUP_1, RUNE_POWERUP_2 }) do
-		if GetRuneStatus(runeId) == RUNE_STATUS_AVAILABLE and not isRuneKnownEmpty(bot, runeId, now) then
+		local status = GetRuneStatus(runeId)
+		seenStatus = seenStatus .. tostring(status) .. (isRuneKnownEmpty(bot, runeId, now) and "e" or "-")
+		if status == RUNE_STATUS_AVAILABLE and not isRuneKnownEmpty(bot, runeId, now) then
 			local loc = GetRuneSpawnLocation(runeId)
 			if loc ~= nil then
 				local dist = GetUnitToLocationDistance(bot, loc)
@@ -627,9 +636,12 @@ function M.SeekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 				return true
 			end
 		end
-		Style.Blocked(bot, diagKey, "no_close_rune",
-			string.format("max=%.0f waterMax=%.0f nearest=%.0f water=%.0f mid=%.0f",
-				maxDist or 2600, Const.Rune.waterRecoveryMaxDist, nearestDist, nearestWaterDist, midContextDistance(bot)), 8.0)
+		-- Keep this call within three lines of the `return false` below: check_all's silent-refusal
+		-- detector looks that far back for a logger and nothing further, so a fourth line of
+		-- wrapping turns a named refusal into a reported silent one.
+		Style.Blocked(bot, diagKey, "no_close_rune", string.format(
+			"max=%.0f waterMax=%.0f nearest=%.0f water=%.0f mid=%.0f status=%s", maxDist or 2600,
+			Const.Rune.waterRecoveryMaxDist, nearestDist, nearestWaterDist, midContextDistance(bot), seenStatus), 8.0)
 		return false
 	end
 
