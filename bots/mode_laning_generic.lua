@@ -1085,10 +1085,30 @@ local function AIB_BuildDesireCandidates(dials, rules, runtimeCtx, intentCtx)
 			or bot:HasModifier("modifier_clarity_potion"))
 		and not bot:WasRecentlyDamagedByAnyHero(2.0)
 	local fightReach = (enemyDist or 99999) <= 1200
+	-- The in-contact branch below used to be a bare "inside range + 80", and that is wider than
+	-- what the contact leg will actually do. aibattle_laning_combat.lua:134 -- the only place in
+	-- the tree that emits hero-contact/uphill -- refuses exactly the shell
+	-- `range < dist <= range + 80` when the enemy stands higher, because the engine's miss
+	-- chance makes the swing a coin flip. hero-pass (trade.lua:194) and kill-lock (trade.lua:87)
+	-- refuse uphill outright. So all three legs of the fight family decline on terrain while the
+	-- probe promised action, and fight won the arbiter on a swing that could not happen.
+	-- 8972520526 t=146-156 is the whole thing in one window: Radiant at 100% HP with
+	-- `hero-contact reason=uphill dist=600`, `hero-pass reason=uphill` and
+	-- `kill-lock reason=uphill dist=509` in the same ticks, and
+	-- `blocked=top-arbiter reason=empty_action winner=fight score=124`. hero-contact/uphill was
+	-- 4 of Radiant's 18 empty ticks, and that is a lower bound -- the blocked line is rate
+	-- limited to 3s. Uphill was already tested here, but only in the third branch, which the
+	-- in-contact branch short-circuits before it is ever reached.
+	-- This is a probe correction, not a balance choice, the same class as CanRecoverNow: a
+	-- canAct that promises more than its own action can deliver is simply wrong. It creates no
+	-- new action -- it stops burning the tick, and the ladder hands it to last-hit / creep-work,
+	-- which is what a bot at full HP should be doing while the enemy holds the high ground.
+	-- dist <= range is left alone: there the swing lands and the leg really does attack.
 	local fightCanAct = enemy ~= nil and not concedeLane and fightReach
 		and not (ownHealTicking and (enemyDist or 99999) > range + 80)
 		and (
-		(enemyDist or 99999) <= range + 80
+		(enemyDist or 99999) <= range
+		or ((enemyDist or 99999) <= range + 80 and not AIB_UphillMiss(enemy))
 		or hp < 0.32
 		or (not AIB_UphillMiss(enemy) and not hpBehind
 			and (hp >= 0.45 or enemyHp <= (dials.execute_threshold or 0))))
