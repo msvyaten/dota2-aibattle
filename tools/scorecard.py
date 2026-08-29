@@ -10,7 +10,23 @@ import sys
 from aibattle_log import DOTA_LOG_DIR
 
 # diag counters whose per-match MAX approximates movement churn (jitter proxy)
-JITTER_KEYS = ("low-hp-nudge", "low-hp-back", "uphill-reposition")
+#
+# `low-hp-nudge` and `low-hp-back` were in this tuple and are emitted by nothing: neither string
+# exists anywhere under bots/, in any form, concatenated or otherwise. They read 0 in every match
+# ever measured, and that zero was never evidence of calm -- it was the absence of a key. Removed
+# rather than kept as decoration; the numbers do not move, because they were always 0.
+#
+# What is left is thin, and 8972598364 is the proof: jitter/min read 3.4 for Radiant, a
+# comfortable PASS against the limit of 8, in the match where the user watched the bots walk back
+# and forth and `wave-watch-step` fired 107 times (~16/min). None of the owners that actually
+# issue movement -- wave-watch, cs-watchdog, siege, creep-aggro, the chases, the anti-idle legs --
+# is counted here. So a PASS on this line means "the two things we watch stayed quiet", not "the
+# bot moved sanely", and the eye has beaten this metric twice.
+#
+# Not widened before a match on purpose: the 8/min threshold is calibrated against this narrow
+# set, and adding the real movers without recalibrating would fail every match on arrival. The
+# next match gives the per-key movement census to calibrate from.
+JITTER_KEYS = ("uphill-reposition",)
 # SPECS 3.10 step 2 (20.07): lane-line-fallback left the raw JITTER_KEYS -- its running
 # counter counted every re-issue of the SAME legitimate walk (~9x inflation: two matches
 # on f77b66b measured lane-line raw 160-207 -> 6-24 real episodes). It is replaced by the

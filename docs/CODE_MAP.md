@@ -202,7 +202,7 @@ are checked against each other by `tools/check_schema_contract.py`.
 | `postmatch.py` | 510 | **Main match report**: scorecard, fix signatures, jitter breakdown. |
 | `binding.py` | 279 | Proves a config knob actually reaches behaviour. |
 | `test_match_stats.py` / `test_betting.py` / `test_project_inventory.py` | 324 / 108 / 12 | Tests. |
-| `scorecard.py` | 123 | Bare PASS/FAIL verdict on watchability criteria. |
+| `scorecard.py` | 139 | Bare PASS/FAIL verdict on watchability criteria. |
 | `project_inventory.py` | 197 | Current sizes, direct action surface, shared-state writers, dead helpers. |
 | `deploy.bat` | 129 | Deploy profiles. |
 | `pathology.py` | 98 | Movement shapes: STALL and YOYO detection from positions alone. |
