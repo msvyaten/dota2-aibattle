@@ -22,29 +22,30 @@ watching"** - a match with a contested middle, not a deterministic stomp.
 
 | # | Read | Why |
 |---|---|---|
-| 1 | [`docs/REVIEW_SCOPE.md`](docs/REVIEW_SCOPE.md) | What we are asking a reviewer to answer, what to read for it, and what to ignore. |
-| 2 | [`NOTICE.md`](NOTICE.md) | What is vendored, what is ours, and the unresolved licence status. |
-| 3 | [`docs/CODE_MAP.md`](docs/CODE_MAP.md) | File inventory, the vendor boundary, and a "where do I change X" table. |
-| 4 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Decision order, module ownership, telemetry rules, how to add behaviour. |
-| 5 | [`docs/STATE.md`](docs/STATE.md) | Current plan, open structural work, and the evidence rules. |
-| 6 | [`docs/HANDOFF.md`](docs/HANDOFF.md) | Operational reference: paths, gate, deploy, match analysis. |
+| 1 | [`docs/CONTRACTOR_START.md`](docs/CONTRACTOR_START.md) | Short path for a paid external reviewer: commands, evidence set, deliverable shape. |
+| 2 | [`docs/REVIEW_SCOPE.md`](docs/REVIEW_SCOPE.md) | What we are asking a reviewer to answer, what to read for it, and what to ignore. |
+| 3 | [`NOTICE.md`](NOTICE.md) | What is vendored, what is ours, and the unresolved licence status. |
+| 4 | [`docs/CODE_MAP.md`](docs/CODE_MAP.md) | File inventory, the vendor boundary, and a "where do I change X" table. |
+| 5 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Decision order, module ownership, telemetry rules, how to add behaviour. |
+| 6 | [`docs/STATE.md`](docs/STATE.md) | Current plan, open structural work, and the evidence rules. |
+| 7 | [`docs/HANDOFF.md`](docs/HANDOFF.md) | Operational reference: paths, gate, deploy, match analysis. |
 
 `docs/SPECS.md`, `docs/BACKLOG.md` and `docs/history/` are **written in Russian** and are
 working notes, not handoff material. See "Language" below.
 
 ## Do not be scared by the size
 
-`bots/` is about 199,000 lines of Lua. **7,829 of them are ours.** The rest is the vendored
+`bots/` is about 199,000 lines of Lua. About **7,800 of them are ours.** The rest is the vendored
 OpenHyperAI engine: read it when you need to, do not refactor it.
 
 | | lines | ours? |
 |---|---:|---|
-| `bots/FunLib/aibattle_*.lua` - the behaviour layer | 7,829 | yes, this is the project |
+| `bots/FunLib/aibattle_*.lua` - the behaviour layer | ~7,800 | yes, this is the project |
 | `bots/Customize/` - strategy presets and live bindings | 683 | yes |
-| In-place patches inside vendored files (21 files, marked `AIB`) | ~217 | yes, see `CODE_MAP.md` section 3 |
+| In-place patches inside vendored files (marked `AIB`) | generated | yes, see `CODE_MAP.md` section 3 |
 | Everything else under `bots/` | ~190,000 | no - vendored, synced from upstream |
-| `tools/` - match analysis and repo gates | 5,233 | yes |
-| `backend/` - LLM config generator | 359 | yes |
+| `tools/` - match analysis and repo gates | ~5,000 | yes |
+| `backend/` - LLM config generator | ~365 | yes |
 
 ## Run the checks
 
@@ -57,7 +58,7 @@ python tools/check_all.py --skip-live
 That is the pre-commit gate. It runs text-encoding checks, Lua syntax, Lua
 local-use-before-declaration, duplicate global names, `require` cycle detection, Python
 syntax, a forbidden-fallback lint, deploy-manifest sync, runtime-module coverage, the
-Python/Lua/prompt schema contract, 58 tests, and a project inventory. It should print
+Python/Lua/prompt schema contract, the Python tests, and a project inventory. It should print
 `[ok] all checks passed`.
 
 Two more that are useful on a cold read:
@@ -124,7 +125,7 @@ Two categories are deliberately not English:
   upstream user-facing translations. Do not touch them.
 - **`docs/SPECS.md`, `docs/BACKLOG.md`, `docs/history/`** are Russian working notes kept for
   the original authors. They are not required to work on this repository, and nothing in the
-  five documents listed under "Start here" depends on them.
+  English documents listed under "Start here" depends on them.
 
 ## Glossary
 
@@ -140,7 +141,7 @@ The code comments cite real matches and real arguments. Some shorthand recurs:
 | **tick** | One `Think()` call. Exactly one owner acts per tick. |
 | **owner / candidate / election** | Behaviours compete for a tick by score; the arbiter runs only the winner and logs the losers. |
 | **intent / diag / blocked** | The three telemetry lines: what it wanted, an implementation-level counter, and why it refused. |
-| **mutual low** | Seconds where *both* heroes are simultaneously in danger. It reads `0` in every match measured so far, which is the headline product problem. |
+| **mutual low** | Seconds where *both* heroes are simultaneously in danger. It was zero through most measured matches; `8968270421` produced the first small non-zero signal. |
 | **LIVE** | The deployed copy inside the Dota 2 install, as opposed to this repository. |
 | An 8-10 digit number like `8968270421` | A Dota match ID; the evidence behind the comment next to it. |
 

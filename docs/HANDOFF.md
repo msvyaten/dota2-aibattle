@@ -12,10 +12,20 @@ python tools\pre_match_state.py
 python tools\check_all.py --skip-live
 ```
 
+If `python` is not in PATH on this Windows workstation, use the bundled runtime:
+
+```powershell
+& 'C:\Users\Shadow\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe' tools\pre_match_state.py
+& 'C:\Users\Shadow\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe' tools\check_all.py --skip-live
+```
+
 **Do not copy HEAD or LIVE out of any document.** `pre_match_state.py` prints the branch,
 upstream, live marker, bindings and dirty files as they are on this machine right now.
 
 The working branch is `phase-2-team-dials`, not `main`.
+
+For an external reviewer, start with [`CONTRACTOR_START.md`](CONTRACTOR_START.md). It is the
+billable-time checklist: commands, evidence set, and deliverable format.
 
 ## Paths
 
@@ -51,7 +61,7 @@ python tools\check_all.py --skip-live
 ```
 
 It covers text encoding, Lua and Python syntax, the deploy manifest, runtime module coverage,
-the schema contract, 58 tests and the project inventory. The full check, after a deploy:
+the schema contract, the Python tests and the project inventory. The full check, after a deploy:
 
 ```powershell
 python tools\check_all.py

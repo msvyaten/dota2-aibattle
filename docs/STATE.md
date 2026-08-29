@@ -30,7 +30,7 @@ Stage named files only; never `git add` the whole tree here.
 
 ## Product
 
-A prompt is interpreted by an LLM into 12 numeric dials and model-facing rules. The runtime
+A prompt is interpreted by an LLM into 11 numeric dials and 11 model-facing rules. The runtime
 must turn that config into distinct, competent, explainable 1v1-mid behavior. The model picks
 strategy; the engine owns mechanics and safety. Engine constants such as distances, rune
 staging windows, AFK timing, and tower leashes must not leak into model-facing rules.
@@ -54,8 +54,8 @@ ownership, recovery `canAct` alignment.
 
 Open structural work, in order:
 
-1. Validate the current stack in a match. The last five logs are read (`8927375253`,
-   `8940466473`, `8964702771`, `8964741391`, `8968270421`); `pre_match_state.py` sizes the rest.
+1. Validate the current stack in a match. Read logs include `8927375253`, `8940466473`,
+   `8964702771`, `8964741391`, `8968270421`, and `8926148548`.
 2. P1-B: migrate urgent head-of-tick decisions into the same arbiter.
 3. P3-B.2: make recovery destination-aware and remove remaining parallel low-HP movers.
 4. P3-C: windup protection, safe CS in soft recovery, and the remaining rune/recovery semantics.

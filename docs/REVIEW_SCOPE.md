@@ -9,10 +9,14 @@ Two LLM-configured bots play 1v1 mid against each other. The product question is
 a bot wins - it is whether the match is **worth watching**, and we measure that as **mutual
 low**: seconds in which both heroes are simultaneously in danger.
 
-**In every match we have measured, mutual low is `0s in 0 windows`.** Both bots have danger
-windows. The windows never overlap. One bot backs off, heals, comes back; then the other
-does. Nobody is ever finished. That is what "boring" looks like as a number, and it has not
-moved once across roughly 450 commits of gameplay work.
+For most measured matches, mutual low was `0s in 0 windows`. Both bots had danger windows,
+but the windows did not overlap: one bot backed off, healed, came back; then the other did.
+That is what "boring" looks like as a number.
+
+The first non-zero signal appeared in match `8968270421` on build `81547c2`: `10s in 2
+windows`. Treat this as a signal, not proof. It was about 2% of a short, one-sided match with
+zero lead changes. Later accepted matches can still fall back to `0s`, so the review question
+is now sharper: why is simultaneous danger rare and unstable?
 
 Everything below exists to help answer why.
 
@@ -48,7 +52,7 @@ and the bot leaves the lane holding an unused salve. Neither side logs an error.
 
 We want a migration shape that can be done incrementally, not a rewrite.
 
-### 3. Is `mutual low = 0` a mechanics defect or a scoring defect?
+### 3. Is near-zero mutual low a mechanics defect or a scoring defect?
 
 Put differently: does the engine make simultaneous danger impossible, or does the scoring
 ladder always find a reason for somebody to disengage first? The evidence lives in
@@ -58,7 +62,7 @@ scores in `aibattle_laning_policy.lua`.
 
 ## What to read
 
-About 850 lines of documentation and 2,400 lines of code. Not 199,000.
+About 1,000 lines of documentation and 2,400 lines of code. Not 199,000.
 
 **Documents, in order:**
 
@@ -66,6 +70,7 @@ About 850 lines of documentation and 2,400 lines of code. Not 199,000.
 |---|---:|
 | `README.md` | 151 |
 | `NOTICE.md` | 47 |
+| `docs/CONTRACTOR_START.md` | short |
 | `docs/CODE_MAP.md` | 293 |
 | `docs/ARCHITECTURE.md` | 203 |
 | `docs/STATE.md` | 150 |
@@ -107,7 +112,7 @@ of the config generator.
 python tools/check_all.py --skip-live
 ```
 
-Expect `[ok] all checks passed` and 58 tests. This gate also checks architecture, not just
+Expect `[ok] all checks passed` and the current Python test count. This gate also checks architecture, not just
 syntax: `require` cycles, deploy-manifest drift, the top-desire policy boundary, a
 forbidden-fallback lint, and the schema contract between Python, Lua and the LLM prompt.
 
@@ -129,3 +134,21 @@ helpers. Trust this over any number written in a document.
   (`general.lua`, `playstyle_radiant.lua`, `playstyle_dire.lua`). They hold live experiment
   state, not source of truth. Do not commit them.
 - Compare rates per minute, never raw counters between matches of different length.
+
+## Evidence set
+
+Use these matches before proposing gameplay changes:
+
+- `8964702771` - accepted technical gate, two lead changes, mutual low still zero.
+- `8968270421` - first non-zero mutual low: `10s in 2 windows`, but short and one-sided.
+- `8926148548` - accepted scorecard, but betting shape is weak: zero lead changes and a long
+  dead tail.
+
+Run:
+
+```bash
+python tools/postmatch.py 8964702771
+python tools/postmatch.py 8968270421
+python tools/postmatch.py 8926148548
+python tools/betting.py 8964702771 8968270421 8926148548
+```
