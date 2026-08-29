@@ -58,6 +58,36 @@ def code_map_drift() -> list[tuple[str, int, int]]:
 # version of this check passed while CODE_MAP was missing five tools outright -- series.py, which
 # is what keeps a side effect from masquerading as a model effect, and pre_match_state.py, which
 # every session is told to run first among them. The scope of a check is part of its answer.
+# The dead-helper scan below only ever looked at `local function`. An exported `M.Name` that
+# nothing calls is just as dead and more misleading, because it reads as public API. Two were
+# sitting there: M.PublicFamilies copied a local list, M.ItemCost forwarded to a local one line
+# above it, and neither was mentioned anywhere else in the tree.
+#
+# Detection is by MENTION, not by call site. The obvious `[.:]Name\s*\(` pattern reported two
+# live functions as dead -- GetItemRules and EvalItemCondition are handed to pcall by reference
+# in item_purchase_generic.lua and never appear next to an opening paren. A check that produces
+# false positives on live code would be turned off within a week.
+def dead_exported_functions() -> list[tuple[str, str]]:
+    """Exported `M.Name` in the AIBattle layer that nothing anywhere mentions."""
+    corpus = []
+    for folder, pattern in ((ROOT / "bots", "**/*.lua"), (ROOT / "tools", "*.py"),
+                            (ROOT / "backend", "*.py"), (ROOT / "docs", "*.md")):
+        if not folder.is_dir():
+            continue
+        for path in folder.glob(pattern):
+            if "archive" in path.parts:
+                continue
+            corpus.append(path.read_text(encoding="utf-8", errors="ignore"))
+    joined = "\n".join(corpus)
+    dead = []
+    for path in sorted((ROOT / "bots" / "FunLib").glob("aibattle_*.lua")):
+        text = path.read_text(encoding="utf-8", errors="ignore")
+        for name in re.findall(r"^function M\.([A-Za-z_][A-Za-z0-9_]*)", text, re.M):
+            if len(re.findall(r"\b%s\b" % re.escape(name), joined)) <= 1:
+                dead.append((path.name, name))
+    return dead
+
+
 def code_map_missing_tools() -> list[str]:
     """Tools under tools/ that CODE_MAP does not mention at all."""
     if not CODE_MAP.is_file():
@@ -169,6 +199,13 @@ def main() -> int:
     args = parser.parse_args()
     data = build_inventory()
     if args.check:
+        orphans = dead_exported_functions()
+        if orphans:
+            print("[fail] exported functions nothing mentions:")
+            for file_name, func in orphans:
+                print(f"    {file_name}: M.{func}")
+            print("    call it, or delete it -- a public name with no caller reads as API")
+            return 1
         drift = code_map_drift()
         missing = code_map_missing_tools()
         if drift or missing:

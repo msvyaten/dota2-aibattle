@@ -76,7 +76,7 @@ All behaviour lives here. One file, one responsibility.
 | `aibattle_laning_duel.lua` | 212 | `Prewave` and `Pregame` duel movement. |
 | `aibattle_utils.lua` | 236 | `SafeRetreatTowerLoc`, `ForwardSurvivingTowerLoc`, `EnemyTowerDanger`, `UphillMiss`, `IsTowerActuallyThreatening`. |
 | `aibattle_laning_trade.lua` | 234 | `KillLock`, `HealInterrupt`, `PassingHeroTrade` - the urgent trades. |
-| `aibattle_item_policy.lua` | 173 | `ShouldUseMango`, `ShouldDelaySpareTpPurchase`. |
+| `aibattle_item_policy.lua` | 169 | `ShouldUseMango`, `ShouldDelaySpareTpPurchase`. |
 | `aibattle_laning_survival.lua` | 117 | `CreepAggroRelief`. |
 
 ---
@@ -203,7 +203,7 @@ are checked against each other by `tools/check_schema_contract.py`.
 | `binding.py` | 279 | Proves a config knob actually reaches behaviour. |
 | `test_match_stats.py` / `test_betting.py` / `test_project_inventory.py` | 324 / 108 / 12 | Tests. |
 | `scorecard.py` | 139 | Bare PASS/FAIL verdict on watchability criteria. |
-| `project_inventory.py` | 197 | Current sizes, direct action surface, shared-state writers, dead helpers. |
+| `project_inventory.py` | 234 | Current sizes, direct action surface, shared-state writers, dead helpers. |
 | `deploy.bat` | 129 | Deploy profiles. |
 | `pathology.py` | 98 | Movement shapes: STALL and YOYO detection from positions alone. |
 | `check_text_encoding.py` | 104 | Mojibake, ASCII-only runtime files, and the no-Cyrillic rule. |

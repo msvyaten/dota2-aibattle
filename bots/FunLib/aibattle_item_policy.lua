@@ -24,10 +24,6 @@ local function itemCost(name)
 	return (ok and type(cost) == "number") and cost or 0
 end
 
-function M.ItemCost(name)
-	return itemCost(name)
-end
-
 function M.MissingBuildCheckpoint(bot, style)
 	if bot == nil or type(style) ~= "table" or style.GetItemBuild == nil then return nil, 0 end
 	local okBuild, build = pcall(style.GetItemBuild)
