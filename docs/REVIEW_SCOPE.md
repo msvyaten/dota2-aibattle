@@ -22,7 +22,12 @@ Everything below exists to help answer why.
 
 ## What we want from the review
 
-Three questions, in priority order. Answers we can act on beat a list of style findings.
+Four tracks, in priority order. Answers we can act on beat a list of style findings.
+
+### 0. Are the current documents, code boundaries and tools enough to work efficiently?
+
+Before gameplay advice, tell us what still wastes paid review time: stale docs, duplicated
+ownership, missing tests, unclear metrics, or places where the vendor boundary leaks.
 
 ### 1. Is "one owner per tick" still the right model, or has it become a cascade we should cut?
 
@@ -60,6 +65,16 @@ ladder always find a reason for somebody to disengage first? The evidence lives 
 `aibattle_laning_combat.lua` (hero contact, chase, ability pressure) and the recover/safety
 scores in `aibattle_laning_policy.lua`.
 
+### 4. What should change before expanding to more heroes and 5v5?
+
+The current live baseline is Shadow Fiend 1v1 mid. Juggernaut melee has been tested, but many
+assumptions still smell ranged/SF-specific: attack range, windup, melee-pack spacing, spell
+targeting, sustain, rune timing, item builds, and kill thresholds. For 5v5, do not assume the
+1v1 owners scale directly: enemy selection, lane ownership, teamfight roles, wards, roam, rune
+control, telemetry volume and OHA/vendor ownership all need a staged plan.
+
+We want a roadmap with smallest playable milestones, not a rewrite proposal.
+
 ## What to read
 
 About 1,000 lines of documentation and 2,400 lines of code. Not 199,000.
@@ -86,6 +101,9 @@ About 1,000 lines of documentation and 2,400 lines of code. Not 199,000.
 | `bots/FunLib/aibattle_laning_trade.lua` | 219 | Q3 |
 | `bots/FunLib/aibattle_laning_combat.lua` | 518 | Q3 |
 | `bots/FunLib/aibattle_laning_recovery.lua` | 405 | Q2, Q3 |
+| `bots/BotLib/hero_nevermore.lua` | vendor | SF baseline ability behaviour |
+| `bots/BotLib/hero_juggernaut.lua` | vendor | melee contrast |
+| `bots/mode_roam_generic.lua` / `mode_team_roam_generic.lua` | vendor patched | 5v5 expansion |
 | `bots/FunLib/aibattle_constants.lua` | 51 | reference |
 
 ## What to ignore

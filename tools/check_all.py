@@ -91,7 +91,7 @@ ACTIVE_DOC_LIMITS = {
     # on a Russian working doc (see README "Language").
     "BACKLOG.md": 152,
     "CODE_MAP.md": 350,
-    "CONTRACTOR_START.md": 120,
+    "CONTRACTOR_START.md": 160,
     "HANDOFF.md": 180,
     "REVIEW_SCOPE.md": 200,
     "SPECS.md": 800,

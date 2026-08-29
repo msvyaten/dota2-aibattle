@@ -18,6 +18,9 @@ plain-English strategy  ->  LLM  ->  config (11 dials + 11 rules + item build)
 The product question is not "does the bot win". It is **"are two generated agents worth
 watching"** - a match with a contested middle, not a deterministic stomp.
 
+Current paid-review goal: audit the existing system, propose the next improvements, review
+the path from Shadow Fiend 1v1 to more heroes, and sketch the staged return to 5v5.
+
 ## Start here (in this order)
 
 | # | Read | Why |

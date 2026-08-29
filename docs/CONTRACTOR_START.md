@@ -63,6 +63,11 @@ Those files are live matchup state. Do not commit or clean them unless explicitl
 
 ## High-Value Questions
 
+The engagement has four tracks. Keep findings grouped by track so hourly work stays easy to
+approve or stop.
+
+### Track 1 - Review the current system
+
 Answer these before suggesting broad cleanup:
 
 1. Should the tick arbiter stay a priority cascade, become explicit priority tiers, or become
@@ -74,6 +79,25 @@ Answer these before suggesting broad cleanup:
 5. What minimum product metric set proves that two generated strategies are watchable and
    priceable?
 
+### Track 2 - Improve what exists
+
+Separate polish from logic. Minor polish is documentation, telemetry naming, tests, and
+contract checks. Logic changes need one expected signature and one match.
+
+### Track 3 - Expand beyond Shadow Fiend 1v1
+
+Shadow Fiend is the live baseline; Juggernaut melee work is exploratory. Review which
+assumptions are hero-specific: attack range, windup, melee-pack spacing, rune timing, sustain,
+ability targeting, item builds, and kill thresholds. Propose a small hero-readiness matrix
+before adding more heroes.
+
+### Track 4 - Prepare 5v5
+
+Treat 5v5 as a product mode, not a bigger 1v1. Identify which systems are 1v1-only
+(solo-mid rune economy, lane front, tower pressure, enemy selection, shared telemetry volume)
+and which OHA/vendor systems should remain owners. Propose a staged 5v5 plan with one
+measurable gate per stage.
+
 ## Hourly Work Triage
 
 Buy these first: a written architecture answer, a small patch with one match signature, or a
@@ -84,6 +108,9 @@ cleanup, new fallbacks at the end of the tick, and claims based only on grep.
 
 Ask for a stop/go checkpoint after any finding that changes tick ownership, recovery, combat
 gates, rune economy, or the schema seen by the LLM.
+
+For hourly work, prefer written decision memos over speculative patches when the scope crosses
+tracks, especially for hero expansion and 5v5. A good memo should save code hours.
 
 ## Evidence Set
 
@@ -113,3 +140,6 @@ Use this shape to keep the review actionable:
 4. Validation: one command and, for behavior, one match signature.
 5. Work estimate split into: no-match tooling/docs, low-risk code, match-required behavior,
    and speculative redesign.
+
+For tracks 3 and 4, also include the smallest playable milestone and the minimum telemetry
+needed to prove it worked.
