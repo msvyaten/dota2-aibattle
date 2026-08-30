@@ -31,9 +31,8 @@ ownership, missing tests, unclear metrics, or places where the vendor boundary l
 
 ### 1. Is "one owner per tick" still the right model, or has it become a cascade we should cut?
 
-`aibattle_laning_arbiter.lua` scores every candidate without letting it act, sorts by score,
-then walks down the sorted list calling `action()` until one returns true. A candidate that
-ranked fifth owns the tick when the four above it decline.
+How the cascade runs is in `ARCHITECTURE.md`; read that first. What matters for this question
+is that a candidate ranked fifth owns the tick when the four above it decline.
 
 Two numbers in that ladder are load-bearing and live in different files: the no-action caps
 (`safetyNoAction` 44, `fightNoAction` 40, `recoverNoAction` 44 in `aibattle_laning_policy.lua`)
@@ -41,19 +40,9 @@ are calibrated to sit below `tail("safe-cs", 56)`, which is written inline in
 `mode_laning_generic.lua`. And `last-hit` scores 140 - above `safetyDanger` at 126 - with an
 action that always returns true, making it the only candidate that cannot yield.
 
-One thing to know before reading any match log for this question: **the cascade is only half
-visible in telemetry.** `empty_action` is logged when a candidate in the *desire* band wins and
-declines; tail candidates in the lanework, position and idle bands fall through silently, on
-purpose, because they replaced an older sequential tail that logged nothing. So `empty/min` on
-the scorecard is not "ticks wasted" - the tick is handed straight down and something lower
-usually acts. What it actually measures is how often the top of the ladder wins an election it
-cannot honour, and the cost is that the score is a lie, not that the tick is lost: the election
-is won at 124 and the work is done at 40.
-
-The reverse case is the one that does cost a tick, and it is invisible: an owner that returns
-`true` having done nothing ends the loop, and everything below it - including the anti-AFK
-backstops at scores 8 and 2 - never runs. `wave-watch` was doing exactly that until `1c458c5`
-gave it an action and `d377da7` bounded it.
+Before reading any match log for this question, read `ARCHITECTURE.md` on `empty_action`: it is
+a score that lies, not a wasted tick. The reverse case - an owner that returns `true` having done
+nothing, ending the loop - is the one that really costs a tick, and it has no counter at all.
 
 We want to know whether this should become explicit priority tiers, a real utility function,
 or stay as it is.
@@ -181,11 +170,20 @@ helpers. Trust this over any number written in a document.
 
 ## Evidence set
 
-Use these matches before proposing gameplay changes. The first three are the newest and carry
-most of the evidence for questions 1 and 3; the last three are the older baseline.
+Use these matches before proposing gameplay changes. The first three are the newest; the rest
+are the older baseline and are superseded wherever they disagree.
 
-- `8972520526` - **the one that reframes question 3.** Best tension profile in the series
-  (decided at 95% of the match, 4.8% dead tail, loser ahead on last hits) and `mutual low = 0`.
+- `8974058954` + `8974086880` - **read these two as one pair, and read them first.** Same build,
+  same heroes, configs swapped between the sides. Radiant won both, with opposite configs, for a
+  seventh Radiant win in a row - so the side effect is larger than the config effect and no
+  single match in this project can compare two configs. The swap is provable from inside the
+  logs (the harass dials and the strategy hashes trade places), and it also produced the best
+  tension profile the project has: never decided, no dead tail, a final gap of seven gold.
+- `8974387496` - same sides and configs as `8974058954`, one build later, so it is a direct A/B
+  of the edits between them. Dire won it, the first time in eight matches. One of those edits
+  was reverted because of what it showed (`03bd66d`).
+- `8972520526` - the previous best tension profile (decided at 95% of the match, 4.8% dead tail)
+  with `mutual low = 0`. Superseded by the pair above on tension, still useful on question 3.
 - `8972598364` - the kill lock broke off a finish at `ehp=10` under `chase_into_tower` (fixed
   since); the fountain return walked because `fountain-floor reason=heal_in_hand` kept the trip
   owner out of the tick; the rune scan read `nearest=inf` all match for Dire while Radiant
@@ -195,6 +193,6 @@ most of the evidence for questions 1 and 3; the last three are the older baselin
   match here that passed the gate; `8968270421` and `8926148548` are older and superseded.
 
 ```bash
-python tools/postmatch.py 8972520526   # then 8972598364, 8969965270
-python tools/betting.py 8972520526 8972598364 8969965270 8964702771
+python tools/postmatch.py 8974058954   # then 8974086880, 8974387496
+python tools/betting.py 8974058954 8974086880 8974387496 8972520526
 ```

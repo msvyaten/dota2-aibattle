@@ -117,18 +117,20 @@ and its absolute counts are not.
 
 The genuinely lost tick has a different shape and no counter at all: an owner that returns
 `true` having done nothing ends the cascade, so everything below it - including the anti-AFK
-backstops at 8 and 2 - never runs. That is what wave-watch did until `d377da7`.
+backstops at 8 and 2 - never runs. That is what wave-watch did until `1c458c5` gave it a real
+action and `d377da7` bounded it.
 
-Telemetry itself is narrower than it looks from the call sites. There are **four** primitives,
-all in `aibattle_style.lua`: `Diag` (plain counter), `DiagRL` (the same, rate limited), `Intent`
-and `Blocked`. Everything else that looks like a separate channel is a named wrapper that adds a
+Telemetry itself is narrower than it looks from the call sites. There are **five** primitives,
+all in `aibattle_style.lua`: `Diag` (plain counter), `DiagRL` (the same, at most once per `sec`),
+`DiagEdge` (once per occasion - it counts how many times a thing came up, where DiagRL counts how
+long it lasted), `Intent` and `Blocked`. Everything else that looks like a separate channel is a named wrapper that adds a
 prefix or a default - `ctx.diag`/`ctx.blocked` bind the bot, `ctx.state` prefixes `state-`,
 `ctx.towerOpportunity` and `runeTxn` are fixed-name Intents, `TickOwner` is an Intent with a
 throttle. `Engine.Intent`/`Engine.Blocked` emit nothing at all; they build candidate records.
 
-The one real trap in it is the plain/rate-limited split: `Diag` counts every occurrence and
-`DiagRL(bot, key, sec)` counts at most one per `sec`, so any ratio between a pair drawn from
-both scales is wrong. In anti-idle the only honest pair is `anti-idle-enter` against `idle`.
+The one real trap in it is that the three counters live on different scales, so a ratio between
+a pair drawn from two of them is wrong. `STATE.md` under "Evidence Rules" carries that rule and
+the honest pair to use in anti-idle.
 
 - `aibattle_laning_policy.lua`: named HP bands, top-level desire gates, score weights, and forward/siege thresholds.
 - `aibattle_laning_duel.lua`: pregame/prewave duel movement.

@@ -112,10 +112,9 @@ once per occasion, and side by side they invite a ratio that does not exist. In 
 only honest pair is `anti-idle-enter` against `idle`.
 
 Ask the same question of a counter before the match, not after: does the key exist in `bots/`
-at all, and is it on the same scale as the quantity the acceptance sets it against? On 30.08
-`vendor-heal-suppressed` was one key for seven items on a 30-second window, so it could not
-exceed about seventeen in a match and would have read as "the fix barely fired" whatever
-happened. The rule above was already written here and was simply not applied to a new counter.
+at all, and is it on the same scale as the quantity the acceptance sets it against? The worked
+case is in BACKLOG under the `153ee96` acceptance: a counter that failed both questions and was
+caught on 30.08 before the match rather than after it.
 
 Grep locates code; it never justifies a claim about it. Before writing that a function is dead,
 unreachable, or never fires, read the whole body — the actual conditions, not the `return`

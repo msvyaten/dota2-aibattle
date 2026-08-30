@@ -27,13 +27,8 @@ python tools\check_all.py --skip-live
 python tools\project_inventory.py
 ```
 
-On the current Windows workstation, `python` may not be in PATH. Use the bundled runtime:
-
-```powershell
-& 'C:\Users\Shadow\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe' tools\pre_match_state.py
-& 'C:\Users\Shadow\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe' tools\check_all.py --skip-live
-& 'C:\Users\Shadow\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe' tools\project_inventory.py
-```
+If `python` is not in PATH, `docs/HANDOFF.md` has the workstation-specific invocation. It is an
+operator detail on one machine, not part of joining the project.
 
 ## Read First
 
@@ -74,7 +69,9 @@ Answer these before suggesting broad cleanup:
 1. Should the tick arbiter stay a priority cascade, become explicit priority tiers, or become
    a utility model?
 2. How should cross-file `bot.aib_*` state get owner APIs without a rewrite?
-3. Why does `fight` still win ticks and then fail to act at live scores?
+3. Why does `fight` still win ticks and then fail to act at live scores? Read the correction in
+   `ARCHITECTURE.md` first: the tick is not lost, so this is a scoring problem, and a fix that
+   only splits the candidate changes telemetry and nothing on screen.
 4. Should recovery move next as one destination-aware owner, or should urgent head decisions
    move into the arbiter first?
 5. What minimum product metric set proves that two generated strategies are watchable and
@@ -94,6 +91,9 @@ before adding more heroes.
 
 ### Track 4 - Prepare 5v5
 
+Start from what already exists: five team dials (`gank`, `push`, `defend`, `ward`, `roshan`)
+shipped for 5v5 and are dormant here, because the OHA team modes they scale barely run in a solo
+mid lane. `push_desire` is the exception - it also feeds the laning siege ladder.
 Treat 5v5 as a product mode, not a bigger 1v1. Identify which systems are 1v1-only
 (solo-mid rune economy, lane front, tower pressure, enemy selection, shared telemetry volume)
 and which OHA/vendor systems should remain owners. Propose a staged 5v5 plan with one
@@ -123,7 +123,10 @@ Two things about that set are worth knowing before you read any of it. The Jugge
 the Shadow Fiend mirror are separate populations - matches got twice as short and every result
 flipped to kills at that boundary, and it is the hero swap, not a change in the code. And in the
 Shadow Fiend five, the configs never changed sides, so config and side are perfectly confounded
-and none of those matches can tell you which one won.
+and none of those matches can tell you which one won. That was fixed afterwards by swapping the
+sides and replaying: the pair at the top of the evidence set is what to read, and its answer was
+that the side wins. Behaviour does follow the config - branch counters move with it on both
+sides - but the result does not.
 
 ## Deliverable Format
 
