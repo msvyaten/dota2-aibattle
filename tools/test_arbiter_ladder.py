@@ -221,6 +221,8 @@ def anchor(text, needle, what, start=0):
 SAFETY = ROOT / "bots" / "FunLib" / "aibattle_laning_safety.lua"
 TRADE = ROOT / "bots" / "FunLib" / "aibattle_laning_trade.lua"
 STYLE = ROOT / "bots" / "FunLib" / "aibattle_style.lua"
+RUNES = ROOT / "bots" / "FunLib" / "aibattle_runes.lua"
+SURVIVE = ROOT / "bots" / "FunLib" / "aibattle_survive.lua"
 
 # AIB_MoveToAttackEdgeOf returns false WITHOUT emitting its diag key when there is no edge
 # location to walk to. A caller that drops that return and answers true has claimed the tick for
@@ -295,6 +297,58 @@ def test_may_dive_keeps_the_engine_floors_under_the_dial():
     assert "GetHeroDeaths" in body and "0.40" in body, (
         "the post-death 40% floor is gone: in 1v1 a second death ends the game, so the floor "
         "has to outrank any dive_policy the config asks for"
+    )
+
+
+def test_a_staged_rune_trip_can_still_be_called_off():
+    """Departure gates are not enough: the walk and the wait have to re-ask."""
+    text = _read(RUNES)
+    start = anchor(text, "function M.SeekBottleRune", "aibattle_runes.lua")
+    follow_at = anchor(text, '"stage_follow"', "M.SeekBottleRune", start)
+    dist_at = anchor(text, "local followDist", "M.SeekBottleRune", start)
+    assert dist_at < follow_at, "the stage follow/hold block moved; re-anchor before trusting this"
+    guard = text[dist_at:follow_at]
+    missing = [name for name in ("tripUnsafe(", "spotRaceLost(") if name not in guard]
+    assert not missing, (
+        "the staged rune trip re-issues its walk with no survival test again (missing "
+        + ", ".join(missing) + "). In 8974058954 t=468-484 that made the trip a promise the "
+        "bot could not take back: it left the lane at 35% hp for a rune 2161u away and "
+        "stage_follow/stage_hold kept walking until it died standing at the spot"
+    )
+
+
+def test_every_rune_departure_asks_the_same_survival_question():
+    """Two departures, one predicate -- the stage path used to ask one gate of three."""
+    text = _read(RUNES)
+    start = anchor(text, "function M.SeekBottleRune", "aibattle_runes.lua")
+    body = text[start:]
+    assert body.count("tripUnsafe(bot,") >= 3, (
+        "a rune departure or continuation stopped asking tripUnsafe. The direct commit, the "
+        "stage departure and the stage hold must all ask it, or the cheapest path to a rune "
+        "becomes the one with the fewest safety gates"
+    )
+    for leg in ("route_unsafe", "enemy_near", "hero_damage"):
+        assert leg in text[:start], (
+            f"the {leg} test left tripUnsafe and is inline again -- that is how the stage path "
+            "ended up with one gate of three"
+        )
+
+
+def test_the_heal_escape_fires_before_the_bot_is_already_dying():
+    """Both saving guards keep one escape; it must not shrink back to a bare 30% floor."""
+    text = _read(SURVIVE)
+    start = anchor(text, "local function stockHealConsumable", "aibattle_survive.lua")
+    body = text[start:anchor(text, '\treturn "bought"', "stockHealConsumable", start)]
+    escape = re.search(r"local criticalStuck =[^\n]*(?:\n\s+and[^\n]*)*", body)
+    assert escape is not None, "the criticalStuck escape is gone from stockHealConsumable"
+    assert "underFire" in escape.group(0), (
+        "the escape past budget_cap and bottle-gold-protect is a bare HP floor again. A salve "
+        "first allowed at 30% is allowed after the trade that decides the fight: 8974086880 "
+        "t=152-168, Dire died from 100% in sixteen seconds holding 413 gold"
+    )
+    assert "savingIsClose" in body, (
+        "the escape stopped asking whether saving is about to pay off, so it now overrides the "
+        "bottle at any gold -- that is the early flask re-buy loop the original cap prevented"
     )
 
 

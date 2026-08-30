@@ -790,8 +790,25 @@ local function stockHealConsumable(bot, hp, gold)
 	-- it (no bottle charge, no reachable rune, no second TP). When in-lane sustain is
 	-- genuinely exhausted, survival > saving: allow ONE flask past both caps. Cannot
 	-- runaway -- each buy spends gold and the 15s rate limit above still holds.
+	--
+	-- 8974086880 t=152-168 widened the trigger. Dire went from 100% HP to dead in sixteen
+	-- seconds with 413 gold in its pocket and never got past the caps: at 43% it was not yet
+	-- "critical", so budget_cap refused (count=4 allow=3) and bottle-gold-protect was still
+	-- saving for a 675 bottle it was 262 short of. Asking "am I nearly dead" is asking too
+	-- late -- a salve bought at 30% is bought after the trade that decides the fight. The
+	-- question that matters is "is a hero taking me down while I have nothing in hand".
+	--
+	-- The saving side keeps its veto where saving is about to pay off: `gold >= cost - 160`
+	-- is the same nearly-affordable test consumableSpendBlocked already uses, so a bot 100
+	-- gold from its bottle still protects the bottle -- which is the early re-buy loop the
+	-- original cap was written against -- and a bot 262 short does not.
 	local charges = bottleCharges(bot)
-	local criticalStuck = hp < 0.30
+	local savingCheckpoint, savingCost = missingCheckpointItem(bot)
+	local savingIsClose = savingCheckpoint ~= nil and savingCost > 0 and gold >= savingCost - 160
+	local underFire = hp < Const.Recovery.laneLowHp
+		and bot:WasRecentlyDamagedByAnyHero(3.0)
+		and not savingIsClose
+	local criticalStuck = (hp < 0.30 or underFire)
 		and (charges == nil or charges <= 0)
 		and gold >= itemCost("item_flask")
 		and not bot:HasModifier("modifier_flask_healing")
@@ -824,6 +841,10 @@ local function stockHealConsumable(bot, hp, gold)
 		string.format("hp=%.0f gold=%d count=%d", hp*100, gold, bot.aib_recBuyCount or 0), 2.0)
 	bot:ActionImmediate_PurchaseItem("item_flask")
 	Style.Diag(bot, criticalStuck and "recovery-buy-critical" or "recovery-buy")
+	-- The escape has two legs now and they mean different things: one is a bot already at 30%,
+	-- the other is a bot on its way there. Counting them together would make the widening
+	-- unmeasurable -- `+critical N` would move and nothing would say which leg moved it.
+	if criticalStuck and hp >= 0.30 then Style.Diag(bot, "recovery-buy-under-fire") end
 	return "bought"
 end
 

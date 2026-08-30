@@ -35,11 +35,14 @@ must turn that config into distinct, competent, explainable 1v1-mid behavior. Th
 strategy; the engine owns mechanics and safety. Engine constants such as distances, rune
 staging windows, AFK timing, and tower leashes must not leak into model-facing rules.
 
-Bettability requires repeated runs with frozen code and a side swap, and that went unmet for
-five matches: SF mirror, gemini fixed on Radiant, grok fixed on Dire, a different build each
-time, and the same result five for five - Radiant wins 2:0 on kills and never dies. Side and
-config are perfectly confounded, so none of the five says which one won. First swap running now
-via `tools/series.py 1` (grok Radiant, gemini Dire), build frozen.
+Bettability requires repeated runs with frozen code and a side swap. Five matches went without
+one - SF mirror, gemini fixed on Radiant, grok fixed on Dire, Radiant 2:0 on kills five for five
+- so side and config were perfectly confounded. The swap has now been played on a frozen
+`d9cc1a7`: `8974058954` (grok Radiant, 2:1) and `8974086880` (gemini Radiant, 2:0). **Radiant
+won both, with opposite configs.** Read matches in pairs from here on; a single match cannot
+tell a config apart from a side. What survived the swap as config-bound is the bottle: gemini
+buys it 50-70s earlier on either side. What survived as side-bound is Dire's HP - median 64%
+and 56% in the laning window against 79% and 96% - mechanism not yet diagnosed.
 
 `mutual low` - seconds where both heroes are in danger at once - was picked as the number this
 hangs on, and read `0s` everywhere except `8968270421` (10s) and `8972598364` (5s). ⚠️ Now

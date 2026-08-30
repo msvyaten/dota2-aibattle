@@ -110,18 +110,81 @@ end
 -- so walking to the uncontested one converts staging into a guaranteed fill
 -- instead of a pickup race the bot loses (result=gone age=2-3 at dist=42-96,
 -- filled=0 across matches while the enemy bottle filled).
-local function enemyNearLoc(loc, radius)
-	if loc == nil then return false end
+local function nearestEnemyToLoc(loc)
+	if loc == nil then return nil end
+	local best = nil
 	for _, h in pairs(GetUnitList(UNIT_LIST_ENEMY_HEROES) or {}) do
 		if h ~= nil and h:CanBeSeen() and h:IsAlive() then
 			local hl = h:GetLocation()
 			if hl ~= nil then
 				local dx, dy = hl.x - loc.x, hl.y - loc.y
-				if dx * dx + dy * dy <= radius * radius then return true end
+				local d = math.sqrt(dx * dx + dy * dy)
+				if best == nil or d < best then best = d end
 			end
 		end
 	end
-	return false
+	return best
+end
+
+local function enemyNearLoc(loc, radius)
+	local d = nearestEnemyToLoc(loc)
+	return d ~= nil and d <= radius
+end
+
+-- One survival question, asked wherever a rune trip BEGINS or CONTINUES.
+--
+-- These three tests used to live only at the direct-commit departure. The staging path
+-- asked one of them at departure (hero_damage) and NOTHING afterwards, so a staged trip
+-- was a promise the bot could not take back. 8974058954 t=468-484: R left the lane at 35%
+-- hp for a rune 2161u away, the enemy came into view at 1118u four seconds later, and
+-- stage_follow/stage_hold kept re-issuing the walk until R died standing AT the spot
+-- (23% -> 2%, killed by a 100% enemy). A rune is sustain, not a hill to die on.
+--
+-- `dist == nil` means "already away": the trip-length short-circuit does not apply,
+-- because a bot standing at the spot is not made safe by having a short walk left.
+-- It prints as `rune=-1` in the refusal line, which is how a reader tells the two apart.
+local function tripUnsafe(bot, hp, dist)
+	if dist ~= nil and dist <= 700 then return nil end
+	local visibleEnemies = bot:GetNearbyHeroes(1150, true, BOT_MODE_NONE)
+	local routeEnemy = (visibleEnemies and #visibleEnemies > 0 and visibleEnemies[1]:IsAlive()) and visibleEnemies[1] or nil
+	if routeEnemy ~= nil and hp < 0.55
+		and (AIBUtils.UphillMiss(bot, routeEnemy) or bot:WasRecentlyDamagedByAnyHero(2.0)) then
+		return "route_unsafe", string.format("enemy=%.0f rune=%.0f hp=%.0f",
+			GetUnitToUnitDistance(bot, routeEnemy), dist or -1, hp * 100)
+	end
+	local near = bot:GetNearbyHeroes(650, true, BOT_MODE_NONE)
+	local enemyTooClose = near and #near > 0 and near[1]:IsAlive()
+		and GetUnitToUnitDistance(bot, near[1]) <= bot:GetAttackRange() + 120
+	if enemyTooClose and (hp < 0.55 or bot:WasRecentlyDamagedByAnyHero(1.0)) then
+		return "enemy_near", string.format("enemy=%.0f rune=%.0f hp=%.0f",
+			GetUnitToUnitDistance(bot, near[1]), dist or -1, hp * 100)
+	end
+	if bot:WasRecentlyDamagedByAnyHero(1.0) and hp < 0.45 then
+		return "hero_damage", string.format("hp=%.0f rune=%.0f", hp * 100, dist or -1)
+	end
+	return nil
+end
+
+-- The race the bot is standing in. While staging it holds still at a landmark the enemy
+-- wants too, so "is an enemy near ME" is the wrong question: what decides the trip is
+-- whether the enemy reaches the SPOT no later than the rune appears there. Answering it
+-- with the same 300u/s travel model the departure window already uses (stageDist/300+2)
+-- keeps one movement model in this file instead of two.
+--
+-- In 8974058954 this is the tick that was missing: at t=471-476 the enemy was 1877u then
+-- 929u from the spot with eta 8s then 3s -- it beat the rune both times -- while R held
+-- at 38-40% hp and picked the rune up straight into a fight it could not win.
+local function spotRaceLost(bot, hp, spot, secsToSpawn)
+	if spot == nil or hp >= 0.55 then return nil end
+	-- No known spawn time means no race to judge. Without this, `secsToSpawn = math.huge`
+	-- (what nextBottleRuneSpawn returns when the clock is unreadable) makes every enemy on
+	-- the map "arrive first" and the gate refuses everything.
+	if secsToSpawn == nil or secsToSpawn == math.huge then return nil end
+	local enemyDist = nearestEnemyToLoc(spot)
+	if enemyDist == nil then return nil end
+	local eta = math.max(0, secsToSpawn or 0)
+	if enemyDist / 300.0 > eta + 1.5 then return nil end
+	return string.format("enemy=%.0f eta=%.0f hp=%.0f", enemyDist, eta, hp * 100)
 end
 
 local function runeMemoryUntil(now)
@@ -531,6 +594,27 @@ function M.SeekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 				if bot.aib_bottleRuneStageUntil ~= nil and now <= bot.aib_bottleRuneStageUntil
 					and bot.aib_bottleRuneStageTarget ~= nil then
 					local followDist = GetUnitToLocationDistance(bot, bot.aib_bottleRuneStageTarget)
+					-- The tick that was missing in 8974058954. Everything below this point
+					-- re-issues the walk unconditionally until the stage window expires, so
+					-- once the trip started nothing could call it off. Ask the same two
+					-- questions the departure asks; on a yes, release the stage (and block
+					-- re-staging this window) so lane/recovery takes the tick instead.
+					local holdUnsafe, holdDetail = tripUnsafe(bot, hp, nil)
+					local holdRace = holdUnsafe == nil
+						and spotRaceLost(bot, hp, bot.aib_bottleRuneStageTarget, secsToSpawn) or nil
+					if holdUnsafe ~= nil or holdRace ~= nil then
+						local reason = holdUnsafe or "spot_race_lost"
+						bot.aib_bottleRuneStageWindow = nil
+						bot.aib_bottleRuneStageUntil = nil
+						bot.aib_bottleRuneStageTarget = nil
+						bot.aib_bottleRuneStageBlockedWindow = nextSpawnAt
+						bot.aib_bottleRuneStageBlockedUntil = now + 4.0
+						Style.Blocked(bot, diagKey, reason,
+							string.format("stage=hold %s", holdDetail or holdRace), 4.0)
+						runeResult(bot, diagKey, "abort",
+							string.format("reason=%s hp=%.0f stage=1", reason, hp * 100), 6.0)
+						return false
+					end
 					if followDist > 120 then
 						if bot.aib_bottleRuneStageFollowLast == nil or now - bot.aib_bottleRuneStageFollowLast >= 1.0 then
 							bot.aib_bottleRuneStageFollowLast = now
@@ -614,8 +698,14 @@ function M.SeekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 					Style.Blocked(bot, diagKey, "last_hit_window", string.format("stage=1 rune=%.0f hp=%.0f eta=%.0f", stageDist, hp*100, secsToSpawn), 6.0)
 					return false
 				end
-				if stageDist > 700 and bot:WasRecentlyDamagedByAnyHero(1.0) and hp < 0.45 then
-					Style.Blocked(bot, diagKey, "hero_damage", string.format("stage=1 hp=%.0f rune=%.0f eta=%.0f", hp*100, stageDist, secsToSpawn), 6.0)
+				local stageUnsafe, stageDetail = tripUnsafe(bot, hp, stageDist)
+				if stageUnsafe ~= nil then
+					Style.Blocked(bot, diagKey, stageUnsafe, string.format("stage=1 %s eta=%.0f", stageDetail, secsToSpawn), 6.0)
+					return false
+				end
+				local stageRace = spotRaceLost(bot, hp, stageLoc, secsToSpawn)
+				if stageRace ~= nil then
+					Style.Blocked(bot, diagKey, "spot_race_lost", "stage=1 " .. stageRace, 6.0)
 					return false
 				end
 				bot.aib_bottleRuneStageWindow = nextSpawnAt
@@ -645,24 +735,9 @@ function M.SeekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 		return false
 	end
 
-	local visibleEnemies = bot:GetNearbyHeroes(1150, true, BOT_MODE_NONE)
-	local routeEnemy = (visibleEnemies and #visibleEnemies > 0 and visibleEnemies[1]:IsAlive()) and visibleEnemies[1] or nil
-	if bestDist > 700 and routeEnemy ~= nil and hp < 0.55
-		and (AIBUtils.UphillMiss(bot, routeEnemy) or bot:WasRecentlyDamagedByAnyHero(2.0)) then
-		Style.Blocked(bot, diagKey, "route_unsafe", string.format("enemy=%.0f rune=%.0f hp=%.0f", GetUnitToUnitDistance(bot, routeEnemy), bestDist, hp*100), 6.0)
-		return false
-	end
-
-	local near = bot:GetNearbyHeroes(650, true, BOT_MODE_NONE)
-	local enemyTooClose = near and #near > 0 and near[1]:IsAlive()
-		and GetUnitToUnitDistance(bot, near[1]) <= bot:GetAttackRange() + 120
-	if bestDist > 700 and enemyTooClose and (hp < 0.55 or bot:WasRecentlyDamagedByAnyHero(1.0)) then
-		Style.Blocked(bot, diagKey, "enemy_near", string.format("enemy=%.0f rune=%.0f hp=%.0f", GetUnitToUnitDistance(bot, near[1]), bestDist, hp*100), 6.0)
-		return false
-	end
-
-	if bestDist > 700 and bot:WasRecentlyDamagedByAnyHero(1.0) and hp < 0.45 then
-		Style.Blocked(bot, diagKey, "hero_damage", string.format("hp=%.0f rune=%.0f", hp*100, bestDist), 6.0)
+	local commitUnsafe, commitDetail = tripUnsafe(bot, hp, bestDist)
+	if commitUnsafe ~= nil then
+		Style.Blocked(bot, diagKey, commitUnsafe, commitDetail, 6.0)
 		return false
 	end
 
