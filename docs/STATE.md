@@ -75,19 +75,19 @@ owns a tick makes review harder and cures nothing.
 - Recovery can still win while having no useful action; verify `empty_action by winner` and
   low-HP episode traces after every recovery change.
 - **`fight` wins the tick and cannot act, on every build measured.** Top empty-action winner in
-  9 of 10 side-matches, always at its live scores, never at the 40 cap (BACKLOG has the numbers;
-  `test_arbiter_ladder.py` pins the arithmetic). ⛔ Corrected 29.08: this was also written up as
-  the mechanism holding `mutual low` at zero - "both want the fight and neither engages". It
-  does not follow. `Arbiter.Run` falls through on a false return, so a lower candidate usually
-  acts, and `empty_action` is logged only for the desire band. The cost is a score that lies,
-  not a lost tick; splitting `fight` would fix telemetry, not behaviour.
+  9 of 10 side-matches, always at its live scores, never at the 40 cap. ⛔ Corrected 29.08: this
+  does NOT explain `mutual low` at zero - `Arbiter.Run` falls through on a false return, so a
+  lower candidate acts. The cost is a score that lies; splitting `fight` fixes telemetry only.
+- **Five edits are deployed and unmeasured** (`c802251`..`03a70bf`): rune trip re-asks while it
+  holds the tick, tower cover needs depth, creep outranks the tower when our wave is not on it,
+  `healing_style="active"` finally suppresses the vendor consumables, and fight desire is capped
+  when materially behind on HP. Signatures per edit are in BACKLOG. One match reads all five at
+  once; split the run in two if attribution matters more than throughput.
 - Anti-idle still holds gameplay actions; its job is detection only. It empties **33-47%** of
-  its activations on both sides (the older "never below 40%" is wrong: 33, 37, 38, 38 of six
-  readings across the last three matches).
+  its activations on both sides, and it is what drives the bot when a real owner refuses.
 - Two owners can deadlock by deferring to each other, and neither logs an error. Open case:
-  `blocked=heal-item reason=fountain_trip_committed` with `blocked=fountain-floor
-  reason=heal_in_hand` on one tick, and the bot leaves lane holding an unused salve. Writing a
-  guard that defers? Read what that owner does back first.
+  `heal-item/fountain_trip_committed` against `fountain-floor/heal_in_hand` on one tick, and
+  the bot leaves lane holding an unused salve. Read what an owner does back before deferring.
 - Cross-module `bot.aib_*` state is ownership debt; move writes behind owner APIs when
   touching those systems (`project_inventory.py` lists the writers).
 - The three largest files shrink by ownership extraction, never by line-count targets.
