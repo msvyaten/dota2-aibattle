@@ -222,6 +222,7 @@ SAFETY = ROOT / "bots" / "FunLib" / "aibattle_laning_safety.lua"
 TRADE = ROOT / "bots" / "FunLib" / "aibattle_laning_trade.lua"
 STYLE = ROOT / "bots" / "FunLib" / "aibattle_style.lua"
 RUNES = ROOT / "bots" / "FunLib" / "aibattle_runes.lua"
+SIEGE = ROOT / "bots" / "FunLib" / "aibattle_laning_siege.lua"
 SURVIVE = ROOT / "bots" / "FunLib" / "aibattle_survive.lua"
 
 # AIB_MoveToAttackEdgeOf returns false WITHOUT emitting its diag key when there is no edge
@@ -349,6 +350,24 @@ def test_the_heal_escape_fires_before_the_bot_is_already_dying():
     assert "savingIsClose" in body, (
         "the escape stopped asking whether saving is about to pay off, so it now overrides the "
         "bottle at any gold -- that is the early flask re-buy loop the original cap prevented"
+    )
+
+
+def test_tower_cover_is_one_answer_for_the_probe_and_the_act():
+    """CanAct and Think must not disagree about whether the bot has creep cover."""
+    text = _read(SIEGE)
+    assert text.count("alliedTankAt(ctx, twr)") >= 2, (
+        "Think and CanAct stopped sharing the cover test. They were byte-identical copies "
+        "before, which is how the fact test got tightened in one place and the guess under it "
+        "left at 'any one creep' -- a probe that promises cover the act refuses is the failure "
+        "this file already carries two comments about"
+    )
+    start = anchor(text, "local function alliedTankAt", "aibattle_laning_siege.lua")
+    body = text[start:anchor(text, "\nend\n", "alliedTankAt", start)]
+    assert "near >= 2" in body, (
+        "the guessed creep shield is back to depth one. One creep near a tower is one tower "
+        "shot from gone: 8974387496 t=423-434, Dire hit the tower as the wave fell 2 -> 1 and "
+        "took the retarget at 90% -> 83% with no enemy hero on the lane"
     )
 
 

@@ -64,6 +64,39 @@ function M.TowerBackoffArrived(bot)
 		and GetUnitToLocationDistance(bot, bot.aib_towerBackoffDest) <= 90
 end
 
+-- "Something of OURS is soaking the tower" -- and a hero is not that something. The team
+-- test alone counted the bot ITSELF: while the tower was shooting the hero, the hero
+-- concluded it had tank cover and kept sieging, which is self-reinforcing -- the longer it
+-- stands there the longer the tower keeps targeting it and the longer it believes it is
+-- covered. 8909602648 [D] took 319 tower damage, 18% of everything it received, and lost
+-- the game on it; bee3dd8 fixed the commit latch that carried it in, this is why it thought
+-- it was safe once there. Only a non-hero unit can tank, which in a 1v1 lane means a creep.
+--
+-- Reading the tower's target is the FACT. Everything after it is a guess, and the guess used
+-- to accept any one creep standing near the tower. One creep is not cover; it is one tower
+-- shot away from not being cover. 8974387496 t=423-434: Dire walked in on wave=2, kept hitting
+-- the tower as the wave fell to 1, and took the retarget at 90% -> 83% with no enemy hero
+-- anywhere on the lane -- the same self-reinforcing belief as above, entered through the back
+-- door left open when the fact test was tightened and the guess under it was not. A guessed
+-- shield needs depth, so the creep the tower is about to kill is not the only thing in the way.
+--
+-- Returns (tank, guessedNear): guessedNear is 0 when the fact answered, otherwise how many
+-- creeps the guess counted, so Think can log a shield of exactly one. It never logs itself --
+-- CanAct calls this too, and a probe that emits telemetry double-counts every tick.
+local function alliedTankAt(ctx, twr)
+	local target = twr:GetAttackTarget()
+	if target ~= nil and target:GetTeam() == GetTeam() and not target:IsHero() then
+		return true, 0
+	end
+	local near = 0
+	for _, creep in pairs(ctx.allyCreeps or {}) do
+		if J.IsValid(creep) and GetUnitToUnitDistance(creep, twr) <= twr:GetAttackRange() + 120 then
+			near = near + 1
+		end
+	end
+	return near >= 2, near
+end
+
 function M.Think(ctx)
 	local bot = ctx.bot
 	local dials = ctx.dials or {}
@@ -140,25 +173,8 @@ function M.Think(ctx)
 		return false
 	end
 
-	local alliedTank = false
-	local target = twr:GetAttackTarget()
-	-- "Something of OURS is soaking the tower" -- and a hero is not that something. The team
-	-- test alone counted the bot ITSELF: while the tower was shooting the hero, the hero
-	-- concluded it had tank cover and kept sieging, which is self-reinforcing -- the longer it
-	-- stands there the longer the tower keeps targeting it and the longer it believes it is
-	-- covered. 8909602648 [D] took 319 tower damage, 18% of everything it received, and lost
-	-- the game on it; bee3dd8 fixed the commit latch that carried it in, this is why it thought
-	-- it was safe once there. Only a non-hero unit can tank, which in a 1v1 lane means a creep.
-	if target ~= nil and target:GetTeam() == GetTeam() and not target:IsHero() then
-		alliedTank = true
-	end
-	if not alliedTank then
-		for _, creep in pairs(ctx.allyCreeps or {}) do
-			if J.IsValid(creep) and GetUnitToUnitDistance(creep, twr) <= twr:GetAttackRange() + 120 then
-				alliedTank = true; break
-			end
-		end
-	end
+	local alliedTank, guessedShield = alliedTankAt(ctx, twr)
+	if not alliedTank and guessedShield == 1 then ctx.diag("siege-thin-shield") end
 	-- THE TOWER IS SHOOTING US is answered at the top of this function now, ahead of the gate
 	-- that used to bury it. Measured across the era: 14 of 16 sides took tower damage, and
 	-- aggregating what the bot was doing in the 31 windows where that damage grew puts the
@@ -367,25 +383,7 @@ function M.CanAct(ctx)
 	if not wantsSiege or J.GetHP(bot) < siegeHpFloor then return false end
 
 	local twrDist = GetUnitToUnitDistance(bot, twr)
-	local alliedTank = false
-	local target = twr:GetAttackTarget()
-	-- "Something of OURS is soaking the tower" -- and a hero is not that something. The team
-	-- test alone counted the bot ITSELF: while the tower was shooting the hero, the hero
-	-- concluded it had tank cover and kept sieging, which is self-reinforcing -- the longer it
-	-- stands there the longer the tower keeps targeting it and the longer it believes it is
-	-- covered. 8909602648 [D] took 319 tower damage, 18% of everything it received, and lost
-	-- the game on it; bee3dd8 fixed the commit latch that carried it in, this is why it thought
-	-- it was safe once there. Only a non-hero unit can tank, which in a 1v1 lane means a creep.
-	if target ~= nil and target:GetTeam() == GetTeam() and not target:IsHero() then
-		alliedTank = true
-	end
-	if not alliedTank then
-		for _, creep in pairs(ctx.allyCreeps or {}) do
-			if J.IsValid(creep) and GetUnitToUnitDistance(creep, twr) <= twr:GetAttackRange() + 120 then
-				alliedTank = true; break
-			end
-		end
-	end
+	local alliedTank = alliedTankAt(ctx, twr)
 	if not alliedTank and towerAggr ~= "always" then
 		-- only the enemy-dead no-tank STEP acts; the plain no-tank case returns empty
 		return ctx.enemyDeadRecently() and twrDist > attackRange + 60
