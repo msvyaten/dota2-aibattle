@@ -88,6 +88,46 @@ def dead_exported_functions() -> list[tuple[str, str]]:
     return dead
 
 
+# The scale table at the top of CODE_MAP is the first thing a reader meets, and every number in
+# it was wrong: the AIBattle layer read 7,829 against 8,072, tools 5,115 against 5,484, and the
+# backend 359 against 720 -- off by a factor of two. Docs carry ~10x the correction rate of the
+# bot code in this repo's history (5 of 37 BACKLOG edits against 2 of 166 for the orchestrator),
+# and until today every doc gate checked form -- line budgets, encoding -- and none checked
+# whether a claim was true. This one does, for the claims that are mechanically checkable.
+#
+# Rows are found by their label, so renaming one fails loudly instead of silently unhooking the
+# check. Numbers written with a leading ~ are approximations by intent and are left alone.
+CODE_MAP_SCALE_ROWS = {
+    "Our layer": lambda: sum(line_count(p) for p in (ROOT / "bots" / "FunLib").glob("aibattle_*.lua")),
+    "Configs": lambda: sum(line_count(p) for p in (ROOT / "bots" / "Customize").glob("*.lua")),
+    "Tools (Python)": lambda: sum(line_count(p) for p in (ROOT / "tools").glob("*.py")),
+    "Backend": lambda: sum(line_count(p) for p in (ROOT / "backend").glob("*.py"))
+    + sum(line_count(p) for p in (ROOT / "backend").glob("*.txt")),
+}
+
+
+def code_map_scale_drift() -> list[str]:
+    """Claims in CODE_MAP's scale table that no longer match the tree."""
+    if not CODE_MAP.is_file():
+        return []
+    text = CODE_MAP.read_text(encoding="utf-8", errors="ignore")
+    problems = []
+    for label, compute in CODE_MAP_SCALE_ROWS.items():
+        row = re.search(r"^\|[^|\n]*%s[^|\n]*\|\s*\*{0,2}([\d,~]+)\*{0,2}\s*\|" % re.escape(label),
+                        text, re.M)
+        if row is None:
+            problems.append(f"the '{label}' row is gone from the scale table")
+            continue
+        claimed_text = row.group(1)
+        if claimed_text.startswith("~"):
+            continue
+        claimed = int(claimed_text.replace(",", ""))
+        real = compute()
+        if claimed != real:
+            problems.append(f"'{label}' says {claimed:,}, the tree has {real:,}")
+    return problems
+
+
 def code_map_missing_tools() -> list[str]:
     """Tools under tools/ that CODE_MAP does not mention at all."""
     if not CODE_MAP.is_file():
@@ -208,12 +248,15 @@ def main() -> int:
             return 1
         drift = code_map_drift()
         missing = code_map_missing_tools()
-        if drift or missing:
+        scale = code_map_scale_drift()
+        if drift or missing or scale:
             print("[fail] CODE_MAP.md no longer matches the tree:")
             for name, claimed, real in drift:
                 print(f"    {name}: says {claimed}, file has {real}")
             for name in missing:
                 print(f"    {name}: exists in tools/ but CODE_MAP does not mention it")
+            for problem in scale:
+                print(f"    scale table: {problem}")
             print("    fix docs/CODE_MAP.md -- a reviewer picks what to open by that table")
             return 1
         print(

@@ -29,12 +29,12 @@ python tools\pre_match_state.py
 
 | | lines | % of `bots/` | do we touch it? |
 |---|---:|---:|---|
-| **Our layer `aibattle_*`** (behaviour) | **7,829** | 3.9% | YES - all the logic is here |
-| Configs `Customize/` | 683 | 0.3% | YES - archetype presets |
+| **Our layer `aibattle_*`** (behaviour) | **8,072** | 3.9% | YES - all the logic is here |
+| Configs `Customize/` | 620 | 0.3% | YES - archetype presets |
 | **Our patches inside vendored files** | **~469** | 0.2% | CAREFULLY - 21 files, see section 3 |
 | Vendored OHA (everything else in `bots/`) | ~190,000 | ~96% | NO - upstream base, synced from above |
-| Tools (Python) | 5,115 | - | YES |
-| Backend (Python + prompt) | 359 | - | YES |
+| Tools (Python) | 5,527 | - | YES |
+| Backend (Python + prompt) | 720 | - | YES |
 
 **Total Lua in `bots/`: ~199,000 lines. Ours: ~8,300 (4.2%)**, counting the vendor patches.
 
@@ -44,7 +44,7 @@ when you need to, never refactor it.
 
 ---
 
-## 1. The AIBattle layer - our code (`bots/FunLib/aibattle_*.lua`, 7,829 lines, 22 files)
+## 1. The AIBattle layer - our code (`bots/FunLib/aibattle_*.lua`, 8,072 lines, 22 files)
 
 All behaviour lives here. One file, one responsibility.
 
@@ -203,7 +203,7 @@ are checked against each other by `tools/check_schema_contract.py`.
 | `binding.py` | 279 | Proves a config knob actually reaches behaviour. |
 | `test_match_stats.py` / `test_betting.py` / `test_project_inventory.py` | 324 / 108 / 12 | Tests. |
 | `scorecard.py` | 139 | Bare PASS/FAIL verdict on watchability criteria. |
-| `project_inventory.py` | 234 | Current sizes, direct action surface, shared-state writers, dead helpers. |
+| `project_inventory.py` | 277 | Current sizes, direct action surface, shared-state writers, dead helpers. |
 | `deploy.bat` | 129 | Deploy profiles. |
 | `pathology.py` | 98 | Movement shapes: STALL and YOYO detection from positions alone. |
 | `check_text_encoding.py` | 104 | Mojibake, ASCII-only runtime files, and the no-Cyrillic rule. |
