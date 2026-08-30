@@ -200,6 +200,24 @@ def test_desire_and_tail_bands_do_not_overlap_by_accident():
 # back and forth, and the counter that should have shown it (`wave-watch-step`) was never
 # emitted on the failing path.
 
+def anchor(text, needle, what, start=0):
+    """Index of `needle`, or a readable failure saying which anchor moved.
+
+    `str.index` raises ValueError('substring not found'), which tells the next reader nothing
+    about which file, which anchor, or what to do -- and these tests anchor on real Lua, so a
+    rename is the expected way for them to break. Probed by renaming `finishable` to `canKill`:
+    the suite crashed instead of failing, and the traceback named neither the test's subject nor
+    the fix.
+    """
+    at = text.find(needle, start)
+    assert at >= 0, (
+        f"anchor {needle!r} is gone from {what}. If it was renamed, update this test to the new "
+        f"name; if the code around it was restructured, check the invariant still holds before "
+        f"re-anchoring -- that is the whole point of the test."
+    )
+    return at
+
+
 SAFETY = ROOT / "bots" / "FunLib" / "aibattle_laning_safety.lua"
 TRADE = ROOT / "bots" / "FunLib" / "aibattle_laning_trade.lua"
 STYLE = ROOT / "bots" / "FunLib" / "aibattle_style.lua"
@@ -240,10 +258,11 @@ def test_move_to_attack_edge_returns_are_not_discarded():
 def test_wave_watch_only_steps_at_a_creep_it_can_finish():
     """The stall branch must not walk at a healthy creep: the walk would not clear the stall."""
     text = _read(SAFETY)
-    start = text.index("function M.WaveWatch(ctx)")
-    body = text[start:text.index("\nend", text.index('"wave-watch-step"', start))]
-    finishable_at = body.index("local finishable")
-    step_at = body.index('"wave-watch-step"')
+    start = anchor(text, "function M.WaveWatch(ctx)", "aibattle_laning_safety.lua")
+    step_key = anchor(text, '"wave-watch-step"', "M.WaveWatch", start)
+    body = text[start:anchor(text, "\nend", "M.WaveWatch", step_key)]
+    finishable_at = anchor(body, "local finishable", "M.WaveWatch")
+    step_at = anchor(body, '"wave-watch-step"', "M.WaveWatch")
     assert finishable_at < step_at, "the step must be gated by `finishable`, not merely near it"
     guard = body[finishable_at:step_at]
     assert re.search(r"if\s+finishable\s+then", guard), (
@@ -256,8 +275,8 @@ def test_wave_watch_only_steps_at_a_creep_it_can_finish():
 def test_kill_lock_tower_veto_asks_the_dive_dial():
     """dive_policy has to reach behaviour; bare geometry must not outrank the dial."""
     text = _read(TRADE)
-    start = text.index("function M.KillLock(ctx)")
-    body = text[start:text.index("\nend\n", start)]
+    start = anchor(text, "function M.KillLock(ctx)", "aibattle_laning_trade.lua")
+    body = text[start:anchor(text, "\nend\n", "M.KillLock", start)]
     veto = re.search(r"chaseIntoTower\(enemy\)[^\n]*\n?[^\n]*", body)
     assert veto is not None, "KillLock no longer consults chaseIntoTower at all"
     assert "MayDive" in veto.group(0), (
@@ -270,8 +289,8 @@ def test_kill_lock_tower_veto_asks_the_dive_dial():
 def test_may_dive_keeps_the_engine_floors_under_the_dial():
     """The dial may licence a dive; it may not licence suicide."""
     text = _read(STYLE)
-    start = text.index("function M.MayDive(bot)")
-    body = text[start:text.index("\nend\n", start)]
+    start = anchor(text, "function M.MayDive(bot)", "aibattle_style.lua")
+    body = text[start:anchor(text, "\nend\n", "M.MayDive", start)]
     assert "hpDive < 0.30" in body, "the absolute 30% dive floor is gone"
     assert "GetHeroDeaths" in body and "0.40" in body, (
         "the post-death 40% floor is gone: in 1v1 a second death ends the game, so the floor "
@@ -282,8 +301,8 @@ def test_may_dive_keeps_the_engine_floors_under_the_dial():
 def test_fight_can_act_tests_terrain_in_the_contact_band():
     """The probe must not promise a swing the contact leg refuses on high ground."""
     text = _read(ORCHESTRATOR)
-    start = text.index("local fightCanAct")
-    body = text[start:text.index("local recoverCanAct", start)]
+    start = anchor(text, "local fightCanAct", "mode_laning_generic.lua")
+    body = text[start:anchor(text, "local recoverCanAct", "the fightCanAct block", start)]
     band = re.search(r"<=\s*range\s*\+\s*80[^\n]*", body)
     assert band is not None, "the in-contact branch of fightCanAct is gone"
     assert "UphillMiss" in band.group(0), (

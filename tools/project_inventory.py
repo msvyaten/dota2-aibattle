@@ -8,6 +8,7 @@ from collections import defaultdict
 import json
 from pathlib import Path
 import re
+import subprocess
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -97,12 +98,15 @@ def dead_exported_functions() -> list[tuple[str, str]]:
 #
 # Rows are found by their label, so renaming one fails loudly instead of silently unhooking the
 # check. Numbers written with a leading ~ are approximations by intent and are left alone.
+# Every row sums TRACKED files, for the same reason code_map_missing_tools does: an untracked
+# scratch file must not fail this gate for work that never touched it. Fixing only the other
+# check left the same false positive standing behind a different door -- a scratch script in
+# tools/ still reddened the build through this table.
 CODE_MAP_SCALE_ROWS = {
-    "Our layer": lambda: sum(line_count(p) for p in (ROOT / "bots" / "FunLib").glob("aibattle_*.lua")),
-    "Configs": lambda: sum(line_count(p) for p in (ROOT / "bots" / "Customize").glob("*.lua")),
-    "Tools (Python)": lambda: sum(line_count(p) for p in (ROOT / "tools").glob("*.py")),
-    "Backend": lambda: sum(line_count(p) for p in (ROOT / "backend").glob("*.py"))
-    + sum(line_count(p) for p in (ROOT / "backend").glob("*.txt")),
+    "Our layer": lambda: tracked_line_count("bots/FunLib/aibattle_*.lua"),
+    "Configs": lambda: tracked_line_count("bots/Customize/*.lua"),
+    "Tools (Python)": lambda: tracked_line_count("tools/*.py"),
+    "Backend": lambda: tracked_line_count("backend/*.py") + tracked_line_count("backend/*.txt"),
 }
 
 
@@ -128,16 +132,37 @@ def code_map_scale_drift() -> list[str]:
     return problems
 
 
+def tracked_files(pathspec: str) -> list[Path]:
+    """Files git tracks under `pathspec`. Falls back to a glob outside a work tree."""
+    try:
+        out = subprocess.run(["git", "-C", str(ROOT), "ls-files", pathspec],
+                             capture_output=True, text=True, check=True).stdout
+    except (OSError, subprocess.SubprocessError):
+        return sorted(ROOT.glob(pathspec))
+    return [ROOT / line for line in out.split() if line]
+
+
+def tracked_line_count(pathspec: str) -> int:
+    return sum(line_count(p) for p in tracked_files(pathspec) if p.is_file())
+
+
+def tracked_tools() -> list[Path]:
+    """Tools git knows about.
+
+    Deliberately not a filesystem glob. Globbing meant an untracked scratch file left in tools/
+    failed this gate for everyone, on every commit, including work that never touched it -- and a
+    gate that blocks unrelated work is a gate somebody switches off. Only committed tools are the
+    project's to document.
+    """
+    return tracked_files("tools/*.py")
+
+
 def code_map_missing_tools() -> list[str]:
     """Tools under tools/ that CODE_MAP does not mention at all."""
     if not CODE_MAP.is_file():
         return []
     text = CODE_MAP.read_text(encoding="utf-8", errors="ignore")
-    missing = []
-    for path in sorted((ROOT / "tools").glob("*.py")):
-        if f"`{path.name}`" not in text:
-            missing.append(path.name)
-    return missing
+    return [p.name for p in sorted(tracked_tools()) if f"`{p.name}`" not in text]
 
 
 def rel(path: Path) -> str:
