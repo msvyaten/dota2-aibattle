@@ -22,7 +22,9 @@ If `python` is not in PATH on this Windows workstation, use the bundled runtime:
 **Do not copy HEAD or LIVE out of any document.** `pre_match_state.py` prints the branch,
 upstream, live marker, bindings and dirty files as they are on this machine right now.
 
-The working branch is `phase-2-team-dials`, not `main`.
+The working branch is `1v1-mid-validation`, not `main`. It was called
+`phase-2-team-dials` until 2026-08-30; that name came from the 5v5 team-mode dials of
+Phase 2 and had stopped describing the work. A stale clone needs `git fetch --prune`.
 
 For a teammate joining the project, start with [`TEAM_REVIEW_START.md`](TEAM_REVIEW_START.md).
 It is the checklist for commands, evidence set, and deliverable format.
@@ -150,7 +152,7 @@ Stage named files only. Never `git add -A` here - the bindings are deliberately 
 Force-push and destructive resets are forbidden. After a push, confirm the sync:
 
 ```powershell
-git rev-list --left-right --count origin/phase-2-team-dials...HEAD
+git rev-list --left-right --count origin/1v1-mid-validation...HEAD
 ```
 
 The expected result is `0 0`.

@@ -52,7 +52,7 @@ useful background, not required reading for an English-language review.
 
 Never trust a SHA or live binding copied into a document. Always run `tools\pre_match_state.py`.
 
-As of the last local audit, branch `phase-2-team-dials` had repo HEAD and LIVE aligned, while
+As of the last local audit, branch `1v1-mid-validation` had repo HEAD and LIVE aligned, while
 the live experiment files were dirty:
 
 - `bots/Customize/general.lua`

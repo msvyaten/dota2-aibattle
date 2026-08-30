@@ -173,7 +173,7 @@ helpers. Trust this over any number written in a document.
   dead or never fires, read the whole body, and run `python tools/check_all.py --twins <Name>`
   - two similarly named functions in different files are two functions, and assuming otherwise
   has already cost us a half-working fix.
-- **The working branch is `phase-2-team-dials`, not `main`.**
+- **The working branch is `1v1-mid-validation`, not `main`.**
 - Three files under `bots/Customize/` are deliberately dirty in `git status`
   (`general.lua`, `playstyle_radiant.lua`, `playstyle_dire.lua`). They hold live experiment
   state, not source of truth. Do not commit them.
