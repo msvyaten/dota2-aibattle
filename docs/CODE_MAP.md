@@ -199,7 +199,7 @@ are checked against each other by `tools/check_schema_contract.py`.
 | `product_scorecard.py` | 106 | Product gate: dead-tail, bottle economy, first event, lead changes, and mutual-low tension. |
 | `hero_readiness.py` | 71 | Hero expansion matrix: what is covered for SF/Juggernaut and what is still risky. |
 | `check_all.py` | 760 | The repo gate: encoding, Lua/Python syntax, deploy manifest, live drift, schema contract, tests, inventory. |
-| `postmatch.py` | 618 | **Main match report**: scorecard, fix signatures, jitter breakdown. |
+| `postmatch.py` | 623 | **Main match report**: scorecard, fix signatures, jitter breakdown. |
 | `binding.py` | 279 | Proves a config knob actually reaches behaviour. |
 | `test_match_stats.py` / `test_betting.py` / `test_project_inventory.py` | 324 / 108 / 12 | Tests. |
 | `scorecard.py` | 139 | Bare PASS/FAIL verdict on watchability criteria. |

@@ -94,6 +94,38 @@ Current owners:
   scored fifth owns the tick if the four above it decline. A desire that wins and cannot
   act logs `blocked=top-arbiter reason=empty_action` and loses its hysteresis; a tail
   candidate falls through silently, which is what the old sequential tail did.
+### Two words the project kept using as one
+
+**Elected** is the candidate that won the score election. **Acted** is the one that produced the
+action. Because the arbiter is a cascade they are routinely different, and almost every
+measurement mistake made against this codebase comes from reading one as the other:
+
+- `intent=top-arbiter winner=X` is logged only when X's action returned true. X **acted**.
+- `blocked=top-arbiter reason=empty_action winner=X` means X was **elected and did not act**.
+  Something further down almost certainly did, on the same tick.
+
+So `empty_action` does not count lost ticks. It counts elections that did not become actions,
+and the cost is a score that lies about who is doing the work - the election is won at 124 and
+the tick is spent by a candidate scoring 40 - rather than a tick nobody spent. Reading it as
+lost ticks turns a scoring problem into an imaginary behaviour problem, and pointed at a
+refactor of the fight candidate that would have fixed telemetry and changed nothing on screen.
+
+Two more traps in the same reports. `empty_action` is emitted for the desire band only, so tail
+candidates that decline are invisible by design; and the "who acted" panel is a ~1.5s sample,
+because `Style.Intent` rate-limits on the shared name `top-arbiter`, so its shares are usable
+and its absolute counts are not.
+
+The genuinely lost tick has a different shape and no counter at all: an owner that returns
+`true` having done nothing ends the cascade, so everything below it - including the anti-AFK
+backstops at 8 and 2 - never runs. That is what wave-watch did until `d377da7`.
+
+⚠️ Known concept debt, not yet paid: there are twelve telemetry entry points across 446 call
+sites (`Style.Diag`/`DiagRL`/`Intent`/`Blocked`/`TickOwner`, the `ctx.diag`/`blocked`/`state`
+wrappers over them, `Engine.Intent`/`Blocked`, `towerOpportunity`, `runeTxn`). Several are the
+same idea reached by two names, and the plain/rate-limited split is a documented ratio trap. Not
+a refactor to start before the ownership cuts above, but the count is the reason a reader needs
+this section at all.
+
 - `aibattle_laning_policy.lua`: named HP bands, top-level desire gates, score weights, and forward/siege thresholds.
 - `aibattle_laning_duel.lua`: pregame/prewave duel movement.
 - `aibattle_laning_siege.lua`: tower pressure and allied-tank rules.

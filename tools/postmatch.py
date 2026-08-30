@@ -221,7 +221,7 @@ def report(match_id):
         h = re.search(r"AIB\[%s\] harass=([0-9.]+)" % side, text)
         return {"0.90": "brawler", "0.55": "farmer", "0.85": "pusher"}.get(h.group(1), h.group(1)) if h else "?"
     print("----- outcome -----")
-    print("  winner=%s | R=%s D=%s" % (win, cfg("R"), cfg("D")))
+    print("  match winner=%s | R=%s D=%s" % (win, cfg("R"), cfg("D")))
 
     print("----- watch: recover cap + dive floor + P3 owner episodes -----")
     for side in ("R", "D"):
@@ -282,14 +282,19 @@ def report(match_id):
     # 8925526609 (first melee match) is why it is here: anti-idle -- the watchdog that exists
     # for when nothing else acted -- was the top tick owner for [R] at 91, ahead of fight and
     # farm. That is the shape of the melee problem in one line, and no other panel showed it.
-    print("----- who owned the ticks (arbiter winners, whole match) -----")
+    # ACTED, not "won": the arbiter is a cascade, so the candidate that wins the score election
+    # and the one that produces the action are often different, and this line only sees the
+    # second. It is also a ~1.5s SAMPLE, not a tick count -- Style.Intent rate-limits on the name
+    # "top-arbiter", shared by every winner -- so the proportions are usable and the absolute
+    # numbers are not. Both distinctions cost a wrong reading of this report on 29.08.
+    print("----- who ACTED on the ticks (~1.5s sample, shares not counts) -----")
     for side in ("R", "D"):
         wins = re.findall(r"AIB\[%s\] intent=top-arbiter family=state winner=([a-z-]+):" % side, text)
         top = collections.Counter(wins).most_common(8)
         print("  [%s] n=%d | %s"
               % (side, len(wins), ", ".join("%s=%d" % (k, v) for k, v in top) or "none"))
 
-    print("----- watch: empty_action by winner (structural: capped/no-contract wins) -----")
+    print("----- ELECTED but did not act (empty_action; desire band only) -----")
     for side in ("R", "D"):
         tot = occ(text, side, "reason=empty_action")
         pairs = re.findall(r"AIB\[%s\][^']*?reason=empty_action winner=([a-z-]+) score=(\d+)" % side, text)
@@ -297,7 +302,7 @@ def report(match_id):
         print("  [%s] empty_action=%d | top: %s"
               % (side, tot, ", ".join("%s x%d" % (k, n) for k, n in top) or "none"))
 
-    print("----- watch: why the empty winners could not act (28.08 instrumentation) -----")
+    print("----- why the elected candidate could not act -----")
     for side in ("R", "D"):
         empties, named, causes = empty_action_causes(text, side)
         pct = (100.0 * named / empties) if empties else 0.0
