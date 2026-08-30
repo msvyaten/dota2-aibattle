@@ -87,8 +87,9 @@ STALE_LIVE_FILES = [
 
 ACTIVE_DOC_LIMITS = {
     "ARCHITECTURE.md": 250,
-    # 150 of queue + 2 for the English language banner the handoff requires
-    # on a Russian working doc (see README "Language").
+    # A budget on how long the QUEUE may be, not on how densely prose may be written: when it
+    # binds, prune finished items (the forensics stay in the commit that did them) instead of
+    # compressing new ones, which is how a queue silently fills with closed work.
     "BACKLOG.md": 152,
     "CODE_MAP.md": 350,
     "TEAM_REVIEW_START.md": 160,

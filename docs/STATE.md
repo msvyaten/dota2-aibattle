@@ -71,26 +71,19 @@ owns a tick makes review harder and cures nothing.
 
 ## Current Watchlist
 
-- `rune_control` binding is weak: diagnose from transaction telemetry, not bottle-empty %.
 - Recovery can still win while having no useful action; verify `empty_action by winner` and
   low-HP episode traces after every recovery change.
-- **`fight` wins the tick and cannot act, on every build measured.** Top empty-action winner in
-  9 of 10 side-matches, always at its live scores, never at the 40 cap. ⛔ Corrected 29.08: this
-  does NOT explain `mutual low` at zero - `Arbiter.Run` falls through on a false return, so a
-  lower candidate acts. The cost is a score that lies; splitting `fight` fixes telemetry only.
-- **Five edits are deployed and unmeasured** (`c802251`..`03a70bf`): rune trip re-asks while it
-  holds the tick, tower cover needs depth, creep outranks the tower when our wave is not on it,
-  `healing_style="active"` finally suppresses the vendor consumables, and fight desire is capped
-  when materially behind on HP. Signatures per edit are in BACKLOG. One match reads all five at
-  once; split the run in two if attribution matters more than throughput.
+- **`fight` wins the tick and cannot act, on every build measured.** Full finding, including
+  why it does NOT explain `mutual low` at zero, in BACKLOG "Empty `fight` Wins".
+- **Five edits are deployed and unmeasured** (`c802251`..`03a70bf`), each with its acceptance
+  signature in BACKLOG. One match reads all five at once; split the run in two if attribution
+  matters more than throughput.
 - Anti-idle still holds gameplay actions; its job is detection only. It empties **33-47%** of
   its activations on both sides, and it is what drives the bot when a real owner refuses.
-- Two owners can deadlock by deferring to each other, and neither logs an error. Open case:
-  `heal-item/fountain_trip_committed` against `fountain-floor/heal_in_hand` on one tick, and
-  the bot leaves lane holding an unused salve. Read what an owner does back before deferring.
+- Two owners can deadlock by deferring to each other, and neither logs an error. Read what an
+  owner does back before deferring; the open case is in BACKLOG "Open After `8926148548`".
 - Cross-module `bot.aib_*` state is ownership debt; move writes behind owner APIs when
   touching those systems (`project_inventory.py` lists the writers).
-- The three largest files shrink by ownership extraction, never by line-count targets.
 
 ## Telemetry Volume: Deliberate, Not Debt
 
@@ -114,8 +107,15 @@ Use evidence in this order:
 5. visual observation, tied to a match timestamp.
 
 Never divide two counters without checking both rate limits in the source: `Style.Diag` is
-plain, `Style.DiagRL(bot, key, sec)` fires once per `sec`, and side by side they invite a ratio
-that does not exist. In anti-idle the only honest pair is `anti-idle-enter` against `idle`.
+plain, `Style.DiagRL(bot, key, sec)` fires once per `sec`, `Style.DiagEdge(bot, key, gap)` fires
+once per occasion, and side by side they invite a ratio that does not exist. In anti-idle the
+only honest pair is `anti-idle-enter` against `idle`.
+
+Ask the same question of a counter before the match, not after: does the key exist in `bots/`
+at all, and is it on the same scale as the quantity the acceptance sets it against? On 30.08
+`vendor-heal-suppressed` was one key for seven items on a 30-second window, so it could not
+exceed about seventeen in a match and would have read as "the fix barely fired" whatever
+happened. The rule above was already written here and was simply not applied to a new counter.
 
 Grep locates code; it never justifies a claim about it. Before writing that a function is dead,
 unreachable, or never fires, read the whole body — the actual conditions, not the `return`

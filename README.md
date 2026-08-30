@@ -126,9 +126,11 @@ Two categories are deliberately not English:
 - **Vendored localisation.** `bots/FretBots/HeroNames.lua`, `bots/FunLib/localization.lua`
   and `bots/FunLib/aba_chat_table.lua` carry Russian, Chinese and Japanese strings. They are
   upstream user-facing translations. Do not touch them.
-- **`docs/SPECS.md`, `docs/BACKLOG.md`, `docs/history/`** are Russian working notes kept for
-  the original authors. They are not required to work on this repository, and nothing in the
-  English documents listed under "Start here" depends on them.
+- **`docs/SPECS.md`, `docs/history/`** are Russian working notes kept for the original authors.
+  They are not required to work on this repository, and nothing in the English documents listed
+  under "Start here" depends on them. `docs/BACKLOG.md` was in this group until 2026-08-30 and
+  is now English: it is the queue, and a reviewer who cannot read it cannot tell known-open work
+  from a new finding.
 
 ## Glossary
 

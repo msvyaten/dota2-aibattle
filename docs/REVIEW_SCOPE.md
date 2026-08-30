@@ -137,8 +137,10 @@ About 1,000 lines of documentation and 2,400 lines of code. Not 199,000.
 - **Everything else under `bots/`** - about 190,000 lines of vendored OpenHyperAI engine.
   `.gitattributes` marks it, so GitHub collapses it in diffs. We do not refactor it; we patch
   it narrowly, and `docs/CODE_MAP.md` section 3 lists every one of those patches.
-- **`docs/SPECS.md`, `docs/BACKLOG.md`, `docs/history/`** - Russian working notes. Nothing in
-  the reading list depends on them.
+- **`docs/BACKLOG.md`** - the queue, in English since 2026-08-30. `STATE.md` names the open
+  work; the per-edit acceptance signatures live here.
+- **`docs/SPECS.md`, `docs/history/`** - Russian working notes. Nothing in the reading list
+  depends on them.
 - **File sizes as a finding.** `aibattle_survive.lua` and `aibattle_style.lua` are large and we
   know it. `docs/STATE.md` records the decision that they shrink by ownership extraction, not
   by line-count targets - a mechanical split before the ownership cuts makes review harder and
@@ -169,10 +171,8 @@ helpers. Trust this over any number written in a document.
 
 ## Ground rules that will save time
 
-- **Grep locates code; it never proves anything about it.** Before writing that a function is
-  dead or never fires, read the whole body, and run `python tools/check_all.py --twins <Name>`
-  - two similarly named functions in different files are two functions, and assuming otherwise
-  has already cost us a half-working fix.
+- **Grep locates code; it never proves anything about it.** The rule, the `--twins` command and
+  the fix it already cost us are in `STATE.md` under "Evidence Rules".
 - **The working branch is `1v1-mid-validation`, not `main`.**
 - Three files under `bots/Customize/` are deliberately dirty in `git status`
   (`general.lua`, `playstyle_radiant.lua`, `playstyle_dire.lua`). They hold live experiment

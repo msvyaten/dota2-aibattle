@@ -11,6 +11,10 @@ Rule 3 exists because this repository is reviewed by people who do not read Russ
 allowlist has exactly two members: vendored user-facing localisation, which is upstream's and
 must not be touched, and the Russian working notes under docs/, which are deliberately kept in
 Russian for the original authors. Anything else in Cyrillic is a leak, not a decision.
+
+The queue left that second group on 2026-08-30. A reviewer sent to English documents while the
+list of what is pending -- and the signature each pending edit is judged by -- exists only in
+Russian is not being given optional background; they are being given a shop window.
 """
 
 from pathlib import Path
@@ -42,7 +46,9 @@ ASCII_ONLY_PREFIXES = (
 #
 #   - bots/FretBots/, localization.lua, aba_chat_table.lua: vendored OHA localisation
 #     (ru/zh/ja strings shown to players). Upstream's; do not edit.
-#   - docs/SPECS.md, docs/BACKLOG.md, docs/history/: Russian working notes, kept on purpose.
+#   - docs/SPECS.md, docs/history/: Russian working notes, kept on purpose. BACKLOG.md left
+#     this list on 2026-08-30: the reviewer is English and the queue is what tells them what
+#     is pending and how it will be judged, so it cannot be optional background.
 #     README.md "Language" says so; CODE_MAP.md section 7 marks them RU in the reading table.
 #   - archive/dota/local_automation/: gitignored one-off desktop automation, never shipped.
 CYRILLIC_ALLOWED_PREFIXES = (
@@ -50,7 +56,6 @@ CYRILLIC_ALLOWED_PREFIXES = (
     Path("bots/FunLib/localization.lua"),
     Path("bots/FunLib/aba_chat_table.lua"),
     Path("docs/SPECS.md"),
-    Path("docs/BACKLOG.md"),
     Path("docs/history/"),
     Path("archive/dota/local_automation/"),
 )

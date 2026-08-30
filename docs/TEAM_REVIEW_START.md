@@ -45,8 +45,9 @@ On the current Windows workstation, `python` may not be in PATH. Use the bundled
 6. `docs/STATE.md` - current queue and evidence rules.
 7. `docs/HANDOFF.md` - operations, deploy, match tools.
 
-`docs/SPECS.md`, `docs/BACKLOG.md`, and `docs/history/` are Russian working notes. They are
-useful background, not required reading for an English-language review.
+`docs/BACKLOG.md` is the queue: what is pending and the signature each pending edit will be
+judged by. Read it. `docs/SPECS.md` and `docs/history/` are Russian working notes - useful
+background, not required reading.
 
 ## Current Snapshot Rules
 

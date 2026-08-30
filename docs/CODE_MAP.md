@@ -33,7 +33,7 @@ python tools\pre_match_state.py
 | Configs `Customize/` | 678 | 0.3% | YES - archetype presets |
 | **Our patches inside vendored files** | **~469** | 0.2% | CAREFULLY - 21 files, see section 3 |
 | Vendored OHA (everything else in `bots/`) | ~190,000 | ~96% | NO - upstream base, synced from above |
-| Tools (Python) | 5684 | - | YES |
+| Tools (Python) | 5690 | - | YES |
 | Backend (Python + prompt) | 720 | - | YES |
 
 **Total Lua in `bots/`: ~199,000 lines. Ours: ~8,300 (4.2%)**, counting the vendor patches.
@@ -198,7 +198,7 @@ are checked against each other by `tools/check_schema_contract.py`.
 | `betting.py` | 711 | **Market layer**: the Radiant-minus-Dire advantage curve over time, market lines, in-play base. See below. |
 | `product_scorecard.py` | 106 | Product gate: dead-tail, bottle economy, first event, lead changes, and mutual-low tension. |
 | `hero_readiness.py` | 71 | Hero expansion matrix: what is covered for SF/Juggernaut and what is still risky. |
-| `check_all.py` | 760 | The repo gate: encoding, Lua/Python syntax, deploy manifest, live drift, schema contract, tests, inventory. |
+| `check_all.py` | 761 | The repo gate: encoding, Lua/Python syntax, deploy manifest, live drift, schema contract, tests, inventory. |
 | `postmatch.py` | 623 | **Main match report**: scorecard, fix signatures, jitter breakdown. |
 | `binding.py` | 279 | Proves a config knob actually reaches behaviour. |
 | `test_match_stats.py` / `test_betting.py` / `test_project_inventory.py` | 324 / 108 / 12 | Tests. |
@@ -206,7 +206,7 @@ are checked against each other by `tools/check_schema_contract.py`.
 | `project_inventory.py` | 302 | Current sizes, direct action surface, shared-state writers, dead helpers. |
 | `deploy.bat` | 129 | Deploy profiles. |
 | `pathology.py` | 98 | Movement shapes: STALL and YOYO detection from positions alone. |
-| `check_text_encoding.py` | 104 | Mojibake, ASCII-only runtime files, and the no-Cyrillic rule. |
+| `check_text_encoding.py` | 109 | Mojibake, ASCII-only runtime files, and the no-Cyrillic rule. |
 | `aibattle_log.py` | 83 | The single telemetry parser everything else builds on. |
 | `test_arbiter_ladder.py` | 425 | Ladder arithmetic and owner contracts, read as text; see its docstring for what green does not mean. |
 | `check_schema_contract.py` | 110 | Python/Lua/prompt/config schema agreement, including the worked example the model copies. |

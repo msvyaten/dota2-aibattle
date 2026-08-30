@@ -1,143 +1,151 @@
 # AIBattle Backlog
 
-> **Language: Russian.** Working queue. English summary of open work: `docs/STATE.md`.
-
-Только актуальные задачи. Полная форензика и закрытые пункты до 01.08.2026 лежат в истории git:
-`git show ae2604d:docs/BACKLOG.md`. Текущий HEAD/LIVE всегда получать командой:
+Open work only. Forensics and items closed before 2026-08-01 are in git history:
+`git show ae2604d:docs/BACKLOG.md`. Never copy HEAD or LIVE out of this file; read them with:
 
 ```powershell
 python tools\pre_match_state.py
 ```
 
-## Следующий Gate
+## Next Gate
 
-⛔ Перед разбором брать долг билдов: `git log <билд-из-лога>..HEAD`.
-⛔⛔ **Читать матчи только ПАРАМИ** (обе расстановки сторон): эффект стороны больше эффекта
-конфига, одиночный матч их не различает — доказано на `8974058954`/`8974086880`.
-🧊 Заморожено до Джаггернаута: нога подхода к варду — вопрос ДОСТИЖИМОСТИ, не прицеливания.
+- Before reading a match, take the build debt: `git log <build-from-log>..HEAD`.
+- **Read matches only in PAIRS** (both side arrangements). The side effect is larger than the
+  config effect, and a single match cannot tell them apart - proved on `8974058954`/`8974086880`.
+- Frozen until Juggernaut: the ward approach leg is a question of REACHABILITY, not aiming.
 
-Читать `python tools/postmatch.py <id>` сверху вниз; панели написаны под конкретные правки:
+Read `python tools/postmatch.py <id>` top to bottom; the panels are written per edit:
 
-- `runtime_errors`/`aib_err` = 0 и last hits > 0 у обеих сторон — всегда первым;
-- **`sustain:`** — `bought`/`drunk` ВВЕРХ, `budget_cap` ≈ 0, `stand-and-regen` ВНИЗ;
-- `deny probe`/`deny kill-test` — `deny-act` ВНИЗ при `dn` не ниже;
-- `tower pokes` — `backoff` > 0, `parked` вместо пустого владения, commit/terminal ДЕРЖАТСЯ;
-- `buy loop` — `stalled` остаётся 0; `anti-idle` — только пара `enter`/`idle`.
+- `runtime_errors`/`aib_err` = 0 and last hits > 0 on both sides - always first;
+- **`sustain:`** - `bought`/`drunk` UP, `budget_cap` about 0, `stand-and-regen` DOWN;
+- `deny probe`/`deny kill-test` - `deny-act` DOWN while `dn` does not fall;
+- `tower pokes` - `backoff` > 0, `parked` instead of empty ownership, commit/terminal HOLD;
+- `buy loop` - `stalled` stays 0; `anti-idle` - only an `enter`/`idle` pair.
 
-## Пустые Победы `fight` — Находка 28.08 (по 5 логам, игра не нужна)
+## Empty `fight` Wins - Found 28.08 (from 5 logs, no match needed)
 
-**Разрыв предикатов.** `fightCanAct` — ТРИ условия против **38 точек отказа** в действии.
-`c2ed8ac` добавил четвёртое (`uphill`), Codex пятое (`abilityReady`); осталось ~33.
+**Predicate gap.** `fightCanAct` is THREE conditions against **38 refusal points** in the action
+itself. `c2ed8ac` added a fourth (`uphill`), Codex a fifth (`abilityReady`); about 33 remain.
 
-⛔⛔ **`empty_action` — НЕ сожжённый тик** ([aibattle_laning_arbiter.lua:92-128]): арбитр
-проваливается вниз, тик берёт кандидат ниже. Цена в том, что СЧЁТ ЛЖЁТ — выборы берут со 124,
-работу делают с 40. Настоящее пустое владение это `return true` без действия.
-**Следствие: разделение `fight` чинит телеметрию, а не поведение.**
+**`empty_action` is NOT a burnt tick** ([aibattle_laning_arbiter.lua:92-128]): the arbiter falls
+through and a lower candidate takes the tick. The cost is that THE SCORE LIES - the election is
+won at 124 and the work is done at 40. Real empty ownership is `return true` with no action.
+**Consequence: splitting `fight` fixes telemetry, not behaviour.**
 
-⛔ Метод `--never-fired`: вердикт о КОНКРЕТНЫХ матчах, всегда перепроверять.
+The `--never-fired` method gives a verdict about SPECIFIC matches. Always re-check it.
 
-## Приёмка Правок 30.08 (сигнатуры следующего матча)
+## Acceptance For The Edits Of 30.08 (signatures of the next match)
 
-✅ Партия 29.08 принята на паре `8974058954`/`8974086880` — разбор в `git show 9b95ba7`.
-⛔ Остаток долга: шесть `*-no-edge` = 0 — НИЧЕМ НЕ ИЗМЕРЕНО, это не «не работает».
+The 29.08 batch was accepted on the pair `8974058954`/`8974086880` - see `git show 9b95ba7`.
+Remaining debt from it: six `*-no-edge` keys read 0, which means MEASURED BY NOTHING. That is a
+different claim from "they do not work".
 
-- **`c802251` рунный поход:** `route_unsafe`/`enemy_near`/`spot_race_lost` со `stage=1|hold`.
-  ✅ Уже сработало в `8974387496` (D, враг 567 при hp 44) — держать, не расширять.
-- **`51b9896` прикрытие вышки:** `siege-thin-shield` считает отказы при одном крипе.
-- **`9c94a06` крип вперёд вышки:** `siege-creep-first` СХОДИТ С НУЛЯ, `siege-terminal-tower`
-  падает. Если terminal не сдвинулся — волна реально била вышку, это ПРОХОД, а не провал.
-- **`153ee96` владелец расходников:** приёмка это ВЫЧИТАНИЕ, смотреть в обе стороны — суммарно
-  выпитое НЕ падает, `heal-skip-trip-committed` ловит кларити по дороге на фонтан.
-  ⛔ Счётчик отказов вендору переписан ДО матча (`9c7b732`). Было `vendor-heal-suppressed` —
-  ОДИН ключ на семь предметов с окном 30с: мерил не отказы, а окна, и не мог превысить ~17 за
-  матч при любой правде, то есть читался бы как «переключатель почти не сработал» всегда.
-  Стало `vendor-heal-suppressed-<предмет>` по фронту (`DiagEdge` 1.0с) — теперь число на ОДНОЙ
-  шкале с выпитым: `-flask` против флаконов, `-clarity` против кларити.
-- **`03a70bf` штраф за отставание:** `hp_behind` в детали `state-desire-fight`, драка
-  перестаёт выигрывать тик при отставании ≥0.15. ⚠️ Риск обратный: если `mutual low` и kill
-  pressure ушли в ноль — кап широк раньше, чем неверен, двигать порог, а не выкидывать.
+- **`c802251` rune trip:** `route_unsafe`/`enemy_near`/`spot_race_lost` carrying `stage=1|hold`.
+  Already fired in `8974387496` (D, enemy at 567 with hp 44) - hold it, do not widen it.
+- **`51b9896` tower cover:** `siege-thin-shield` counts the refusals when cover is one creep.
+- **`9c94a06` creep before tower:** `siege-creep-first` LEAVES ZERO and `siege-terminal-tower`
+  falls. If terminal did not move, the wave really was hitting the tower - that is a pass,
+  not a failure.
+- **`153ee96` consumables owner:** acceptance here is SUBTRACTION, read both directions - total
+  consumables drunk must NOT fall, and `heal-skip-trip-committed` catches the clarity drunk on
+  the way to the fountain. The vendor-refusal counter was rewritten before the match (`9c7b732`).
+  It used to be `vendor-heal-suppressed`: ONE key for seven items on a 30-second window, so it
+  measured windows rather than refusals and could not exceed about seventeen in a whole match -
+  it would have read as "the switch barely fired" whatever the truth was. It is now
+  `vendor-heal-suppressed-<item>`, edge-triggered (`DiagEdge`, 1.0s), which puts the number on
+  the SAME scale as what got drunk: `-flask` against flasks, `-clarity` against clarities.
+- **`03a70bf` penalty for being behind:** `hp_behind` in the `state-desire-fight` detail; fight
+  stops winning the tick at a deficit of 0.15 or worse. The risk is the inverse of the bug: if
+  `mutual low` and kill pressure both go to zero, the cap is too wide before it is wrong - move
+  the threshold, do not throw the edit away.
 
-## Измеренные долги 29.08 (не блокеры, чинить по одному после матчей)
+## Measured Debts 29.08 (not blockers, fix one at a time between matches)
 
-- **~140 захардкоженных hp-порогов дублируют именованные константы** (`0.45`=`activeRecovery`
-  27 мест, `0.35`=`danger` 22, `0.55`=`softRecovery` 16, `0.30`=`critical` 14). ⚠️ Сверялось
-  ЗНАЧЕНИЕ, не смысл — читать каждое место. Прецедент оплачен в `7e2b066`.
-- ⚠️ **Затенение веток вышки — частично закрыто `9c94a06`** (ветка удара по КРИПУ поднята выше).
-  Четыре ветки удара по ВЫШКЕ по-прежнему затенены `terminal`ом (`+180` против `+60`).
-  **`ERA_START`** в `binding.py` охватывает обе популяции героев — разделить на эры.
-- ⛔ **`binding.py` неотвечаем на текущей серии ПО ПОСТРОЕНИЮ**: конфиги написаны тремя моделями
-  из ОДНОГО текста, диалы стоят в 0.05-0.10, плюс порог `MIN_ROWS=6` = три матча на билде.
-  ⭐ Решение юзера: второй противоположный текст либо переписать инструмент под «насколько
-  расходятся прочтения». Вечно красным — худшее.
+- **About 140 hardcoded hp thresholds duplicate named constants** (`0.45`=`activeRecovery` in 27
+  places, `0.35`=`danger` 22, `0.55`=`softRecovery` 16, `0.30`=`critical` 14). The VALUE was
+  compared, not the meaning - read every site. The precedent was paid for in `7e2b066`.
+- **Tower branch shadowing - partly closed by `9c94a06`** (the branch that hits the CREEP was
+  raised). The four branches that hit the TOWER are still shadowed by `terminal` (+180 against
+  +60). **`ERA_START`** in `binding.py` spans both hero populations - split it into eras.
+- **`binding.py` is unanswerable on the current series BY CONSTRUCTION**: the configs were
+  written by three models from ONE text, the dials sit within 0.05-0.10 of each other, and
+  `MIN_ROWS=6` means three matches on one build. The user's call: either a second, opposing
+  prompt text, or rewrite the tool to answer "how far apart are the readings". Permanently red
+  is the worst option.
 
-## Открыто После `8974387496` (подтверждено дважды, воспроизводится)
+## Open After `8974387496` (confirmed twice, reproduces)
 
-- **Фонтан пешком.** `fountain-floor` отказывает при `heal_in_hand`/`heal_in_flight`, а ТП
-  домой принадлежит ИМЕННО этому владельцу → бота ведёт `anti-idle:2`. В `8974387496` так ушёл
-  D за свою T2 на 6-й минуте: он шёл НАВСТРЕЧУ КУРЬЕРУ с флаской, а не на фонтан.
-- **Руны: `nearest=inf`** при живых рунах (`rune-ground-truth status=2`), 11 R / 37 D. Скан
-  требует `RUNE_STATUS_AVAILABLE`, то есть видимость точки. НЕ диагностировано.
-- **Спеллы вне нашего контроля.** Разы кастует вендорский `BotLib/hero_nevermore.lua`, он не
-  читает НИ ОДНОГО дила (`ability_aggro` снят в `dfac88a`). Точка каста — фикс-расстояние по
-  направлению взгляда, попадание считается линейной экстраполяцией с урезанием радиуса при
-  низкой `GetMovementDirectionStability` → мажет ровно тогда, когда начинается размен.
-- **`safety` выигрывает выборы и не может действовать:** `safety-candidate no_action_capped`
-  47 раз за матч, тик проваливается на `wave-watch:10`. Обе смерти R прошли через это.
-- ⭐ **Дилы LLM почти не влияют на ВЫБОРЫ тика:** в них входят только `execute_threshold` и
-  `farm_focus` (36.4-39.6, то есть 3.2 очка при разрывах в десятки). `harass_desire`,
-  `forwardness`, `retreat_caution` работают ВНУТРИ выигравшего владельца. Сильнее всего
-  влияют категорийные правила — они включают и выключают целые ветки.
+- **Walking to the fountain.** `fountain-floor` refuses on `heal_in_hand`/`heal_in_flight`, and
+  the TP home belongs to THAT owner, so `anti-idle:2` drives the bot instead. In `8974387496`
+  Dire left past its own T2 in the sixth minute walking TOWARD THE COURIER with a flask on it,
+  not toward the fountain.
+- **Runes: `nearest=inf`** while runes are alive (`rune-ground-truth status=2`), 11 R / 37 D.
+  The scan requires `RUNE_STATUS_AVAILABLE`, that is, visibility of the spot. NOT diagnosed.
+- **Spells are not ours.** Shadowraze is cast by the vendored `BotLib/hero_nevermore.lua`, which
+  reads NO dial (`ability_aggro` was withdrawn in `dfac88a`). The cast point is a fixed distance
+  along the facing direction, and the hit is a linear extrapolation with the radius cut when
+  `GetMovementDirectionStability` is low - so it misses exactly when a trade starts.
+- **`safety` wins the election and cannot act:** `safety-candidate no_action_capped` 47 times in
+  a match, and the tick falls through to `wave-watch:10`. Both Radiant deaths went through this.
+- **LLM dials barely reach tick ELECTIONS:** only `execute_threshold` and `farm_focus` enter them
+  (36.4-39.6, that is 3.2 points against gaps of tens). `harass_desire`, `forwardness` and
+  `retreat_caution` work INSIDE the owner that already won. The categorical rules matter most -
+  they switch whole branches on and off.
 
-## Открыто После `8926148548`
+## Open After `8926148548`
 
-- **Взаимная уступка лечения и фонтана.** Одним тиком `heal-item/fountain_trip_committed` и
-  `fountain-floor/heal_in_hand`: питьё ждёт похода, поход ждёт питья, не действует никто. Кто
-  перестаёт быть вежливым — решение юзера.
-- **⛔ Тракт `item_build` готов, а ЖИВЫЕ конфиги пусты** — все три `canonical_*` содержат НОЛЬ
-  `item_build` (сгенерены до правки). Регенерация меняет сам предмет замера — решение юзера.
-- **Какая нога `anti-idle` уводит бота ВПЕРЁД на низком HP.** Ноги инструментированы
-  (`lane`/`lowhp-back`/`push`/`combat`) — данные есть, ответа нет.
+- **Healing and the fountain trip yield to each other.** In one tick,
+  `heal-item/fountain_trip_committed` and `fountain-floor/heal_in_hand`: drinking waits for the
+  trip, the trip waits for the drink, nobody acts. Which one stops being polite is a user call.
+- **The `item_build` path is ready and the LIVE configs are empty** - all three `canonical_*`
+  carry ZERO `item_build` (generated before the change). Regenerating changes the very thing
+  under measurement, so it is a user call.
+- **Which `anti-idle` leg walks the bot FORWARD at low HP.** The legs are instrumented
+  (`lane`/`lowhp-back`/`push`/`combat`) - the data exists, the answer does not.
 
-## Поведение
+## Behaviour
 
-- ⭐ **`ability_aggro` выведен 28.08 — и его надо ВЕРНУТЬ переработанным.** Почему сняли и чем
-  это стоило (293 `invalid order (101)` за матч, 188 матчей) — `git show dfac88a`. ✅ Приёмка
-  закрыта: `invalid order (101)` = 0. **Открыто:** ручка интенсивности без второго пути каста.
-
-- **`rune_control`.** Диал должен влиять на плановую добычу руны, а не только на power-rune
-  pressure; считать завершённые транзакции, не empty-bottle процент.
-- **Tower-aggro CS.** Controlled aggro-pull под T1 — после P3 и только по новому симптому.
-- **Uphill / low-ground travel.** Не очередной step-back, а единый combat path/position owner.
+- **`ability_aggro` was withdrawn 28.08 and should come BACK reworked.** Why it was pulled and
+  what it cost (293 `invalid order (101)` in one match, 188 of them matched) - `git show dfac88a`.
+  Its acceptance is closed: `invalid order (101)` = 0. **Open:** give the model an intensity knob
+  without creating a second cast path.
+- **`rune_control`.** The dial should drive planned rune collection, not only power-rune
+  pressure; count completed transactions, not empty-bottle percentage.
+- **Tower-aggro CS.** Controlled aggro-pull under T1 - after P3 and only on a new symptom.
+- **Uphill / low-ground travel.** Not another step-back, but one combat path/position owner.
 
 ## Bettability
 
-⭐ Главное число проекта — **`mutual low`** из `state markets` (`tools/betting.py`, `2d86ed6`).
-⛔ После `03a70bf` следить особо: ушло в ноль вместе с kill pressure — значит кап слишком широк.
+The headline number of the project is **`mutual low`**, from `state markets` in
+`tools/betting.py` (`2d86ed6`). After `03a70bf` watch it especially: if it went to zero together
+with kill pressure, the cap is too wide.
 
-Осталось:
+Still to do:
 
-- tower HP/progress и давление с живой волной;
-- net-worth proxy вместо unspent gold (он высок из-за копления на недостижимый компонент);
-- реально использованные преимущества (rune power windows, а не только наличие);
-- series aggregation с frozen build/config и обязательным side swap.
+- tower HP/progress, and pressure measured with a live wave;
+- a net-worth proxy instead of unspent gold (which is high because the bot saves for a component
+  it cannot reach);
+- advantages actually used (rune power windows, not merely holding one);
+- series aggregation with a frozen build/config and a mandatory side swap.
 
-Новые поля — в общий parser `tools/aibattle_log.py` и под тесты, иначе `match_stats`,
-`postmatch` и `betting` прочитают одну строку по-разному.
+New fields go into the shared parser `tools/aibattle_log.py` and under tests, or `match_stats`,
+`postmatch` and `betting` will read the same line three different ways.
 
-## Инфраструктура
+## Infrastructure
 
-- Сокращать `mode_laning_generic.lua`, `aibattle_style.lua`, `aibattle_survive.lua` только через
-  перенос ownership, а не механическое дробление файлов.
-- `tools/project_inventory.py`: следить за direct action sites, dead helpers и shared writers.
-- `tools/check_schema_contract.py`: сохранять Python/Lua/prompt/config schema синхронной.
-- Старую форензику добавлять в `docs/history`, а не возвращать в активный BACKLOG/HANDOFF.
+- Shrink `mode_laning_generic.lua`, `aibattle_style.lua` and `aibattle_survive.lua` by moving
+  ownership, never by mechanically splitting files.
+- `tools/project_inventory.py`: watch direct action sites, dead helpers and shared writers.
+- `tools/check_schema_contract.py`: keep the Python/Lua/prompt/config schema in sync.
+- Old forensics go to `docs/history`, never back into the active BACKLOG/HANDOFF.
 
-## Инварианты
+## Invariants
 
-- Модель выбирает стратегию; engine constants не становятся LLM-facing rules.
-- Один тик — один владелец ДЕЙСТВИЯ (не выборов); кандидат без действия арбитр не удерживает.
-- Один risky behavior batch — одна ожидаемая сигнатура — один матч.
-- Сравнивать значения в минуту и всегда привязывать матч к build SHA из лога.
-- Конфиги и live bindings коммитить только по прямой команде пользователя.
-- Структурная очередь живёт в `STATE.md` («Open structural work»), мандаты — в `docs/SPECS.md`.
-  Копий здесь не держать: 29.08 такая копия разошлась с источником третий раз.
+- The model picks strategy; engine constants do not become LLM-facing rules.
+- One tick, one owner of the ACTION (not of the election); the arbiter does not hold a candidate
+  that cannot act.
+- One risky behaviour batch, one expected signature, one match.
+- Compare values per minute, and always tie a match to the build SHA from its log.
+- Configs and live bindings are committed only on the user's explicit instruction.
+- The structural queue lives in `STATE.md` ("Open structural work"), the mandates in
+  `docs/SPECS.md`. Keep no copy here: on 29.08 such a copy drifted from its source a third time.
