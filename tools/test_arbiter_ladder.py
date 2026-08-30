@@ -335,24 +335,6 @@ def test_every_rune_departure_asks_the_same_survival_question():
         )
 
 
-def test_the_heal_escape_fires_before_the_bot_is_already_dying():
-    """Both saving guards keep one escape; it must not shrink back to a bare 30% floor."""
-    text = _read(SURVIVE)
-    start = anchor(text, "local function stockHealConsumable", "aibattle_survive.lua")
-    body = text[start:anchor(text, '\treturn "bought"', "stockHealConsumable", start)]
-    escape = re.search(r"local criticalStuck =[^\n]*(?:\n\s+and[^\n]*)*", body)
-    assert escape is not None, "the criticalStuck escape is gone from stockHealConsumable"
-    assert "underFire" in escape.group(0), (
-        "the escape past budget_cap and bottle-gold-protect is a bare HP floor again. A salve "
-        "first allowed at 30% is allowed after the trade that decides the fight: 8974086880 "
-        "t=152-168, Dire died from 100% in sixteen seconds holding 413 gold"
-    )
-    assert "savingIsClose" in body, (
-        "the escape stopped asking whether saving is about to pay off, so it now overrides the "
-        "bottle at any gold -- that is the early flask re-buy loop the original cap prevented"
-    )
-
-
 def test_a_creep_in_front_of_us_outranks_the_tower():
     """The tower pays nothing until it falls; the creep under it pays now."""
     text = _read(SIEGE)
@@ -385,6 +367,21 @@ def test_tower_cover_is_one_answer_for_the_probe_and_the_act():
         "the guessed creep shield is back to depth one. One creep near a tower is one tower "
         "shot from gone: 8974387496 t=423-434, Dire hit the tower as the wave fell 2 -> 1 and "
         "took the retarget at 90% -> 83% with no enemy hero on the lane"
+    )
+
+
+def test_the_heal_escape_stays_a_last_resort():
+    """Widening this to incoming damage cost a bottle; keep it at the stuck case."""
+    text = _read(SURVIVE)
+    start = anchor(text, "local function stockHealConsumable", "aibattle_survive.lua")
+    body = text[start:anchor(text, 'return "bought"', "stockHealConsumable", start)]
+    escape = re.search(r"local criticalStuck =(?:[^\n]*\n\s+and)*[^\n]*", body)
+    assert escape is not None, "the criticalStuck escape is gone from stockHealConsumable"
+    assert "WasRecentlyDamagedByAnyHero" not in escape.group(0), (
+        "the escape is being triggered by incoming hero damage again. That was tried in "
+        "c802251 and reverted: in 8974387496 Radiant took it five times, spent about a bottle "
+        "on salves and bought its bottle at 6:19 against 3:29 on the same matchup one build "
+        "earlier -- and a salve taken under fire cannot be drunk anyway"
     )
 
 

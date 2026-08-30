@@ -791,24 +791,21 @@ local function stockHealConsumable(bot, hp, gold)
 	-- genuinely exhausted, survival > saving: allow ONE flask past both caps. Cannot
 	-- runaway -- each buy spends gold and the 15s rate limit above still holds.
 	--
-	-- 8974086880 t=152-168 widened the trigger. Dire went from 100% HP to dead in sixteen
-	-- seconds with 413 gold in its pocket and never got past the caps: at 43% it was not yet
-	-- "critical", so budget_cap refused (count=4 allow=3) and bottle-gold-protect was still
-	-- saving for a 675 bottle it was 262 short of. Asking "am I nearly dead" is asking too
-	-- late -- a salve bought at 30% is bought after the trade that decides the fight. The
-	-- question that matters is "is a hero taking me down while I have nothing in hand".
-	--
-	-- The saving side keeps its veto where saving is about to pay off: `gold >= cost - 160`
-	-- is the same nearly-affordable test consumableSpendBlocked already uses, so a bot 100
-	-- gold from its bottle still protects the bottle -- which is the early re-buy loop the
-	-- original cap was written against -- and a bot 262 short does not.
+	-- TRIED AND REVERTED, keep the result. 8974086880 t=152-168 looked like this escape being
+	-- too late: Dire went 100% HP to dead in sixteen seconds holding 413 gold, refused at 43%
+	-- by budget_cap and by bottle-gold-protect saving for a 675 bottle. So the trigger was
+	-- widened to "a hero is taking me down below the lane-low line with nothing in hand".
+	-- 8974387496 says that was wrong, twice over. Radiant took the widened leg five times
+	-- instead of once, spent roughly a bottle on salves, and got its bottle at 6:19 against
+	-- 3:29 on the same matchup one build earlier -- then spent three quarters of the match
+	-- without the one item that would have made the salves unnecessary.
+	-- And the premise was wrong too: the forensics that produced the change had already noted
+	-- that a salve five seconds before death cannot be drunk, because hero damage cancels it.
+	-- The bot did not die for want of a salve, it died for staying in a trade at 43% against
+	-- 96%. Refusing that trade is a fight-desire question, not a shopping one -- widening a
+	-- purchase to fix a positioning mistake buys the wrong thing at exactly the wrong time.
 	local charges = bottleCharges(bot)
-	local savingCheckpoint, savingCost = missingCheckpointItem(bot)
-	local savingIsClose = savingCheckpoint ~= nil and savingCost > 0 and gold >= savingCost - 160
-	local underFire = hp < Const.Recovery.laneLowHp
-		and bot:WasRecentlyDamagedByAnyHero(3.0)
-		and not savingIsClose
-	local criticalStuck = (hp < 0.30 or underFire)
+	local criticalStuck = hp < 0.30
 		and (charges == nil or charges <= 0)
 		and gold >= itemCost("item_flask")
 		and not bot:HasModifier("modifier_flask_healing")
@@ -841,10 +838,6 @@ local function stockHealConsumable(bot, hp, gold)
 		string.format("hp=%.0f gold=%d count=%d", hp*100, gold, bot.aib_recBuyCount or 0), 2.0)
 	bot:ActionImmediate_PurchaseItem("item_flask")
 	Style.Diag(bot, criticalStuck and "recovery-buy-critical" or "recovery-buy")
-	-- The escape has two legs now and they mean different things: one is a bot already at 30%,
-	-- the other is a bot on its way there. Counting them together would make the widening
-	-- unmeasurable -- `+critical N` would move and nothing would say which leg moved it.
-	if criticalStuck and hp >= 0.30 then Style.Diag(bot, "recovery-buy-under-fire") end
 	return "bought"
 end
 
