@@ -517,6 +517,19 @@ function M.DiagRL(bot, key, sec)
     end
 end
 
+-- Edge-triggered counter: increments `key` only after the caller has been quiet for `gap`
+-- seconds, so a refusal that persists across frames counts once per occasion instead of once
+-- per frame (Diag) or once per fixed window (DiagRL). Use it where the question is "how many
+-- times did this come up", and a fixed window would answer "how long did it last" instead.
+function M.DiagEdge(bot, key, gap)
+    if bot == nil then return end
+    bot.aib_edgeLast = bot.aib_edgeLast or {}
+    local now = DotaTime()
+    local last = bot.aib_edgeLast[key]
+    bot.aib_edgeLast[key] = now
+    if last == nil or now - last >= gap then M.Diag(bot, key) end
+end
+
 -- Rate-limited intent telemetry. Unlike Diag(), this describes what the bot wanted
 -- to do and why; match_stats.py prints it separately from branch counters.
 function M.Intent(bot, name, detail, sec)

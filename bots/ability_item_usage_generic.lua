@@ -8478,18 +8478,24 @@ end
 -- and flask and the bottle in recovery(), magic wand, magic stick, faerie fire and clarity in
 -- the heal ladder. Checked item by item before flipping this, because a switch that turns off
 -- healing nobody replaces is worse than two systems arguing.
--- Watch after the next match: total consumables used must not fall. `vendor-heal-suppressed`
--- counts what this refuses, so a drop has a number next to it instead of a guess.
+-- Watch after the next match: total consumables used must not fall. The refusals are counted
+-- per item and edge-triggered, so a drop in what got drunk has a number on the same scale next
+-- to it: `vendor-heal-suppressed-flask` against flasks, `-clarity` against clarities, and so on.
+-- The first version of this counter was one key for all seven items on a 30-second window, which
+-- measured windows rather than refusals and could not exceed about seventeen in a whole match --
+-- a number that reads as "the switch barely fired" no matter what actually happened.
 local _aibHealItems = { 'item_tango', 'item_flask', 'item_clarity', 'item_bottle',
                         'item_magic_wand', 'item_magic_stick', 'item_faerie_fire' }
 for _, _healName in ipairs(_aibHealItems) do
 	local _orig = X.ConsiderItemDesire and X.ConsiderItemDesire[_healName]
 	if _orig ~= nil then
+		local _short = _healName:gsub("^item_", "")
+		local _diagKey = "vendor-heal-suppressed-" .. _short
 		X.ConsiderItemDesire[_healName] = function(item)
 			local hs = AIBStyle.Get().rules.healing_style
 			if hs == "never" then return BOT_ACTION_DESIRE_NONE end
 			if hs == "active" then
-				AIBStyle.DiagRL(bot, "vendor-heal-suppressed", 30)
+				AIBStyle.DiagEdge(bot, _diagKey, 1.0)
 				return BOT_ACTION_DESIRE_NONE
 			end
 			return _orig(item)
