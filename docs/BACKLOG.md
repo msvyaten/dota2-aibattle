@@ -54,10 +54,10 @@ different claim from "they do not work".
   it would have read as "the switch barely fired" whatever the truth was. It is now
   `vendor-heal-suppressed-<item>`, edge-triggered (`DiagEdge`, 1.0s), which puts the number on
   the SAME scale as what got drunk: `-flask` against flasks, `-clarity` against clarities.
-- **`03a70bf` penalty for being behind:** `hp_behind` in the `state-desire-fight` detail; fight
-  stops winning the tick at a deficit of 0.15 or worse. The risk is the inverse of the bug: if
-  `mutual low` and kill pressure both go to zero, the cap is too wide before it is wrong - move
-  the threshold, do not throw the edit away.
+- **`03a70bf` penalty for being behind:** `fight-candidate no_action_capped cause=hp_behind`.
+  A cap here is a VETO, not a low score - the candidate never enters the election at all, so
+  `fightBehind=50` decides nothing. Risk is the inverse of the bug: if `mutual low` and kill
+  pressure go to zero, the cap is too wide before it is wrong - move the threshold, not the edit.
 
 ## Measured Debts 29.08 (not blockers, fix one at a time between matches)
 

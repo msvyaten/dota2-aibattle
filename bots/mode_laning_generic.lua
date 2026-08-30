@@ -1215,6 +1215,12 @@ local function AIB_BuildDesireCandidates(dials, rules, runtimeCtx, intentCtx)
 		end
 	end
 
+	-- The refusal used to name only itself. `no_action_capped` is the same string for every
+	-- cause, so `safety-candidate no_action_capped` 47 times in a match said that safety could
+	-- not act and never why, and the hp-deficit cap added in 03a70bf would have been unreadable
+	-- against the seen-unreachable cap that was already there. The policy already computes a
+	-- reason; it was being dropped on the floor at the log call. `cause=` carries it, the key
+	-- itself is unchanged so the existing counters still line up, and no election changes.
 	-- CAPPED = VETO, not participation. dd74e76 established this for recover (see the
 	-- no_action_capped block below): a capped candidate means "no feasible action this tick",
 	-- and at cap it still outbids the low-band workers (creep-work 38, wave-watch 10) and
@@ -1226,7 +1232,8 @@ local function AIB_BuildDesireCandidates(dials, rules, runtimeCtx, intentCtx)
 	local safetyPolicy = AIBLanePolicy.Safety(policyArgs)
 	if safetyPolicy ~= nil and safetyPolicy.capped then
 		Style.Blocked(bot, "safety-candidate", "no_action_capped",
-			string.format("hp=%.0f score=%.0f", hp * 100, safetyPolicy.score or 0), 3.0)
+			string.format("hp=%.0f score=%.0f cause=%s", hp * 100, safetyPolicy.score or 0,
+					safetyPolicy.reason or "none"), 3.0)
 	elseif safetyPolicy ~= nil then
 		candidates[#candidates + 1] = AIBTopArbiter.Candidate("safety", safetyPolicy.score, safetyPolicy.reason,
 			safetyPolicy.detail,
@@ -1247,7 +1254,8 @@ local function AIB_BuildDesireCandidates(dials, rules, runtimeCtx, intentCtx)
 	local powerPolicy = AIBLanePolicy.PowerRune(policyArgs)
 	if powerPolicy ~= nil and not AIBLaneCombat.RunePowerCanAct(AIB_LaningModuleCtx(dials, rules)) then
 		Style.Blocked(bot, "power-rune-candidate", "no_action_capped",
-			string.format("hp=%.0f score=%.0f", hp * 100, powerPolicy.score or 0), 3.0)
+			string.format("hp=%.0f score=%.0f cause=%s", hp * 100, powerPolicy.score or 0,
+					powerPolicy.reason or "none"), 3.0)
 	elseif powerPolicy ~= nil then
 		candidates[#candidates + 1] = AIBTopArbiter.Candidate("power-rune", powerPolicy.score, powerPolicy.reason,
 			powerPolicy.detail,
@@ -1257,7 +1265,8 @@ local function AIB_BuildDesireCandidates(dials, rules, runtimeCtx, intentCtx)
 	local fightPolicy = AIBLanePolicy.Fight(policyArgs)
 	if fightPolicy ~= nil and fightPolicy.capped then
 		Style.Blocked(bot, "fight-candidate", "no_action_capped",
-			string.format("hp=%.0f score=%.0f", hp * 100, fightPolicy.score or 0), 3.0)
+			string.format("hp=%.0f score=%.0f cause=%s", hp * 100, fightPolicy.score or 0,
+					fightPolicy.reason or "none"), 3.0)
 	elseif fightPolicy ~= nil then
 		candidates[#candidates + 1] = AIBTopArbiter.Candidate("fight", fightPolicy.score, fightPolicy.reason,
 			fightPolicy.detail,
@@ -1285,7 +1294,8 @@ local function AIB_BuildDesireCandidates(dials, rules, runtimeCtx, intentCtx)
 			-- first, then fell through: 191 no-op first-wins in 8903988046 (the dominant
 			-- empty_action source). Veto keeps the hp_gate_no_action signature via this log.
 			Style.Blocked(bot, "recover-candidate", "no_action_capped",
-				string.format("hp=%.0f score=%.0f", hp * 100, recoverPolicy.score or 0), 3.0)
+				string.format("hp=%.0f score=%.0f cause=%s", hp * 100, recoverPolicy.score or 0,
+						recoverPolicy.reason or "none"), 3.0)
 		else
 			candidates[#candidates + 1] = AIBTopArbiter.Candidate("recover", recoverPolicy.score, recoverPolicy.reason,
 				recoverPolicy.detail,
@@ -1307,7 +1317,8 @@ local function AIB_BuildDesireCandidates(dials, rules, runtimeCtx, intentCtx)
 		local siegePolicy = AIBLanePolicy.Siege(policyArgs)
 		if siegePolicy ~= nil and siegePolicy.capped then
 			Style.Blocked(bot, "siege-candidate", "no_action_capped",
-				string.format("hp=%.0f score=%.0f", hp * 100, siegePolicy.score or 0), 3.0)
+				string.format("hp=%.0f score=%.0f cause=%s", hp * 100, siegePolicy.score or 0,
+						siegePolicy.reason or "none"), 3.0)
 		elseif siegePolicy ~= nil then
 			candidates[#candidates + 1] = AIBTopArbiter.Candidate("siege", siegePolicy.score, siegePolicy.reason,
 				siegePolicy.detail,
