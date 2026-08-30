@@ -71,7 +71,7 @@ All behaviour lives here. One file, one responsibility.
 | `aibattle_laning_combat.lua` | 563 | `HarassAndChase`, `ContactHero`, `AbilityPressure`, `RunePowerPressure`, `UphillReposition`, `EmergencyKillPriority`, `AbilityHarass`. |
 | `aibattle_laning_tempo.lua` | 441 | `Pregame`, `DivePolicy`, `DeathWindow`, `PreCreepStandoff` - the hard stage guards. |
 | `aibattle_laning_recovery.lua` | 426 | **Low-HP owners** (the P3 target): `ThinkIfAllowed`, `CriticalLock`, `ActiveLowHp`, `EmergencyRetreat`, `ForwardLowHpPullback`, `LowHpHoldState`. |
-| `aibattle_laning_siege.lua` | 389 | Tower siege, siege-commit, and the latch owner API. |
+| `aibattle_laning_siege.lua` | 401 | Tower siege, siege-commit, and the latch owner API. |
 | `aibattle_laning_creeps.lua` | 290 | `GetBestLastHitCreep`, `GetBestDenyCreep`, `HandleCreepWork`. |
 | `aibattle_laning_duel.lua` | 212 | `Prewave` and `Pregame` duel movement. |
 | `aibattle_utils.lua` | 236 | `SafeRetreatTowerLoc`, `ForwardSurvivingTowerLoc`, `EnemyTowerDanger`, `UphillMiss`, `IsTowerActuallyThreatening`. |

@@ -119,12 +119,16 @@ The genuinely lost tick has a different shape and no counter at all: an owner th
 `true` having done nothing ends the cascade, so everything below it - including the anti-AFK
 backstops at 8 and 2 - never runs. That is what wave-watch did until `d377da7`.
 
-⚠️ Known concept debt, not yet paid: there are twelve telemetry entry points across 446 call
-sites (`Style.Diag`/`DiagRL`/`Intent`/`Blocked`/`TickOwner`, the `ctx.diag`/`blocked`/`state`
-wrappers over them, `Engine.Intent`/`Blocked`, `towerOpportunity`, `runeTxn`). Several are the
-same idea reached by two names, and the plain/rate-limited split is a documented ratio trap. Not
-a refactor to start before the ownership cuts above, but the count is the reason a reader needs
-this section at all.
+Telemetry itself is narrower than it looks from the call sites. There are **four** primitives,
+all in `aibattle_style.lua`: `Diag` (plain counter), `DiagRL` (the same, rate limited), `Intent`
+and `Blocked`. Everything else that looks like a separate channel is a named wrapper that adds a
+prefix or a default - `ctx.diag`/`ctx.blocked` bind the bot, `ctx.state` prefixes `state-`,
+`ctx.towerOpportunity` and `runeTxn` are fixed-name Intents, `TickOwner` is an Intent with a
+throttle. `Engine.Intent`/`Engine.Blocked` emit nothing at all; they build candidate records.
+
+The one real trap in it is the plain/rate-limited split: `Diag` counts every occurrence and
+`DiagRL(bot, key, sec)` counts at most one per `sec`, so any ratio between a pair drawn from
+both scales is wrong. In anti-idle the only honest pair is `anti-idle-enter` against `idle`.
 
 - `aibattle_laning_policy.lua`: named HP bands, top-level desire gates, score weights, and forward/siege thresholds.
 - `aibattle_laning_duel.lua`: pregame/prewave duel movement.

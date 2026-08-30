@@ -206,6 +206,18 @@ function M.Think(ctx)
 		return false
 	end
 
+	-- NOTE: this is the widest of the four tower-hit branches and the earliest, so it shadows the
+	-- other three in practice. It reaches `attackRange + 180`; the wave branch below and the
+	-- default branch after it both require `+ 60`, and by the time the bot is inside 60 it has
+	-- almost always already satisfied this one and returned. Across the last three matches
+	-- `siege-terminal-tower` fired 130 times while `siege-tower`, `siege-wave-tower` and
+	-- `siege-no-tank-tower` never fired at all -- so the tower does get attacked, but only ever
+	-- through here, and the other three exist on paper.
+	-- Not resolved yet, because the two readings need live numbers to separate: either the 180
+	-- band is too generous and should match the others, or the narrower branches are redundant
+	-- and should go. `siege-no-tank-tower` is a third case again -- it needs
+	-- tower_aggression="always", which no config in the series has ever set, so its silence says
+	-- nothing about this shadowing.
 	if alliedTank and waveAtTower and twrDist <= attackRange + 180
 		and J.GetHP(bot) >= (ctx.enemyDeadRecently() and 0.26 or 0.34) then
 		M.Commit(bot, 2.4, now)
