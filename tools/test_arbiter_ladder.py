@@ -353,6 +353,23 @@ def test_the_heal_escape_fires_before_the_bot_is_already_dying():
     )
 
 
+def test_a_creep_in_front_of_us_outranks_the_tower():
+    """The tower pays nothing until it falls; the creep under it pays now."""
+    text = _read(SIEGE)
+    first_at = anchor(text, '"siege-creep-first"', "aibattle_laning_siege.lua")
+    tower_at = anchor(text, "phase=terminal", "aibattle_laning_siege.lua")
+    assert first_at < tower_at, (
+        "the creep-first check sank below the terminal tower branch again. That branch returns "
+        "true, so everything under it is unreachable: across 8974058954, 8974086880 and "
+        "8974387496 the tower was hit 169 times and `siege-creep` fired zero"
+    )
+    guard = text[anchor(text, "local function waveIsOnTheTower", "aibattle_laning_siege.lua"):first_at]
+    assert "GetAttackTarget() == twr" in guard, (
+        "waveIsOnTheTower stopped asking whether our creeps are actually on the tower; without "
+        "that, two waves trading under a tower reads as a siege again"
+    )
+
+
 def test_tower_cover_is_one_answer_for_the_probe_and_the_act():
     """CanAct and Think must not disagree about whether the bot has creep cover."""
     text = _read(SIEGE)

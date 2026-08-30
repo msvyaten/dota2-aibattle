@@ -97,6 +97,34 @@ local function alliedTankAt(ctx, twr)
 	return near >= 2, near
 end
 
+-- Our wave ON the tower is what makes a siege. Creeps standing near it while they trade with
+-- the enemy wave are not sieging anything, and until then the tower is not our business.
+local function waveIsOnTheTower(ctx, twr)
+	local onIt = false
+	for _, creep in pairs(ctx.allyCreeps or {}) do
+		if J.IsValid(creep) and creep:GetAttackTarget() == twr then onIt = true; break end
+	end
+	return onIt
+end
+
+-- One owner for "there is an enemy creep in front of us, hit that". Called from two places
+-- now -- ahead of the tower branches and after them -- so the two can never disagree about
+-- what counts as a creep worth hitting.
+local function hitCreepHere(ctx, bot, attackRange, now, key)
+	local hit = false
+	for _, creep in pairs(ctx.enemyCreeps or {}) do
+		if J.IsValid(creep) and J.CanBeAttacked(creep)
+			and GetUnitToUnitDistance(bot, creep) <= attackRange + 40 then
+			M.Commit(bot, 1.6, now)
+			bot:Action_AttackUnit(creep, true)
+			ctx.diag(key)
+			hit = true
+			break
+		end
+	end
+	return hit
+end
+
 function M.Think(ctx)
 	local bot = ctx.bot
 	local dials = ctx.dials or {}
@@ -234,6 +262,22 @@ function M.Think(ctx)
 	-- and should go. `siege-no-tank-tower` is a third case again -- it needs
 	-- tower_aggression="always", which no config in the series has ever set, so its silence says
 	-- nothing about this shadowing.
+	-- Two waves killing each other under a tower is not a siege, and the tower is the worst
+	-- target on the screen while it lasts: it pays nothing until it falls, the enemy creep in
+	-- front of us pays gold now, and killing that creep is what walks our own wave up to the
+	-- tower in the first place. The rule was already written -- `siege-creep` below does
+	-- exactly this -- but every tower branch sits above it and returns first, so across
+	-- 8974058954, 8974086880 and 8974387496 the tower was hit 169 times and that branch fired
+	-- ZERO. The order was the bug, not a missing rule.
+	-- Only "our creeps are actually attacking the tower" earns the tower the tick ahead of a
+	-- creep; a creep merely standing near it does not, which is the same distinction
+	-- alliedTankAt draws between the fact and the guess.
+	if not waveIsOnTheTower(ctx, twr)
+		and hitCreepHere(ctx, bot, attackRange, now, "siege-creep-first") then
+		ctx.towerOpportunity("creep_first", string.format("wave=%d tower=%.0f", waveCount, twrDist), 3.0)
+		return true
+	end
+
 	if alliedTank and waveAtTower and twrDist <= attackRange + 180
 		and J.GetHP(bot) >= (ctx.enemyDeadRecently() and 0.26 or 0.34) then
 		M.Commit(bot, 2.4, now)
@@ -290,15 +334,7 @@ function M.Think(ctx)
 		return ctx.moveToAttackEdge(twr, "siege-wave-step", 20)
 	end
 
-	for _, creep in pairs(ctx.enemyCreeps or {}) do
-		if J.IsValid(creep) and J.CanBeAttacked(creep)
-			and GetUnitToUnitDistance(bot, creep) <= attackRange + 40 then
-			M.Commit(bot, 1.6, now)
-			bot:Action_AttackUnit(creep, true)
-			ctx.diag("siege-creep")
-			return true
-		end
-	end
+	if hitCreepHere(ctx, bot, attackRange, now, "siege-creep") then return true end
 	if twrDist <= attackRange + 60 then
 		M.Commit(bot, 1.6, now)
 		bot:Action_AttackUnit(twr, true)
