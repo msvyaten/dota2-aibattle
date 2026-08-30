@@ -35,6 +35,11 @@ M.Scan = {
 
 M.Combat = {
 	hpAdvantage = 0.12,
+	-- The gap at which a trade stops being a trade. Both of Radiant's deaths in 8974387496
+	-- were taken at 0.17-0.18 behind (45 vs 63 at t=236, 64 vs 81 at t=299), so the line sits
+	-- just under them and just over hpAdvantage. Honest about what this number is: the mirror
+	-- penalty below is symmetry, this one is calibrated to two deaths and nothing more.
+	hpBehindHard = 0.15,
 }
 
 M.RecentDamage = {
@@ -65,6 +70,10 @@ M.Score = {
 	-- Score cap when the enemy is visible but every fight action is gated
 	-- (out of range + uphill/low-hp block the approach). See safetyNoAction.
 	fightNoAction = 40,
+	-- Score cap when the enemy is materially healthier. Must stay below tail(safe-cs)=56,
+	-- because the point is that farming safely outranks a trade we are behind in -- a penalty
+	-- that leaves fight above safe-cs changes the printed score and nothing else.
+	fightBehind = 50,
 
 	recoverBase = 74,
 	recoverCritical = 118,
@@ -232,12 +241,35 @@ function M.Fight(args)
 		score = score + M.Score.fightExecuteBonus
 		add(parts, "execute", M.Score.fightExecuteBonus)
 	end
+	local reason = "enemy_seen"
+	local capped = false
+	-- Being ahead was worth +8 and being behind was worth nothing, so the bot wanted a fight at
+	-- 45% against 63% almost exactly as much as at 63% against 45%. It took both of its deaths
+	-- in 8974387496 through that hole: t=236 it won the tick at 96 with hp=45 ehp=63 and was at
+	-- 12% four seconds later; t=299 the same shape at 64 against 81, and that one was fatal.
+	--
+	-- Two steps, and they are not the same kind of claim. The first mirrors the bonus, which is
+	-- only symmetry. The second is the one that changes behaviour: past hpBehindHard the score
+	-- is capped under tail(safe-cs)=56, so the bot farms instead of initiating -- a subtraction
+	-- that left fight above safe-cs would move a number in the log and nothing on the screen.
+	-- Capped, so winner hysteresis cannot lift it back over: the arbiter skips the +18 for
+	-- capped candidates, which is the same contract fightNoAction relies on.
+	--
+	-- An executable enemy is exempt. It is low BECAUSE we are winning the exchange, and
+	-- refusing to finish there would turn a won trade into a lost one.
 	if args.actionPowerRune == true then
 		score = score + M.Score.fightRuneBonus
 		add(parts, "rune", M.Score.fightRuneBonus)
 	end
-	local reason = "enemy_seen"
-	local capped = false
+	if args.actionPowerRune ~= true and enemyHp > execHp and enemyHp >= hp + M.Combat.hpAdvantage then
+		score = score - M.Score.fightHpAdvBonus
+		add(parts, "hp_behind", -M.Score.fightHpAdvBonus)
+		if enemyHp >= hp + M.Combat.hpBehindHard then
+			score = math.min(score, M.Score.fightBehind)
+			capped = true
+			reason = "hp_behind"
+		end
+	end
 	-- canAct contract (P4), fight side: seen-but-unreachable must not own the tick.
 	if args.fightCanAct == false then
 		score = math.min(score, M.Score.fightNoAction)

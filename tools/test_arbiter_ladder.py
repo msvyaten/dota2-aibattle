@@ -335,6 +335,32 @@ def test_every_rune_departure_asks_the_same_survival_question():
         )
 
 
+def test_being_behind_on_hp_costs_the_fight_the_tick():
+    """A bonus for winning and nothing for losing is how both deaths in 8974387496 happened."""
+    scores = score_table()
+    text = _read(POLICY)
+    start = anchor(text, "function M.Fight(args)", "aibattle_laning_policy.lua")
+    body = text[start:anchor(text, "\nend\n", "M.Fight", start)]
+    assert "hp_behind" in body, (
+        "M.Fight scores a hp advantage and ignores a hp deficit again. At t=236 Radiant won the "
+        "tick at 96 with hp=45 against ehp=63 and was at 12% four seconds later; at t=299 the "
+        "same shape at 64 against 81 killed it"
+    )
+    assert "fightBehind" in scores, "M.Score.fightBehind is gone"
+    assert scores["fightBehind"] < safe_cs_score(), (
+        f"fightBehind={scores['fightBehind']:g} must stay under tail(safe-cs)="
+        f"{safe_cs_score():g}. Above it the bot still initiates and only the printed score "
+        f"changes, which is a subtraction nobody can see on screen"
+    )
+    assert re.search(r"math\.min\(\s*score\s*,\s*M\.Score\.fightBehind\s*\)", body), (
+        "fightBehind is defined but never clamps the score"
+    )
+    assert "enemyHp > execHp" in body, (
+        "the execute exemption is gone: an enemy that is low BECAUSE we are winning would now "
+        "read as us being behind, and the bot would refuse to finish a won trade"
+    )
+
+
 def test_a_creep_in_front_of_us_outranks_the_tower():
     """The tower pays nothing until it falls; the creep under it pays now."""
     text = _read(SIEGE)

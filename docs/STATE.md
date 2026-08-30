@@ -35,27 +35,25 @@ must turn that config into distinct, competent, explainable 1v1-mid behavior. Th
 strategy; the engine owns mechanics and safety. Engine constants such as distances, rune
 staging windows, AFK timing, and tower leashes must not leak into model-facing rules.
 
-Bettability requires repeated runs with frozen code and a side swap. Five matches went without
-one - SF mirror, gemini fixed on Radiant, grok fixed on Dire, Radiant 2:0 on kills five for five
-- so side and config were perfectly confounded. The swap has now been played on a frozen
-`d9cc1a7`: `8974058954` (grok Radiant, 2:1) and `8974086880` (gemini Radiant, 2:0). **Radiant
-won both, with opposite configs.** Read matches in pairs from here on; a single match cannot
-tell a config apart from a side. What survived the swap as config-bound is the bottle: gemini
-buys it 50-70s earlier on either side. What survived as side-bound is Dire's HP - median 64%
-and 56% in the laning window against 79% and 96% - mechanism not yet diagnosed.
+Bettability needs repeated runs on frozen code with the sides swapped. Five matches ran without
+one and had side and config perfectly confounded. The swap was then played on frozen `d9cc1a7`:
+`8974058954` (grok Radiant, 2:1) and `8974086880` (gemini Radiant, 2:0). **Radiant won both,
+with opposite configs**, so read matches in PAIRS - one match cannot tell a config from a side.
+Config-bound across the swap: branch counters (`cw-push`, `hero-prio-*`, `dw-farm`) and the
+bottle, which gemini buys 50-70s earlier on either side. Side-bound: Dire's HP, median 64% and
+56% in the laning window against 79% and 96%, mechanism not diagnosed. `8974387496` then broke
+the streak - Dire won 2:0 on the same arrangement, one build later.
 
 `mutual low` - seconds where both heroes are in danger at once - was picked as the number this
-hangs on, and read `0s` everywhere except `8968270421` (10s) and `8972598364` (5s). ⚠️ Now
-suspect as a proxy: `8972520526` held its outcome to 95% of the match, 4.8% dead tail, loser
-ahead on last hits, and still scored `0s`. REVIEW_SCOPE question 3 - the fix may belong in
+hangs on and is now suspect as a proxy: `8972520526` held its outcome to 95% of the match with a
+4.8% dead tail and still scored `0s`. REVIEW_SCOPE question 3 - the fix may belong in
 `betting.py`, not in the ladder.
 
 ## Current Architecture Status
 
-Completed stages are not listed here any more - this file is the current plan, and a growing
-record of finished work is what pushed it against its budget. `git log --oneline` and the
-commit bodies hold it; the last structural one is P1-A phase A (`a2bc9a9`), where top desires
-and the old tail began sharing one election.
+Completed stages are not listed here - this file is the current plan, and a growing record of
+finished work is what pushed it against its budget. `git log` holds it; the last structural one
+is P1-A phase A (`a2bc9a9`), where top desires and the old tail began sharing one election.
 
 Open structural work, in order:
 

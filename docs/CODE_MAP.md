@@ -29,11 +29,11 @@ python tools\pre_match_state.py
 
 | | lines | % of `bots/` | do we touch it? |
 |---|---:|---:|---|
-| **Our layer `aibattle_*`** (behaviour) | **8,199** | 3.9% | YES - all the logic is here |
+| **Our layer `aibattle_*`** (behaviour) | **8,231** | 3.9% | YES - all the logic is here |
 | Configs `Customize/` | 678 | 0.3% | YES - archetype presets |
 | **Our patches inside vendored files** | **~469** | 0.2% | CAREFULLY - 21 files, see section 3 |
 | Vendored OHA (everything else in `bots/`) | ~190,000 | ~96% | NO - upstream base, synced from above |
-| Tools (Python) | 5658 | - | YES |
+| Tools (Python) | 5684 | - | YES |
 | Backend (Python + prompt) | 720 | - | YES |
 
 **Total Lua in `bots/`: ~199,000 lines. Ours: ~8,300 (4.2%)**, counting the vendor patches.
@@ -44,7 +44,7 @@ when you need to, never refactor it.
 
 ---
 
-## 1. The AIBattle layer - our code (`bots/FunLib/aibattle_*.lua`, 8,199 lines, 22 files)
+## 1. The AIBattle layer - our code (`bots/FunLib/aibattle_*.lua`, 8,231 lines, 22 files)
 
 All behaviour lives here. One file, one responsibility.
 
@@ -54,7 +54,7 @@ All behaviour lives here. One file, one responsibility.
 |---|---:|---|
 | `aibattle_style.lua` | 1296 | **The hub**: config loading (rules/dials), item/skill build, ability-harass config, and the telemetry primitives `Style.Intent/Diag/TickOwner/Blocked`. Everything calls it. |
 | `aibattle_engine.lua` | 274 | Stage and intent runner: `Stage/Intent/Resolve`, `KillWindow`, `RecoveryPolicy`, `PowerRuneState`, `RuneUsePolicy`. |
-| `aibattle_laning_policy.lua` | 345 | **Desire scoring**: `Safety/PowerRune/Fight/Recover/Siege` -> score; HP bands, thresholds, no-action caps. |
+| `aibattle_laning_policy.lua` | 377 | **Desire scoring**: `Safety/PowerRune/Fight/Recover/Siege` -> score; HP bands, thresholds, no-action caps. |
 | `aibattle_laning_arbiter.lua` | 132 | **Top-desire arbiter**: `Run/Candidate` - winner hysteresis, tick owner. The heart of the choice. |
 | `aibattle_constants.lua` | 59 | Engineering thresholds (distances, cooldowns, HP bands). Not model-facing. |
 | `aibattle_motor.lua` | 45 | Movement ownership `Claim/Active/Release` (v1). Slated for retirement in P1-C. |
@@ -208,7 +208,7 @@ are checked against each other by `tools/check_schema_contract.py`.
 | `pathology.py` | 98 | Movement shapes: STALL and YOYO detection from positions alone. |
 | `check_text_encoding.py` | 104 | Mojibake, ASCII-only runtime files, and the no-Cyrillic rule. |
 | `aibattle_log.py` | 83 | The single telemetry parser everything else builds on. |
-| `test_arbiter_ladder.py` | 399 | Ladder arithmetic and owner contracts, read as text; see its docstring for what green does not mean. |
+| `test_arbiter_ladder.py` | 425 | Ladder arithmetic and owner contracts, read as text; see its docstring for what green does not mean. |
 | `check_schema_contract.py` | 110 | Python/Lua/prompt/config schema agreement, including the worked example the model copies. |
 | `run_tests.py` | 104 | Runs the test files above without pytest. |
 | `series.py` | 91 | Sets the sides for match N of a round robin, so a side effect cannot masquerade as a model effect. |
