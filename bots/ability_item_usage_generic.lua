@@ -8464,16 +8464,34 @@ if _aibSmokeDesire ~= nil then
 	end
 end
 
--- AIBattle rule (healing_style = "never"): suppress OHA heal items entirely.
--- "default" = OHA logic unchanged. "active" = our system in aibattle_heal.lua takes over.
--- "never" = block all healing items so the bot never heals regardless of HP.
+-- AIBattle rule (healing_style): who owns consumables.
+-- "default" = OHA logic unchanged. "active" = OUR system owns them. "never" = nobody heals.
+--
+-- "active" used to fall through to OHA, so both systems ran at once on every config we ship --
+-- and the comment here claimed the opposite, which is why nobody looked. 8974387496 at 8:00:
+-- Dire walked home at 7% HP and drank a clarity on the way. Our own clarity branch never fired
+-- (the `mana-clarity` counter is zero for the whole match); OHA drank it, on its own rule, which
+-- does have a fountain check -- at a radius of 2000 units, while the walk home from mid starts
+-- around nine thousand. Two owners, neither wrong by its own lights, and a wasted clarity.
+--
+-- Suppressing at "active" is only safe because our layer covers every item in this list: tango
+-- and flask and the bottle in recovery(), magic wand, magic stick, faerie fire and clarity in
+-- the heal ladder. Checked item by item before flipping this, because a switch that turns off
+-- healing nobody replaces is worse than two systems arguing.
+-- Watch after the next match: total consumables used must not fall. `vendor-heal-suppressed`
+-- counts what this refuses, so a drop has a number next to it instead of a guess.
 local _aibHealItems = { 'item_tango', 'item_flask', 'item_clarity', 'item_bottle',
                         'item_magic_wand', 'item_magic_stick', 'item_faerie_fire' }
 for _, _healName in ipairs(_aibHealItems) do
 	local _orig = X.ConsiderItemDesire and X.ConsiderItemDesire[_healName]
 	if _orig ~= nil then
 		X.ConsiderItemDesire[_healName] = function(item)
-			if AIBStyle.Get().rules.healing_style == "never" then return BOT_ACTION_DESIRE_NONE end
+			local hs = AIBStyle.Get().rules.healing_style
+			if hs == "never" then return BOT_ACTION_DESIRE_NONE end
+			if hs == "active" then
+				AIBStyle.DiagRL(bot, "vendor-heal-suppressed", 30)
+				return BOT_ACTION_DESIRE_NONE
+			end
 			return _orig(item)
 		end
 	end

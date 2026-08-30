@@ -666,7 +666,11 @@ local function defensiveHeal(bot, dials)
 	end
 
 	-- 8. Clarity: channel, any damage cancels -- separate mana CD.
-	if mana < 0.25 and manaReady then
+	-- The flask leg below asks fountainFreeHealSoon and this one never did, so a bot already
+	-- walking home drank a clarity the fountain was about to refund (8974387496 at 8:00, by
+	-- OHA then; ours owns clarity now, so the same hole would just move here). Mana comes back
+	-- at the fountain exactly like HP does, so a committed trip settles this the same way.
+	if mana < 0.25 and manaReady and not fountainFreeHealSoon(bot, hp) then
 		local safe = not (bot:WasRecentlyDamagedByAnyHero(0.5) or bot:WasRecentlyDamagedByCreep(0.5))
 		if safe and not sameHealTicking(bot, "item_clarity") then
 			local clarity = getItem(bot, "item_clarity")
