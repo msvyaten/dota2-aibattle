@@ -45,9 +45,8 @@ telemetry, not behaviour. `--never-fired` judges SPECIFIC matches - always re-ch
 
 ## Pending: the batch that has never been measured
 
-Nine behaviour changes landed after `53e4eeb` (`e45fe90`, `afc3093`, `609d153`) plus the two
-above that fired on nothing. One match cannot attribute them. Splitting means a pair on
-`e6d56d1` and a pair on HEAD - four matches instead of two.
+Nine behaviour changes landed after `53e4eeb` (`e45fe90`, `afc3093`, `609d153`), plus the two
+above that fired on nothing. Attributing them means a pair on `e6d56d1` and a pair on HEAD.
 
 - **Clarity/mana gate.** `mana-clarity reason=fountain_free_mana` carries `hp= mana= bottle=0
   rune_refused=`. Read the hp: the first threshold was 0.35, the waste happened at 39-48%.
@@ -76,18 +75,19 @@ above that fired on nothing. One match cannot attribute them. Splitting means a 
 
 ## Open After `8974387496` (confirmed twice, reproduces)
 
-- **Walking to the fountain.** `fountain-floor` refuses on `heal_in_hand`/`heal_in_flight`, and
-  the TP home belongs to THAT owner, so `anti-idle:2` drives the bot instead. In `8974387496`
-  Dire left past its own T2 in the sixth minute walking TOWARD THE COURIER with a flask on it,
-  not toward the fountain.
-- **Runes: `nearest=inf`** while runes are alive (`rune-ground-truth status=2`), 11 R / 37 D.
-  The scan requires `RUNE_STATUS_AVAILABLE`, that is, visibility of the spot. NOT diagnosed.
+- **Walking to the fountain.** `fountain-floor` refuses on `heal_in_hand`/`heal_in_flight` and
+  the TP home belongs to THAT owner, so `anti-idle:2` drives instead. Seen again in `8975911100`
+  at 6:34-6:59. The `empty_bottle_no_rune_floor` above is the first edit aimed at it.
+- **Runes: `nearest=inf` is HONEST. Diagnosed 31.08; this entry used to state it wrong.** Status
+  2 is not "rune alive" - `RUNE_STATUS_AVAILABLE` is 1, proved by which side logged
+  `rune-clock-dead` in `8975911100` (Dire, whose first status-1 came after the check; Radiant's
+  came before and never logged it). All 64 refusals fired at status 0 or 2, none at 1. The bottle
+  stays empty because the bot is not at the spot when a rune appears: travel timing, not blindness.
 - **Spells are not ours.** Shadowraze is cast by the vendored `BotLib/hero_nevermore.lua`, which
-  reads NO dial (`ability_aggro` was withdrawn in `dfac88a`). The cast point is a fixed distance
-  along the facing direction, and the hit is a linear extrapolation with the radius cut when
-  `GetMovementDirectionStability` is low - so it misses exactly when a trade starts.
-- **`safety` wins the election and cannot act:** `safety-candidate no_action_capped` 47 times in
-  a match, and the tick falls through to `wave-watch:10`. Both Radiant deaths went through this.
+  reads NO dial. The cast point is a fixed distance along the facing direction, so it misses
+  exactly when a trade starts - `git show dfac88a` for the whole mechanism.
+- **`safety` wins the election and cannot act:** 47 times a match. The cause is now logged -
+  `cause=symptom_no_action`, 16 R / 18 D in `8975911100` - so this can finally be worked on.
 - **LLM dials barely reach tick ELECTIONS:** only `execute_threshold` and `farm_focus` enter them
   (36.4-39.6, that is 3.2 points against gaps of tens). `harass_desire`, `forwardness` and
   `retreat_caution` work INSIDE the owner that already won. The categorical rules matter most -
