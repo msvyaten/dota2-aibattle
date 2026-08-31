@@ -12,7 +12,7 @@ import re
 import sys
 
 import scorecard as sc  # tools/ is on sys.path when run as python tools/postmatch.py
-from aibattle_log import rune_bottle_summary
+from aibattle_log import DOTA_LOG_DIR, rune_bottle_summary
 
 
 def diag_max(text, side, key):
@@ -637,9 +637,48 @@ def report(match_id):
     return ok
 
 
+def list_matches():
+    """Newest first: id, date, build sha and the harass dial per side.
+
+    A hand-written list of "the newest matches" in a document has aged out three times in three
+    days, once per match played. The directory is the only thing that knows, so ask it. The
+    harass dial is printed because it is the cheapest proof of which config sat on which side --
+    the swap is readable from inside the log, not from whoever wrote the document down.
+    """
+    import datetime
+    rows = []
+    for path in sorted(DOTA_LOG_DIR.glob("console.*.log"),
+                       key=lambda p: p.stat().st_mtime, reverse=True):
+        m = re.fullmatch(r"console\.(\d+)\.log", path.name)
+        if m is None:
+            continue
+        build, harass = None, {}
+        with path.open(encoding="utf-8", errors="ignore") as fh:
+            for line in fh:
+                if build is None:
+                    b = re.search(r"AIB\[.\] build=([a-f0-9]+)", line)
+                    if b:
+                        build = b.group(1)
+                h = re.search(r"AIB\[([RD])\] harass=([\d.]+)", line)
+                if h and h.group(1) not in harass:
+                    harass[h.group(1)] = h.group(2)
+                if build and len(harass) == 2:
+                    break
+        when = datetime.datetime.fromtimestamp(path.stat().st_mtime).strftime("%Y-%m-%d %H:%M")
+        rows.append((m.group(1), when, build or "?", harass.get("R", "?"), harass.get("D", "?")))
+    print("%-12s %-17s %-9s %-8s %s" % ("match", "played", "build", "R harass", "D harass"))
+    for row in rows:
+        print("%-12s %-17s %-9s %-8s %s" % row)
+    print()
+    print("Same build on both halves of a pair, harass dials swapped, or it is not a pair.")
+    return 0
+
+
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print(__doc__)
         sys.exit(2)
+    if sys.argv[1] == "--list":
+        sys.exit(list_matches())
     results = [report(m) for m in sys.argv[1:]]
     sys.exit(0 if all(results) else 1)

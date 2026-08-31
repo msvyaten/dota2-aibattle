@@ -170,31 +170,25 @@ helpers. Trust this over any number written in a document.
 
 ## Evidence set
 
-Use these before proposing gameplay changes. The first entries are newest; the rest are the
-older baseline, superseded wherever they disagree.
-
-- `8974058954` + `8974086880` - **read these two as one pair, and read them first.** Same build,
-  same heroes, configs swapped between the sides. Radiant won both, with opposite configs, for a
-  seventh Radiant win in a row - so the side effect is larger than the config effect and no
-  single match in this project can compare two configs. The swap is provable from inside the
-  logs (the harass dials and the strategy hashes trade places), and it also produced the best
-  tension profile the project has: never decided, no dead tail, a final gap of seven gold.
-- `8975911100` - **the newest, and the only one on the current generation of the build.** Dire
-  won again, so the seven-Radiant-win streak is broken twice over. The lane was lost between
-  t=45 and t=50 (Radiant 54% to 26% while Dire went 49% to 50%), and the match-wide damage
-  attribution says why: Radiant took 2412 hero damage against Dire's 1562. It lost the duel, not
-  a creep exchange. Three of the five edits under test were accepted on it.
-- `8974387496` - same sides and configs as `8974058954`, one build later, so it is a direct A/B
-  of the edits between them. Dire won it, the first time in eight matches. One of those edits
-  was reverted because of what it showed (`03bd66d`).
-- `8972520526` - the previous best tension profile (decided at 95% of the match, 4.8% dead tail)
-  with `mutual low = 0`. Superseded by the pair above on tension, still useful on question 3.
-- `8972598364` - where the walking fountain return and the `nearest=inf` rune scan were first
-  seen. Both are still open and both are in BACKLOG; the kill-lock half of it is fixed.
-- `8964702771` - the only match here that passed the technical gate: two lead changes, mutual
-  low still zero. `8969965270` (decided at 78s) is the one-sided end of the range.
+Which matches exist, on which build, and which config sat on which side is a question for the
+log directory, not for this document. The list that used to live here aged out three times in
+three days, once per match played, so it is a command now:
 
 ```bash
-python tools/postmatch.py 8975911100   # then 8974058954, 8974086880, 8974387496
-python tools/betting.py 8975911100 8974058954 8974086880 8974387496
+python tools/postmatch.py --list
 ```
+
+Same build on both halves and the harass dials swapped, or it is not a pair - and a single match
+cannot compare two configs, because the side effect is larger than the config effect. What
+follows is only the matches that carry a lesson beyond their own numbers.
+
+- `8976219545` + `8976241894` - the current pair, and the cleanest the project has: one build,
+  sides swapped, Radiant won both with opposite configs. Read them before anything older.
+- `8974058954` + `8974086880` - the swap that first proved the side effect, and the reason the
+  pair rule exists at all.
+- `8975911100` - the lane lost between t=45 and t=50 with a match-wide attribution that says
+  Radiant lost the duel, not a creep exchange. The clearest single-match causal trace we have.
+- `8972598364` - where the walking fountain return and the `nearest=inf` rune scan were first
+  seen. The rune half is now diagnosed and was never a bug; the fountain half is still open.
+- `8964702771` - the only match on record that passed the technical gate.
+

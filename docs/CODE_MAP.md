@@ -33,7 +33,7 @@ python tools\pre_match_state.py
 | Configs `Customize/` | 678 | 0.3% | YES - archetype presets |
 | **Our patches inside vendored files** | **~469** | 0.2% | CAREFULLY - 21 files, see section 3 |
 | Vendored OHA (everything else in `bots/`) | ~190,000 | ~96% | NO - upstream base, synced from above |
-| Tools (Python) | 5934 | - | YES |
+| Tools (Python) | 5973 | - | YES |
 | Backend (Python + prompt) | 720 | - | YES |
 
 **Total Lua in `bots/`: ~199,000 lines. Ours: ~8,300 (4.2%)**, counting the vendor patches.
@@ -218,7 +218,7 @@ are checked against each other by `tools/check_schema_contract.py`.
 | `product_scorecard.py` | 106 | Product gate: dead-tail, bottle economy, first event, lead changes, and mutual-low tension. |
 | `hero_readiness.py` | 177 | Hero expansion matrix, plus `--audit`/`--check`: combat spacing not derived from `bot:GetAttackRange()`, and which heroes each floor binds for. |
 | `check_all.py` | 763 | The repo gate: encoding, Lua/Python syntax, deploy manifest, live drift, schema contract, tests, inventory. |
-| `postmatch.py` | 645 | **Main match report**: scorecard, fix signatures, rune/bottle transactions, jitter breakdown. |
+| `postmatch.py` | 684 | **Main match report**: scorecard, fix signatures, rune/bottle transactions, jitter breakdown.; `--list` prints every match with its build and per-side harass dial. |
 | `binding.py` | 279 | Proves a config knob actually reaches behaviour. |
 | `test_match_stats.py` / `test_betting.py` / `test_project_inventory.py` | 324 / 108 / 12 | Tests. |
 | `scorecard.py` | 139 | Bare PASS/FAIL verdict on watchability criteria. |
