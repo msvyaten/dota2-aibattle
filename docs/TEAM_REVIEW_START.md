@@ -56,6 +56,8 @@ the live experiment files were dirty:
 - `bots/Customize/playstyle_dire.lua`
 
 Those files are live matchup state. Do not commit or clean them unless explicitly instructed.
+`pre_match_state.py` prints `dirty_expected_only` so this state is visible without pretending
+the tree is clean.
 
 ## High-Value Questions
 
@@ -76,6 +78,9 @@ Answer these before suggesting broad cleanup:
    move into the arbiter first?
 5. What minimum product metric set proves that two generated strategies are watchable and
    priceable?
+
+Bottle/rune economy is read from `postmatch.py`'s `rune/bottle transaction` panel. Start there
+before using the aggregate empty-bottle percentage as a finding.
 
 ### Track 2 - Improve what exists
 

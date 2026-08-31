@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import re
 from pathlib import Path
+from collections import Counter
 
 
 DEFAULT_DOTA_DIR = Path(
@@ -81,3 +82,60 @@ def find_log(value):
         if path.is_file():
             return path
     return None
+
+
+def aib_lines(text: str, side: str | None = None):
+    """Yield parsed AIB chat payloads from a console log."""
+    pattern = re.compile(r"'AIB\[([RD])\]\s+([^']*)'")
+    for match in pattern.finditer(text):
+        row_side, payload = match.groups()
+        if side is not None and row_side != side:
+            continue
+        yield row_side, payload
+
+
+def field_counts(text: str, name: str, side: str, field: str) -> Counter:
+    """Count `field=value` on AIB intent lines with a given intent name."""
+    out: Counter = Counter()
+    needle = f"intent={name}"
+    field_re = re.compile(r"\b%s=([A-Za-z0-9_.-]+)" % re.escape(field))
+    for _side, payload in aib_lines(text, side):
+        if needle not in payload:
+            continue
+        m = field_re.search(payload)
+        if m:
+            out[m.group(1)] += 1
+    return out
+
+
+def blocked_reason_counts(text: str, name: str, side: str) -> Counter:
+    """Count `blocked=<name> reason=<reason>` telemetry."""
+    out: Counter = Counter()
+    prefix = f"blocked={name}"
+    reason_re = re.compile(r"\breason=([A-Za-z0-9_.-]+)")
+    for _side, payload in aib_lines(text, side):
+        if prefix not in payload:
+            continue
+        m = reason_re.search(payload)
+        if m:
+            out[m.group(1)] += 1
+    return out
+
+
+def rune_bottle_summary(text: str, side: str) -> dict[str, object]:
+    """Summarize the bottle-rune transaction without interpreting gameplay."""
+    tx_phase = field_counts(text, "rune-transaction", side, "phase")
+    tx_source = field_counts(text, "rune-transaction", side, "source")
+    results = field_counts(text, "rune-result", side, "result")
+    result_source = field_counts(text, "rune-result", side, "source")
+    blocks = Counter()
+    for name in ("bottle-rune", "recovery-rune-bottle"):
+        for reason, count in blocked_reason_counts(text, name, side).items():
+            blocks[f"{name}:{reason}"] += count
+    return {
+        "phase": tx_phase,
+        "source": tx_source,
+        "result": results,
+        "result_source": result_source,
+        "blocked": blocks,
+    }

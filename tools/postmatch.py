@@ -12,6 +12,7 @@ import re
 import sys
 
 import scorecard as sc  # tools/ is on sys.path when run as python tools/postmatch.py
+from aibattle_log import rune_bottle_summary
 
 
 def diag_max(text, side, key):
@@ -149,6 +150,14 @@ def buy_loop(text, side):
     return out
 
 
+def _fmt_counter(counter, limit=4):
+    if not counter:
+        return "none"
+    rows = counter.most_common(limit)
+    tail = "" if len(counter) <= limit else " +" + str(len(counter) - limit)
+    return ", ".join("%s=%d" % (k, v) for k, v in rows) + tail
+
+
 def recovery_owner_counts(text, side):
     lines = re.findall(r"AIB\[%s\][^']*intent=recovery-owner[^']*" % side, text)
     counts = {
@@ -273,6 +282,19 @@ def report(match_id):
                  diag_max(text, side, "heal-inflight-hold")))
         print("       break-contact=%d (want UP) | trip releases: %s (heal_in_hand wants 0)"
               % (diag_max(text, side, "heal-break-contact"), by_reason or "none"))
+
+    print("----- watch: rune/bottle transaction -----")
+    for side in ("R", "D"):
+        rb = rune_bottle_summary(text, side)
+        print("  [%s] phase: %s | result: %s" % (
+            side,
+            _fmt_counter(rb["phase"]),
+            _fmt_counter(rb["result"]),
+        ))
+        print("       source: %s | blocked: %s" % (
+            _fmt_counter(rb["source"]),
+            _fmt_counter(rb["blocked"], 5),
+        ))
 
     # 21.07 batch. empty_action was the top blocked reason on both sides (105/65 in
     # 8906632392) and the scorecard did NOT flag it -- empty/min read 8.4/5.2 against a

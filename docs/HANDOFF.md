@@ -110,6 +110,10 @@ python tools\pathology.py <matchid>
 python tools\betting.py <matchid>
 ```
 
+`postmatch.py` is the first read after a game. It now includes the compact
+`rune/bottle transaction` panel: phase, source, result and blocked reasons. Use that before
+turning `bottle_empty_pct` into a gameplay claim.
+
 Supporting tools:
 
 - `match_stats.py` - full telemetry, counters, timeline, items, farm trace;
@@ -117,6 +121,9 @@ Supporting tools:
 - `binding.py` - proof that a config knob reaches behaviour;
 - `series.py` - a series on a frozen build and config;
 - `project_inventory.py` - current size and ownership debt.
+
+There is no active `PM_REVIEW.md` file on this branch. For a PM/auditor handoff, use
+`REVIEW_SCOPE.md` plus `TEAM_REVIEW_START.md`.
 
 ## Reading the evidence
 

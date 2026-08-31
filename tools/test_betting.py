@@ -2,6 +2,7 @@
 
 import betting as b
 from aibattle_log import extract_telemetry, find_log
+from aibattle_log import blocked_reason_counts, field_counts, rune_bottle_summary
 
 
 def _text(*rows):
@@ -16,6 +17,32 @@ def test_shared_parser_keeps_engineering_fields_and_earned_gold():
     assert telemetry["R"][0]["loc"] == (1.0, 2.0)
     assert telemetry["R"][0]["bottle"] == 0
     assert [sample["earned"] for sample in telemetry["R"]] == [40, 40]
+
+
+def test_shared_parser_counts_intent_fields_and_blocked_reasons():
+    text = "\n".join([
+        "x 'AIB[R] intent=rune-transaction source=bottle-rune phase=stage_follow ttl=4 dist=300'",
+        "x 'AIB[R] intent=rune-result source=bottle-rune result=filled age=2'",
+        "x 'AIB[R] blocked=bottle-rune reason=no_close_rune max=1900 water=4300'",
+        "x 'AIB[D] blocked=bottle-rune reason=stage_cooldown eta=18'",
+    ])
+    assert field_counts(text, "rune-transaction", "R", "phase")["stage_follow"] == 1
+    assert field_counts(text, "rune-result", "R", "result")["filled"] == 1
+    assert blocked_reason_counts(text, "bottle-rune", "R")["no_close_rune"] == 1
+
+
+def test_rune_bottle_summary_keeps_transactions_and_blocks_together():
+    text = "\n".join([
+        "x 'AIB[R] intent=rune-transaction source=bottle-rune phase=stage_commit ttl=30 dist=700'",
+        "x 'AIB[R] intent=rune-transaction source=recovery-rune-bottle phase=stage_follow ttl=8 dist=120'",
+        "x 'AIB[R] intent=rune-result source=bottle-rune result=gone age=4'",
+        "x 'AIB[R] blocked=recovery-rune-bottle reason=spot_race_lost stage=1'",
+    ])
+    summary = rune_bottle_summary(text, "R")
+    assert summary["phase"]["stage_commit"] == 1
+    assert summary["phase"]["stage_follow"] == 1
+    assert summary["result"]["gone"] == 1
+    assert summary["blocked"]["recovery-rune-bottle:spot_race_lost"] == 1
 
 
 def test_betting_pairs_the_same_shared_stream():

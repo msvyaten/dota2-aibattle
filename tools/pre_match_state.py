@@ -8,6 +8,11 @@ import subprocess
 from aibattle_log import DOTA_BOTS_DIR, live_build_sha
 
 ROOT = Path(__file__).resolve().parents[1]
+EXPECTED_DIRTY = {
+    "bots/Customize/general.lua",
+    "bots/Customize/playstyle_radiant.lua",
+    "bots/Customize/playstyle_dire.lua",
+}
 
 
 def git(*args):
@@ -43,11 +48,26 @@ def live_playstyle(side):
     return read_playstyle(DOTA_BOTS_DIR / "Customize" / f"playstyle_{side}.lua")
 
 
+def dirty_paths(status_text):
+    paths = []
+    for line in status_text.splitlines():
+        if not line:
+            continue
+        path = line[2:].strip() if len(line) > 2 else ""
+        if " -> " in path:
+            path = path.split(" -> ", 1)[1]
+        paths.append(path.replace("\\", "/"))
+    return paths
+
+
 def main():
     head = git("rev-parse", "--short", "HEAD")
     branch = git("branch", "--show-current")
     upstream = git("rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}")
     dirty = git("status", "--short")
+    dirty_list = dirty_paths(dirty)
+    unexpected_dirty = [p for p in dirty_list if p not in EXPECTED_DIRTY]
+    canonical_dirty = [p for p in dirty_list if "/Customize/canonical_" in p]
     live = live_build()
 
     print("===== pre-match state =====")
@@ -65,6 +85,9 @@ def main():
     print(f"radiant: {repo_radiant} (live {live_radiant})")
     print(f"dire:    {repo_dire} (live {live_dire})")
     print(f"live_playstyles_match_repo: {str(not playstyle_drift).lower()}")
+    print(f"dirty_expected_only: {str(bool(dirty_list) and not unexpected_dirty).lower()}")
+    if canonical_dirty:
+        print("canonical_dirty: " + ", ".join(canonical_dirty))
     print("dirty:")
     if dirty:
         for line in dirty.splitlines():
@@ -76,7 +99,13 @@ def main():
         print("  - deploy code or explicitly record that this match uses a custom live marker")
     if playstyle_drift:
         print("  - sync live playstyle bindings back to repo, or deploy the repo bindings")
-    if dirty:
+    if canonical_dirty:
+        print("  - canonical configs changed; commit them only if this is the intended strategy under test")
+    if unexpected_dirty:
+        print("  - inspect unexpected dirty files before the match: " + ", ".join(unexpected_dirty))
+    elif dirty:
+        print("  - ok with local experiment bindings; do not clean/commit them accidentally")
+    if dirty and not dirty_list:
         print("  - commit configs or explicitly record them as a local experiment")
     if live == head and not dirty and not playstyle_drift:
         print("  - ok")

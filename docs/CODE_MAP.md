@@ -33,7 +33,7 @@ python tools\pre_match_state.py
 | Configs `Customize/` | 678 | 0.3% | YES - archetype presets |
 | **Our patches inside vendored files** | **~469** | 0.2% | CAREFULLY - 21 files, see section 3 |
 | Vendored OHA (everything else in `bots/`) | ~190,000 | ~96% | NO - upstream base, synced from above |
-| Tools (Python) | 5690 | - | YES |
+| Tools (Python) | 5826 | - | YES |
 | Backend (Python + prompt) | 720 | - | YES |
 
 **Total Lua in `bots/`: ~199,000 lines. Ours: ~8,300 (4.2%)**, counting the vendor patches.
@@ -199,7 +199,7 @@ are checked against each other by `tools/check_schema_contract.py`.
 | `product_scorecard.py` | 106 | Product gate: dead-tail, bottle economy, first event, lead changes, and mutual-low tension. |
 | `hero_readiness.py` | 71 | Hero expansion matrix: what is covered for SF/Juggernaut and what is still risky. |
 | `check_all.py` | 761 | The repo gate: encoding, Lua/Python syntax, deploy manifest, live drift, schema contract, tests, inventory. |
-| `postmatch.py` | 623 | **Main match report**: scorecard, fix signatures, jitter breakdown. |
+| `postmatch.py` | 645 | **Main match report**: scorecard, fix signatures, rune/bottle transactions, jitter breakdown. |
 | `binding.py` | 279 | Proves a config knob actually reaches behaviour. |
 | `test_match_stats.py` / `test_betting.py` / `test_project_inventory.py` | 324 / 108 / 12 | Tests. |
 | `scorecard.py` | 139 | Bare PASS/FAIL verdict on watchability criteria. |
@@ -207,12 +207,12 @@ are checked against each other by `tools/check_schema_contract.py`.
 | `deploy.bat` | 129 | Deploy profiles. |
 | `pathology.py` | 98 | Movement shapes: STALL and YOYO detection from positions alone. |
 | `check_text_encoding.py` | 109 | Mojibake, ASCII-only runtime files, and the no-Cyrillic rule. |
-| `aibattle_log.py` | 83 | The single telemetry parser everything else builds on. |
+| `aibattle_log.py` | 141 | The single telemetry parser everything else builds on. |
 | `test_arbiter_ladder.py` | 425 | Ladder arithmetic and owner contracts, read as text; see its docstring for what green does not mean. |
 | `check_schema_contract.py` | 110 | Python/Lua/prompt/config schema agreement, including the worked example the model copies. |
 | `run_tests.py` | 104 | Runs the test files above without pytest. |
 | `series.py` | 91 | Sets the sides for match N of a round robin, so a side effect cannot masquerade as a model effect. |
-| `pre_match_state.py` | 86 | Branch, HEAD, live build, repo vs live playstyles, dirty files. Run before every match. |
+| `pre_match_state.py` | 115 | Branch, HEAD, live build, repo vs live playstyles, dirty files. Run before every match. |
 
 ### Why `betting.py` is separate from `match_stats.py`
 
