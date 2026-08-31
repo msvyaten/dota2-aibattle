@@ -248,6 +248,16 @@ local function runeResult(bot, diagKey, result, detail, cooldown)
 	end
 end
 
+local function rememberNoCloseRefusal(bot, now)
+	if bot == nil then return end
+	bot.aib_noCloseRuneUntil = (now or DotaTime()) + 8.0
+end
+
+function M.RecentNoCloseRefusal(bot, now)
+	return bot ~= nil and bot.aib_noCloseRuneUntil ~= nil
+		and (now or DotaTime()) <= bot.aib_noCloseRuneUntil
+end
+
 local function runeTxn(bot, action, phase, diagKey, detail, ttl, sec)
 	local text = "source=" .. tostring(diagKey) .. " phase=" .. tostring(phase)
 	if ttl ~= nil then text = text .. string.format(" ttl=%.0f", ttl) end
@@ -273,6 +283,7 @@ function M.Reset(bot)
 	bot.aib_bottleRuneStageBlockedWindow = nil
 	bot.aib_bottleRuneStageBlockedUntil = nil
 	bot.aib_emptyBottleSince = nil
+	bot.aib_noCloseRuneUntil = nil
 end
 
 -- Rune clock for callers OUTSIDE the rune machinery. Returns seconds until the next bottle
@@ -732,9 +743,7 @@ function M.SeekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 		-- Keep this call within three lines of the `return false` below: check_all's silent-refusal
 		-- detector looks that far back for a logger and nothing further, so a fourth line of
 		-- wrapping turns a named refusal into a reported silent one.
-		bot.aib_noCloseRuneLast = DotaTime()
-		bot.aib_noCloseRuneMid = midContextDistance(bot)
-		bot.aib_noCloseRuneNearest = nearestDist
+		rememberNoCloseRefusal(bot, DotaTime())
 		Style.Blocked(bot, diagKey, "no_close_rune", string.format(
 			"max=%.0f waterMax=%.0f nearest=%.0f water=%.0f mid=%.0f status=%s", maxDist or 2600,
 			Const.Rune.waterRecoveryMaxDist, nearestDist, nearestWaterDist, midContextDistance(bot), seenStatus), 8.0)

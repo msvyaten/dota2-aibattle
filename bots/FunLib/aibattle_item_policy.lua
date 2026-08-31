@@ -3,6 +3,7 @@
 local M = {}
 
 local J = require(GetScriptDirectory()..'/FunLib/jmz_func')
+local AIBRunes = require(GetScriptDirectory()..'/FunLib/aibattle_runes')
 
 local consumables = {
 	item_flask = true,
@@ -119,9 +120,9 @@ function M.SkipManaConsumableForFountainTrip(bot)
 		if bottle ~= nil and bottle:GetCurrentCharges() > 0 then bottleEmpty = false end
 	end
 	if not bottleEmpty then return false end
-	local noCloseFresh = bot.aib_noCloseRuneLast ~= nil and DotaTime() - bot.aib_noCloseRuneLast <= 8.0
-	if noCloseFresh or hp < 0.35 then
-		return true, detail .. string.format(" bottle=0 no_close=%s", tostring(noCloseFresh))
+	local recentRuneRefusal = AIBRunes.RecentNoCloseRefusal(bot)
+	if recentRuneRefusal or hp < 0.35 then
+		return true, detail .. string.format(" bottle=0 rune_refused=%s", tostring(recentRuneRefusal))
 	end
 	return false
 end

@@ -1205,9 +1205,9 @@ local function recovery(bot, dials, nEnemyCreeps)
 	end
 
 	local floorReason = hp < 0.22 and "regen_lane_floor" or "no_sustain_floor"
-	local noCloseRuneFresh = bot.aib_noCloseRuneLast ~= nil and DotaTime() - bot.aib_noCloseRuneLast <= 8.0
+	local recentRuneRefusal = AIBRunes.RecentNoCloseRefusal(bot)
 	local emptyBottleNoRuneFloor = hp < 0.50 and mana < 0.18 and fcharges == 0
-		and noSustain and noCloseRuneFresh and not bot:WasRecentlyDamagedByAnyHero(1.5)
+		and noSustain and recentRuneRefusal and not bot:WasRecentlyDamagedByAnyHero(1.5)
 	if not canHealHere and (hp < 0.22 or (hp < 0.35 and noSustain) or emptyBottleNoRuneFloor) then
 		if emptyBottleNoRuneFloor then floorReason = "empty_bottle_no_rune_floor" end
 		local tpFloor = getTpScroll(bot)
