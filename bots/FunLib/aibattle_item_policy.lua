@@ -99,6 +99,22 @@ function M.SkipConsumableForFountainTrip(bot)
 	return true
 end
 
+function M.SkipManaConsumableForFountainTrip(bot)
+	if M.SkipConsumableForFountainTrip(bot) then return true end
+	if bot == nil then return false end
+	if bot.aib_fountainTping == true then return true end
+	-- The trip may not be latched yet on the exact tick mana logic runs, but once HP is already
+	-- in the fountain-floor band and the bottle is empty, mana is about to be restored for free.
+	if J.GetHP(bot) >= 0.35 then return false end
+	if bot:WasRecentlyDamagedByAnyHero(1.0) then return false end
+	local bSlot = bot:FindItemSlot("item_bottle")
+	if bSlot >= 0 and bot:GetItemSlotType(bSlot) == ITEM_SLOT_TYPE_MAIN then
+		local bottle = bot:GetItemInSlot(bSlot)
+		if bottle ~= nil and bottle:GetCurrentCharges() > 0 then return false end
+	end
+	return true
+end
+
 function M.HasSufficientTp(bot, itemApi)
 	local charges = itemApi.GetItemCharges(bot, "item_tpscroll")
 	return charges >= 2

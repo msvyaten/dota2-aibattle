@@ -1286,6 +1286,7 @@ local function AIB_BuildDesireCandidates(dials, rules, runtimeCtx, intentCtx)
 		local recoverUseless = AIBLaneRecovery.IsUselessBehindSafe(runtimeCtx, hp,
 			recentHeroDamage, recentCreepDamage)
 		if recoverUseless then
+			runtimeCtx.recoverUselessBehindSafe = true
 			Style.Blocked(bot, "recover-candidate", "no_resources_behind_safe",
 				string.format("hp=%.0f score=%.0f", hp * 100, recoverPolicy.score or 0), 3.0)
 		elseif recoverPolicy.capped then
@@ -1583,6 +1584,11 @@ local function ThinkLaningCore(dials, rules)
 	tail("wave-watch", 10, "idle", "ready", function() return AIBLaneSafety.WaveWatch(runtimeCtx) end)
 	tail("visual-afk", 8, "idle", "ready", function() return AIBLaneSafety.VisualAFK(runtimeCtx) end)
 	tail("anti-idle", 2, "idle", "ready", function()
+		if runtimeCtx.recoverUselessBehindSafe == true then
+			Style.Blocked(bot, "anti-idle", "recover_no_resources",
+				string.format("hp=%.0f", J.GetHP(bot) * 100), 3.0)
+			return false
+		end
 		Style.DiagRL(bot, "pre-aig", 3)
 		return Style.AntiIdleGlobal(bot)
 	end)

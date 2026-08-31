@@ -6,6 +6,7 @@ local J = require(GetScriptDirectory()..'/FunLib/jmz_func')
 local Style = require(GetScriptDirectory()..'/FunLib/aibattle_style')
 local Const = require(GetScriptDirectory()..'/FunLib/aibattle_constants')
 local AIBUtils = require(GetScriptDirectory()..'/FunLib/aibattle_utils')
+local Motor = require(GetScriptDirectory()..'/FunLib/aibattle_motor')
 
 function M.GetBestLastHitCreep(bot, creeps, attackDamage)
 	if not creeps then return nil end
@@ -182,6 +183,9 @@ function M.HandleCreepWork(ctx)
 		-- sitting inside the pack, which a ranged hero should wait for rather than fetch.
 		if AIBUtils.LocInsideMeleePack(ctx, hitCreep:GetLocation()) then
 			ctx.diag("cs-walk-into-pack")
+			Motor.Claim(bot, "cs-pack-refuse", 35, 0.8)
+			Style.Blocked(bot, "cs-walk", "melee_pack_refuse",
+				string.format("dist=%.0f", csDist or -1), 3.0)
 			return false
 		end
 		if not moveToAttackEdge(ctx, hitCreep, 20) then

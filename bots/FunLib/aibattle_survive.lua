@@ -9,6 +9,7 @@ local Style = require(GetScriptDirectory()..'/FunLib/aibattle_style')
 local AIBUtils = require(GetScriptDirectory()..'/FunLib/aibattle_utils')
 local Const = require(GetScriptDirectory()..'/FunLib/aibattle_constants')
 local AIBRunes = require(GetScriptDirectory()..'/FunLib/aibattle_runes')
+local AIBItemPolicy = require(GetScriptDirectory()..'/FunLib/aibattle_item_policy')
 
 local TANGO_CD = 10.0  -- shared across all tango calls; guards re-issue while CD / modifier active
 local FLASK_CD = 3.0   -- laning flask (defensiveHeal); recovery uses aib_recFlaskLast at 8s (separate context)
@@ -670,7 +671,8 @@ local function defensiveHeal(bot, dials)
 	-- walking home drank a clarity the fountain was about to refund (8974387496 at 8:00, by
 	-- OHA then; ours owns clarity now, so the same hole would just move here). Mana comes back
 	-- at the fountain exactly like HP does, so a committed trip settles this the same way.
-	if mana < 0.25 and manaReady and not fountainFreeHealSoon(bot, hp) then
+	if mana < 0.25 and manaReady and not fountainFreeHealSoon(bot, hp)
+		and not AIBItemPolicy.SkipManaConsumableForFountainTrip(bot) then
 		local safe = not (bot:WasRecentlyDamagedByAnyHero(0.5) or bot:WasRecentlyDamagedByCreep(0.5))
 		if safe and not sameHealTicking(bot, "item_clarity") then
 			local clarity = getItem(bot, "item_clarity")

@@ -42,6 +42,10 @@ function M.WantsTowerBackoff(bot, twr, now)
 	-- target == bot, not "a hero on our team": here counting ourselves IS the point, and in a
 	-- five-man game a tower shooting an ally is not a reason for us to walk.
 	if target ~= nil and target == bot then return true end
+	if bot.WasRecentlyDamagedByTower ~= nil and bot:WasRecentlyDamagedByTower(1.2)
+		and GetUnitToUnitDistance(bot, twr) <= twr:GetAttackRange() + 90 then
+		return true
+	end
 	-- Latched but ALREADY at the safe point is not a claim on the tick. Answering true there
 	-- made CanAct promise an action that Think delivered as a bare `return true` with no order,
 	-- so the bot stood still for the rest of the 2.5s window and lost the farm/fight it could

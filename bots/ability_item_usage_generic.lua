@@ -1786,6 +1786,10 @@ end
 X.ConsiderItemDesire["item_clarity"] = function( hItem )
 
 	if bot:DistanceFromFountain() < 2000 then return BOT_ACTION_DESIRE_NONE end
+	if AIBItemPolicy.SkipManaConsumableForFountainTrip(bot) then
+		AIBStyle.Blocked(bot, "mana-clarity", "fountain_free_mana", "", 8.0)
+		return BOT_ACTION_DESIRE_NONE
+	end
 
 	local nCastRange = 800 + aetherRange
 	local sCastType = 'unit'

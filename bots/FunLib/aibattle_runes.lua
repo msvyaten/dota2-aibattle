@@ -484,14 +484,17 @@ function M.SeekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 		end
 		bot.aib_bottleRuneGoneGraceUntil = nil
 		if bot.aib_bottleRuneId ~= nil then
+			local pickedRune = bot.aib_bottleRuneId
 			runeTxn(bot, "rune", "pickup", diagKey, string.format("dist=%.0f", targetDist), 30, 1.0)
 			runeResult(bot, diagKey, "pickup_attempt", string.format("dist=%.0f age=%.0f", targetDist, now - bot.aib_bottleRuneStarted), 2.0)
 			Style.Intent(bot, diagKey, string.format("dist=%.0f age=%.0f reason=pickup", targetDist, now - bot.aib_bottleRuneStarted), 1.0)
 			if bot.Action_PickUpRune ~= nil then
-				bot:Action_PickUpRune(bot.aib_bottleRuneId)
+				bot:Action_PickUpRune(pickedRune)
 			else
 				bot:Action_MoveToLocation(bot.aib_bottleRuneTarget)
 			end
+			clearRuneAttempt(bot)
+			bot.aib_bottleRuneCooldownUntil = now + 1.5
 			return true
 		end
 		runeTxn(bot, "rune", "hold", diagKey, string.format("dist=%.0f", targetDist), 30, 1.0)
