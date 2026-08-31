@@ -29,7 +29,7 @@ python tools\pre_match_state.py
 
 | | lines | % of `bots/` | do we touch it? |
 |---|---:|---:|---|
-| **Our layer `aibattle_*`** (behaviour) | **8,334** | 3.9% | YES - all the logic is here |
+| **Our layer `aibattle_*`** (behaviour) | **8,337** | 3.9% | YES - all the logic is here |
 | Configs `Customize/` | 678 | 0.3% | YES - archetype presets |
 | **Our patches inside vendored files** | **~469** | 0.2% | CAREFULLY - 21 files, see section 3 |
 | Vendored OHA (everything else in `bots/`) | ~190,000 | ~96% | NO - upstream base, synced from above |
@@ -44,7 +44,26 @@ when you need to, never refactor it.
 
 ---
 
-## 1. The AIBattle layer - our code (`bots/FunLib/aibattle_*.lua`, 8,334 lines, 22 files)
+## 0. Where the next extraction should cut
+
+`aibattle_survive.lua` is the largest file we own, and the seam inside it is already clean. Eight
+functions form the fountain-trip cluster - `hasFountainAura`, `fountainFreeHealSoon`,
+`runeBeatsFountain`, `commitFountainTrip`, `releaseFountainTrip`, `fountainTripDoneReason`,
+`reviewFountainTrip`, `fountainRecovery` - 244 of the file's 1317 lines. Every one is `local` and
+nothing outside the file calls any of them, so the move is a rename of call sites and nothing
+else.
+
+It is worth doing for ownership, not for line count: the open debt says the trip home belongs to
+this owner, the owner refuses while a heal is in hand or in flight, and `anti-idle` drives the
+bot instead. The cluster has no name today, so there is nobody to hold responsible for that.
+Giving it one is the precondition for fixing the debt, which is why this is an ownership cut and
+not the mechanical split the project forbids.
+
+Destination is a judgement call and should be made when the work starts, not now: folding it
+into `aibattle_laning_recovery.lua` keeps the file count flat, a new module states the ownership
+more plainly. Either way it does not belong in a build that is about to play a match.
+
+## 1. The AIBattle layer - our code (`bots/FunLib/aibattle_*.lua`, 8,337 lines, 22 files)
 
 All behaviour lives here. One file, one responsibility.
 
@@ -66,7 +85,7 @@ All behaviour lives here. One file, one responsibility.
 | File | lines | Role |
 |---|---:|---|
 | `aibattle_survive.lua` | 1317 | **Healing and low-HP regen**: `fountainRecovery`, `defensiveHeal`, `regenLane`, `recovery` (bottle / flask / tango / rune fallback chain, buy-escape). |
-| `aibattle_runes.lua` | 799 | **Runes**: `SeekBottleRune`, `FindWaterRecoveryRune`, staging and pickup memory, the bottle-fill transaction. |
+| `aibattle_runes.lua` | 802 | **Runes**: `SeekBottleRune`, `FindWaterRecoveryRune`, staging and pickup memory, the bottle-fill transaction. |
 | `aibattle_laning_safety.lua` | 747 | `CreepHitReact`, `DamageUnstuck`, `RangedMeleePackSpacing`, `LastHitWatchdog`, visual-hold / AFK anti-idle. |
 | `aibattle_laning_combat.lua` | 563 | `HarassAndChase`, `ContactHero`, `AbilityPressure`, `RunePowerPressure`, `UphillReposition`, `EmergencyKillPriority`, `AbilityHarass`. |
 | `aibattle_laning_tempo.lua` | 441 | `Pregame`, `DivePolicy`, `DeathWindow`, `PreCreepStandoff` - the hard stage guards. |

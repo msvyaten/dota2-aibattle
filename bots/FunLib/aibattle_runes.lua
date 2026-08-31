@@ -220,6 +220,7 @@ local function nearestRuneSpot(bot, now, avoidContested)
 			-- Water windows spawn a rune at BOTH spots; prefer the uncontested one.
 			-- Small tie-break toward a rune that is actually present, but let distance
 			-- dominate so the bot does not abandon farm to chase a far rune.
+			-- hero-agnostic: rune contest radius is map/vision spacing, not attack reach.
 			local score = dist + ((avoidContested and enemyNearLoc(loc, 700)) and 1400 or 0)
 				- (available and 300 or 0)
 			if score < bestScore then
@@ -444,6 +445,7 @@ function M.SeekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 					return true
 				end
 			end
+			-- hero-agnostic: gone grace is rune pickup/spot tolerance, not combat spacing.
 			if targetDist <= 260 then
 				if bot.aib_bottleRuneGoneGraceUntil == nil then
 					bot.aib_bottleRuneGoneGraceUntil = now + 3.0
@@ -548,6 +550,7 @@ function M.SeekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 				-- spot, a long walk that fully heals beats standing still.
 				local allowedDist = dist <= (maxDist or 2600)
 					or (runeType == RUNE_WATER and waterRecoveryAllowed(bot, hp, mana, dist, forceEmptyBottle))
+					-- hero-agnostic: emergency rune trip is bounded by map travel and spot danger.
 					or (hp < 0.25 and dist <= 4500 and not enemyNearLoc(loc, 900))
 				if allowedDist and score < bestScore then
 					bestRune, bestLoc, bestDist, bestScore = runeId, loc, dist, score

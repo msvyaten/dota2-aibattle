@@ -118,6 +118,17 @@ gates, rune economy, or the schema seen by the LLM.
 Prefer written decision memos over speculative patches when the scope crosses tracks,
 especially for hero expansion and 5v5. A good memo should save implementation time.
 
+## Next Team Package
+
+After the gate is green: classify `hero_readiness.py --audit` sites; keep its budget as a
+ratchet; delete telemetry fields with no reader; do not mechanically split files; the
+`bot.aib_*` ownership rule is in `STATE.md`. Next match must watch recovery
+(`empty_bottle_no_rune_floor`, `fountain_free_mana`, low-HP yoyo), tower damage (`tower_any`
+against `tower`; `siege-tower-backoff` has never left zero, and `cause=` rides the
+`tower_targeting_me` line), healing (`heal-item-took/cancelled`), and creep spacing
+(`melee_pack_refuse`). Larger redesigns: P1-B urgent decisions into the arbiter, P3-B.2
+destination-aware recovery, hero-profile spacing, and a separate 5v5 product gate.
+
 ## Evidence Set
 
 `REVIEW_SCOPE.md` holds it, with the commands and what each match is there to show. It is not

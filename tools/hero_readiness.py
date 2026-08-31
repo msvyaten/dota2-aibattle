@@ -78,7 +78,7 @@ NUMBER = re.compile(r"(?<![\w.])(\d{3,4})(?![\w.])")
 EXEMPT = "hero-agnostic:"
 
 # Sites carrying no attack-range term at all, or a floor that hides it. Falls, never rises.
-SPACING_DEBT_BUDGET = 21
+SPACING_DEBT_BUDGET = 16
 
 
 def audit_sites():

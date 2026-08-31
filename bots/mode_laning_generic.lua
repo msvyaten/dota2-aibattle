@@ -157,6 +157,7 @@ end
 local function AIB_MeleeCreepCentroid(creeps, maxDist)
 	local sx, sy, sz, n = 0, 0, 0, 0
 	for _, creep in pairs(creeps or {}) do
+		-- hero-agnostic: melee creep cluster radius describes creep formation geometry.
 		if AIB_IsMeleeCreep(creep) and GetUnitToUnitDistance(bot, creep) <= (maxDist or 320) then
 			local loc = creep:GetLocation()
 			sx = sx + loc.x; sy = sy + loc.y; sz = sz + loc.z; n = n + 1
@@ -170,6 +171,7 @@ local function AIB_MeleeCreepCentroidAround(loc, maxDist)
 	if loc == nil then return nil, 0 end
 	local sx, sy, sz, n = 0, 0, 0, 0
 	for _, creep in pairs(nEnemyCreeps or {}) do
+		-- hero-agnostic: around-location cluster radius describes creep formation geometry.
 		if AIB_IsMeleeCreep(creep) and GetUnitToLocationDistance(creep, loc) <= (maxDist or 360) then
 			local cLoc = creep:GetLocation()
 			sx = sx + cLoc.x; sy = sy + cLoc.y; sz = sz + cLoc.z; n = n + 1
