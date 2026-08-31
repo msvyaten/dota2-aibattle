@@ -100,19 +100,30 @@ function M.SkipConsumableForFountainTrip(bot)
 end
 
 function M.SkipManaConsumableForFountainTrip(bot)
-	if M.SkipConsumableForFountainTrip(bot) then return true end
+	local hp = bot ~= nil and J.GetHP(bot) or 1.0
+	local mana = 1.0
+	if bot ~= nil and bot:GetMaxMana() > 0 then mana = bot:GetMana() / bot:GetMaxMana() end
+	local detail = string.format("hp=%.0f mana=%.0f", hp * 100, mana * 100)
+	if M.SkipConsumableForFountainTrip(bot) then return true, detail .. " trip=1" end
 	if bot == nil then return false end
-	if bot.aib_fountainTping == true then return true end
-	-- The trip may not be latched yet on the exact tick mana logic runs, but once HP is already
-	-- in the fountain-floor band and the bottle is empty, mana is about to be restored for free.
-	if J.GetHP(bot) >= 0.35 then return false end
+	if bot.aib_fountainTping == true then return true, detail .. " tping=1" end
+	-- The trip may not be latched yet on the exact tick mana logic runs. Do not key this on
+	-- critical HP only: 8975911100 had the waste at 39-48% HP, 3% mana, empty bottle, and a
+	-- fresh no_close_rune proof. That is already a fountain-resource state, not a clarity state.
+	if hp >= 0.55 or mana >= 0.18 then return false end
 	if bot:WasRecentlyDamagedByAnyHero(1.0) then return false end
+	local bottleEmpty = true
 	local bSlot = bot:FindItemSlot("item_bottle")
 	if bSlot >= 0 and bot:GetItemSlotType(bSlot) == ITEM_SLOT_TYPE_MAIN then
 		local bottle = bot:GetItemInSlot(bSlot)
-		if bottle ~= nil and bottle:GetCurrentCharges() > 0 then return false end
+		if bottle ~= nil and bottle:GetCurrentCharges() > 0 then bottleEmpty = false end
 	end
-	return true
+	if not bottleEmpty then return false end
+	local noCloseFresh = bot.aib_noCloseRuneLast ~= nil and DotaTime() - bot.aib_noCloseRuneLast <= 8.0
+	if noCloseFresh or hp < 0.35 then
+		return true, detail .. string.format(" bottle=0 no_close=%s", tostring(noCloseFresh))
+	end
+	return false
 end
 
 function M.HasSufficientTp(bot, itemApi)

@@ -29,7 +29,7 @@ python tools\pre_match_state.py
 
 | | lines | % of `bots/` | do we touch it? |
 |---|---:|---:|---|
-| **Our layer `aibattle_*`** (behaviour) | **8,273** | 3.9% | YES - all the logic is here |
+| **Our layer `aibattle_*`** (behaviour) | **8,292** | 3.9% | YES - all the logic is here |
 | Configs `Customize/` | 678 | 0.3% | YES - archetype presets |
 | **Our patches inside vendored files** | **~469** | 0.2% | CAREFULLY - 21 files, see section 3 |
 | Vendored OHA (everything else in `bots/`) | ~190,000 | ~96% | NO - upstream base, synced from above |
@@ -44,7 +44,7 @@ when you need to, never refactor it.
 
 ---
 
-## 1. The AIBattle layer - our code (`bots/FunLib/aibattle_*.lua`, 8,273 lines, 22 files)
+## 1. The AIBattle layer - our code (`bots/FunLib/aibattle_*.lua`, 8,292 lines, 22 files)
 
 All behaviour lives here. One file, one responsibility.
 
@@ -65,8 +65,8 @@ All behaviour lives here. One file, one responsibility.
 
 | File | lines | Role |
 |---|---:|---|
-| `aibattle_survive.lua` | 1288 | **Healing and low-HP regen**: `fountainRecovery`, `defensiveHeal`, `regenLane`, `recovery` (bottle / flask / tango / rune fallback chain, buy-escape). |
-| `aibattle_runes.lua` | 787 | **Runes**: `SeekBottleRune`, `FindWaterRecoveryRune`, staging and pickup memory, the bottle-fill transaction. |
+| `aibattle_survive.lua` | 1293 | **Healing and low-HP regen**: `fountainRecovery`, `defensiveHeal`, `regenLane`, `recovery` (bottle / flask / tango / rune fallback chain, buy-escape). |
+| `aibattle_runes.lua` | 790 | **Runes**: `SeekBottleRune`, `FindWaterRecoveryRune`, staging and pickup memory, the bottle-fill transaction. |
 | `aibattle_laning_safety.lua` | 747 | `CreepHitReact`, `DamageUnstuck`, `RangedMeleePackSpacing`, `LastHitWatchdog`, visual-hold / AFK anti-idle. |
 | `aibattle_laning_combat.lua` | 563 | `HarassAndChase`, `ContactHero`, `AbilityPressure`, `RunePowerPressure`, `UphillReposition`, `EmergencyKillPriority`, `AbilityHarass`. |
 | `aibattle_laning_tempo.lua` | 441 | `Pregame`, `DivePolicy`, `DeathWindow`, `PreCreepStandoff` - the hard stage guards. |
@@ -76,7 +76,7 @@ All behaviour lives here. One file, one responsibility.
 | `aibattle_laning_duel.lua` | 212 | `Prewave` and `Pregame` duel movement. |
 | `aibattle_utils.lua` | 236 | `SafeRetreatTowerLoc`, `ForwardSurvivingTowerLoc`, `EnemyTowerDanger`, `UphillMiss`, `IsTowerActuallyThreatening`. |
 | `aibattle_laning_trade.lua` | 234 | `KillLock`, `HealInterrupt`, `PassingHeroTrade` - the urgent trades. |
-| `aibattle_item_policy.lua` | 185 | `ShouldUseMango`, `ShouldDelaySpareTpPurchase`, consumable guards for fountain trips. |
+| `aibattle_item_policy.lua` | 196 | `ShouldUseMango`, `ShouldDelaySpareTpPurchase`, consumable guards for fountain trips. |
 | `aibattle_laning_survival.lua` | 117 | `CreepAggroRelief`. |
 
 ---

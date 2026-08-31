@@ -732,6 +732,9 @@ function M.SeekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 		-- Keep this call within three lines of the `return false` below: check_all's silent-refusal
 		-- detector looks that far back for a logger and nothing further, so a fourth line of
 		-- wrapping turns a named refusal into a reported silent one.
+		bot.aib_noCloseRuneLast = DotaTime()
+		bot.aib_noCloseRuneMid = midContextDistance(bot)
+		bot.aib_noCloseRuneNearest = nearestDist
 		Style.Blocked(bot, diagKey, "no_close_rune", string.format(
 			"max=%.0f waterMax=%.0f nearest=%.0f water=%.0f mid=%.0f status=%s", maxDist or 2600,
 			Const.Rune.waterRecoveryMaxDist, nearestDist, nearestWaterDist, midContextDistance(bot), seenStatus), 8.0)

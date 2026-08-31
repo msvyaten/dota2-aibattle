@@ -671,8 +671,9 @@ local function defensiveHeal(bot, dials)
 	-- walking home drank a clarity the fountain was about to refund (8974387496 at 8:00, by
 	-- OHA then; ours owns clarity now, so the same hole would just move here). Mana comes back
 	-- at the fountain exactly like HP does, so a committed trip settles this the same way.
+	local skipManaConsumable = AIBItemPolicy.SkipManaConsumableForFountainTrip(bot)
 	if mana < 0.25 and manaReady and not fountainFreeHealSoon(bot, hp)
-		and not AIBItemPolicy.SkipManaConsumableForFountainTrip(bot) then
+		and not skipManaConsumable then
 		local safe = not (bot:WasRecentlyDamagedByAnyHero(0.5) or bot:WasRecentlyDamagedByCreep(0.5))
 		if safe and not sameHealTicking(bot, "item_clarity") then
 			local clarity = getItem(bot, "item_clarity")
@@ -1204,7 +1205,11 @@ local function recovery(bot, dials, nEnemyCreeps)
 	end
 
 	local floorReason = hp < 0.22 and "regen_lane_floor" or "no_sustain_floor"
-	if not canHealHere and (hp < 0.22 or (hp < 0.35 and noSustain)) then
+	local noCloseRuneFresh = bot.aib_noCloseRuneLast ~= nil and DotaTime() - bot.aib_noCloseRuneLast <= 8.0
+	local emptyBottleNoRuneFloor = hp < 0.50 and mana < 0.18 and fcharges == 0
+		and noSustain and noCloseRuneFresh and not bot:WasRecentlyDamagedByAnyHero(1.5)
+	if not canHealHere and (hp < 0.22 or (hp < 0.35 and noSustain) or emptyBottleNoRuneFloor) then
+		if emptyBottleNoRuneFloor then floorReason = "empty_bottle_no_rune_floor" end
 		local tpFloor = getTpScroll(bot)
 		if tpFloor ~= nil and not bot:WasRecentlyDamagedByAnyHero(1.5) then
 			commitFountainTrip(bot, true, heldHeal)
