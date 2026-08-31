@@ -960,6 +960,14 @@ local function AIB_SampleDamageBySource()
 			local t = bot:WasRecentlyDamagedByTower(window)
 			local h = bot:WasRecentlyDamagedByAnyHero(window)
 			local n = (c and 1 or 0) + (t and 1 or 0) + (h and 1 or 0)
+			-- `tower` only counts samples where the tower flag stood ALONE, and under a tower
+			-- that is the rare case: creeps are usually hitting us at the same time, so the
+			-- damage lands in `mixed` and `tower` reads zero while the user watches the tower
+			-- shoot. 8975911100 is exactly that: tower=0 for Radiant, mixed=474, and towers
+			-- visibly hitting it. This bucket is a SUPERSET -- every sample carrying the tower
+			-- flag, alone or not -- so `tower_any - tower` is the tower damage that arrived in
+			-- company, and the tower-backoff work has a number it can actually be judged by.
+			if t then bot.aib_dmgTowerAny = (bot.aib_dmgTowerAny or 0) + d end
 			if n == 1 then
 				if c then bot.aib_dmgCreep = (bot.aib_dmgCreep or 0) + d
 				elseif t then bot.aib_dmgTower = (bot.aib_dmgTower or 0) + d
@@ -974,10 +982,10 @@ local function AIB_SampleDamageBySource()
 	if bot.aib_dmgLogLast == nil or now - bot.aib_dmgLogLast >= 15.0 then
 		bot.aib_dmgLogLast = now
 		Style.Intent(bot, "damage-by-source", string.format(
-			"creep=%d tower=%d hero=%d mixed=%d death=%d other=%d stale=%d gaps=%d",
+			"creep=%d tower=%d hero=%d mixed=%d death=%d other=%d stale=%d gaps=%d tower_any=%d",
 			bot.aib_dmgCreep or 0, bot.aib_dmgTower or 0, bot.aib_dmgHero or 0,
 			bot.aib_dmgMixed or 0, bot.aib_dmgDeath or 0, bot.aib_dmgOther or 0,
-			bot.aib_dmgStale or 0, bot.aib_dmgStaleN or 0), 1.0)
+			bot.aib_dmgStale or 0, bot.aib_dmgStaleN or 0, bot.aib_dmgTowerAny or 0), 1.0)
 	end
 end
 

@@ -22,51 +22,52 @@ Read `python tools/postmatch.py <id>` top to bottom; the panels are written per 
 - `tower pokes` - `backoff` > 0, `parked` instead of empty ownership, commit/terminal HOLD;
 - `buy loop` - `stalled` stays 0; `anti-idle` - only an `enter`/`idle` pair.
 
-## Empty `fight` Wins - Found 28.08 (from 5 logs, no match needed)
+## Empty `fight` Wins - Found 28.08
 
 **Predicate gap.** `fightCanAct` is THREE conditions against **38 refusal points** in the action
 itself. `c2ed8ac` added a fourth (`uphill`), Codex a fifth (`abilityReady`); about 33 remain.
+What `empty_action` does and does not mean is in `ARCHITECTURE.md`; splitting `fight` fixes
+telemetry, not behaviour. `--never-fired` judges SPECIFIC matches - always re-check it.
 
-**`empty_action` is NOT a burnt tick** ([aibattle_laning_arbiter.lua:92-128]): the arbiter falls
-through and a lower candidate takes the tick. The cost is that THE SCORE LIES - the election is
-won at 124 and the work is done at 40. Real empty ownership is `return true` with no action.
-**Consequence: splitting `fight` fixes telemetry, not behaviour.**
+## Acceptance: read on `8975911100` (build `53e4eeb`, R=grok D=gemini, Dire won, 7.8 min)
 
-The `--never-fired` method gives a verdict about SPECIFIC matches. Always re-check it.
+- PASS **`9c94a06` creep before tower.** `siege-creep-first` R=10 D=3, off zero for the first
+  time in four matches. `siege-terminal-tower` R=20 against 131 one build earlier; D=82 with
+  creep-first=3 is the documented pass case - that wave really was on the tower.
+- PASS **`153ee96` consumables owner.** Six per-item keys emitted, 24 refusals a side. Our own
+  `mana-clarity` moved off zero (R=2 D=1), which is the ownership transfer the edit was for.
+- PASS **`03a70bf` penalty for being behind.** `cause=hp_behind` 3 a side. The inverse risk did
+  NOT land: kill pressure survived on both sides (16s/2 windows and 15s/3), hero damage stayed
+  the dominant source. `mutual low` was 0, which on its own says little - the best-tension match
+  of the project had it at zero too.
+- NOT MEASURED **`51b9896` tower cover** (`siege-thin-shield`=0) and **`c802251` rune trip**
+  (`spot_race_lost`=0, the situation never arose). Zero here means measured by nothing.
 
-## Acceptance For The Edits Of 30.08 (signatures of the next match)
+## Pending: the batch that has never been measured
 
-The 29.08 batch was accepted on the pair `8974058954`/`8974086880` - see `git show 9b95ba7`.
-Remaining debt from it: six `*-no-edge` keys read 0, which means MEASURED BY NOTHING. That is a
-different claim from "they do not work".
+Nine behaviour changes landed after `53e4eeb` (`e45fe90`, `afc3093`, `609d153`) plus the two
+above that fired on nothing. One match cannot attribute them. Splitting means a pair on
+`e6d56d1` and a pair on HEAD - four matches instead of two.
 
-- **`c802251` rune trip:** `route_unsafe`/`enemy_near`/`spot_race_lost` carrying `stage=1|hold`.
-  Already fired in `8974387496` (D, enemy at 567 with hp 44) - hold it, do not widen it.
-- **`51b9896` tower cover:** `siege-thin-shield` counts the refusals when cover is one creep.
-- **`9c94a06` creep before tower:** `siege-creep-first` LEAVES ZERO and `siege-terminal-tower`
-  falls. If terminal did not move, the wave really was hitting the tower - that is a pass,
-  not a failure.
-- **`153ee96` consumables owner:** acceptance here is SUBTRACTION, read both directions - total
-  consumables drunk must NOT fall, and `heal-skip-trip-committed` catches the clarity drunk on
-  the way to the fountain. The vendor-refusal counter was rewritten before the match (`9c7b732`).
-  It used to be `vendor-heal-suppressed`: ONE key for seven items on a 30-second window, so it
-  measured windows rather than refusals and could not exceed about seventeen in a whole match -
-  it would have read as "the switch barely fired" whatever the truth was. It is now
-  `vendor-heal-suppressed-<item>`, edge-triggered (`DiagEdge`, 1.0s), which puts the number on
-  the SAME scale as what got drunk: `-flask` against flasks, `-clarity` against clarities.
-- **`03a70bf` penalty for being behind:** `fight-candidate no_action_capped cause=hp_behind`.
-  A cap here is a VETO, not a low score - the candidate never enters the election at all, so
-  `fightBehind=50` decides nothing. Risk is the inverse of the bug: if `mutual low` and kill
-  pressure go to zero, the cap is too wide before it is wrong - move the threshold, not the edit.
+- **Clarity/mana gate.** `mana-clarity reason=fountain_free_mana` carries `hp= mana= bottle=0
+  rune_refused=`. Read the hp: the first threshold was 0.35, the waste happened at 39-48%.
+- **Melee-pack refusal claims the motor.** `cs-walk/melee_pack_refuse`. Watch the volume, not
+  the presence: 69 refusals a match at 0.8s each is up to 55s of suppressed lane movement.
+- **Tower backoff, damage leg.** `siege ... reason=tower_targeting_me cause=tower_damage`. Three
+  legs shared one hardcoded name, so the new leg was reported as the targeting one.
+- **Empty-bottle fountain floor.** `recovery-plan ... reason=empty_bottle_no_rune_floor`, which
+  carries hp. This is the one aimed at the hesitation the user watched at 6:40.
+- **Rune pickup jitter.** Pickup clears the attempt and takes a 1.5s cooldown.
+- Still owed from 29.08: six `*-no-edge` keys have never been emitted by anything.
 
 ## Measured Debts 29.08 (not blockers, fix one at a time between matches)
 
 - **About 140 hardcoded hp thresholds duplicate named constants** (`0.45`=`activeRecovery` in 27
   places, `0.35`=`danger` 22, `0.55`=`softRecovery` 16, `0.30`=`critical` 14). The VALUE was
   compared, not the meaning - read every site. The precedent was paid for in `7e2b066`.
-- **Tower branch shadowing - partly closed by `9c94a06`** (the branch that hits the CREEP was
-  raised). The four branches that hit the TOWER are still shadowed by `terminal` (+180 against
-  +60). **`ERA_START`** in `binding.py` spans both hero populations - split it into eras.
+- **Tower branch shadowing - the creep branch is now measured off zero (`8975911100`).** The
+  four branches that hit the TOWER are still shadowed by `terminal` (+180 against +60).
+  **`ERA_START`** in `binding.py` spans both hero populations - split it into eras.
 - **`binding.py` is unanswerable on the current series BY CONSTRUCTION**: the configs were
   written by three models from ONE text, the dials sit within 0.05-0.10 of each other, and
   `MIN_ROWS=6` means three matches on one build. The user's call: either a second, opposing

@@ -41,16 +41,22 @@ function M.WantsTowerBackoff(bot, twr, now)
 	local target = twr:GetAttackTarget()
 	-- target == bot, not "a hero on our team": here counting ourselves IS the point, and in a
 	-- five-man game a tower shooting an ally is not a reason for us to walk.
-	if target ~= nil and target == bot then return true end
+	-- Three legs, one log line. The caller used to print `tower_targeting_me` whichever leg
+	-- answered, so the damage leg was reported under the name of the targeting leg and could
+	-- not be told apart from it -- the same shape as the capped candidates, which named the
+	-- refusal and never the cause. The leg comes back as a second value; the key is unchanged
+	-- so existing counters still line up.
+	if target ~= nil and target == bot then return true, "targeted" end
 	if bot.WasRecentlyDamagedByTower ~= nil and bot:WasRecentlyDamagedByTower(1.2)
 		and GetUnitToUnitDistance(bot, twr) <= twr:GetAttackRange() + 90 then
-		return true
+		return true, "tower_damage"
 	end
 	-- Latched but ALREADY at the safe point is not a claim on the tick. Answering true there
 	-- made CanAct promise an action that Think delivered as a bare `return true` with no order,
 	-- so the bot stood still for the rest of the 2.5s window and lost the farm/fight it could
 	-- have had (Codex's audit -- and exactly the empty-owner shape this file keeps paying for).
-	return M.TowerBackoffLatched(bot, now) and not M.TowerBackoffArrived(bot)
+	local latched = M.TowerBackoffLatched(bot, now) and not M.TowerBackoffArrived(bot)
+	return latched, latched and "latched" or nil
 end
 
 -- The latch's remaining time after arrival still has a job: it is what stops the siege desire
@@ -157,7 +163,8 @@ function M.Think(ctx)
 	local twrDist = GetUnitToUnitDistance(bot, twr)
 	-- Leaving comes before every gate below. tower_aggression="always" still buys the right to
 	-- stand and eat it; everyone else walks out first and argues about desire afterwards.
-	if towerAggr ~= "always" and M.WantsTowerBackoff(bot, twr, now) then
+	local wantsBackoff, backoffCause = M.WantsTowerBackoff(bot, twr, now)
+	if towerAggr ~= "always" and wantsBackoff then
 		if bot.aib_towerBackoffUntil == nil or now >= bot.aib_towerBackoffUntil then
 			bot.aib_towerBackoffUntil = now + 2.5
 			-- Out of the tower's range, not a fixed 420. 420 was the step that cleared a
@@ -175,7 +182,8 @@ function M.Think(ctx)
 				math.max(need, 250))
 		end
 		ctx.blocked("siege", "tower_targeting_me",
-			string.format("tower=%.0f hp=%.0f", twrDist, J.GetHP(bot) * 100), 3.0)
+			string.format("tower=%.0f hp=%.0f cause=%s", twrDist, J.GetHP(bot) * 100,
+				backoffCause or "none"), 3.0)
 		ctx.diag("siege-tower-backoff")
 		bot:Action_MoveToLocation(bot.aib_towerBackoffDest)
 		return true

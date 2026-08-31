@@ -29,7 +29,7 @@ python tools\pre_match_state.py
 
 | | lines | % of `bots/` | do we touch it? |
 |---|---:|---:|---|
-| **Our layer `aibattle_*`** (behaviour) | **8,302** | 3.9% | YES - all the logic is here |
+| **Our layer `aibattle_*`** (behaviour) | **8,310** | 3.9% | YES - all the logic is here |
 | Configs `Customize/` | 678 | 0.3% | YES - archetype presets |
 | **Our patches inside vendored files** | **~469** | 0.2% | CAREFULLY - 21 files, see section 3 |
 | Vendored OHA (everything else in `bots/`) | ~190,000 | ~96% | NO - upstream base, synced from above |
@@ -44,7 +44,7 @@ when you need to, never refactor it.
 
 ---
 
-## 1. The AIBattle layer - our code (`bots/FunLib/aibattle_*.lua`, 8,302 lines, 22 files)
+## 1. The AIBattle layer - our code (`bots/FunLib/aibattle_*.lua`, 8,310 lines, 22 files)
 
 All behaviour lives here. One file, one responsibility.
 
@@ -71,7 +71,7 @@ All behaviour lives here. One file, one responsibility.
 | `aibattle_laning_combat.lua` | 563 | `HarassAndChase`, `ContactHero`, `AbilityPressure`, `RunePowerPressure`, `UphillReposition`, `EmergencyKillPriority`, `AbilityHarass`. |
 | `aibattle_laning_tempo.lua` | 441 | `Pregame`, `DivePolicy`, `DeathWindow`, `PreCreepStandoff` - the hard stage guards. |
 | `aibattle_laning_recovery.lua` | 426 | **Low-HP owners** (the P3 target): `ThinkIfAllowed`, `CriticalLock`, `ActiveLowHp`, `EmergencyRetreat`, `ForwardLowHpPullback`, `LowHpHoldState`. |
-| `aibattle_laning_siege.lua` | 439 | Tower siege, siege-commit, and the latch owner API. |
+| `aibattle_laning_siege.lua` | 447 | Tower siege, siege-commit, and the latch owner API. |
 | `aibattle_laning_creeps.lua` | 294 | `GetBestLastHitCreep`, `GetBestDenyCreep`, `HandleCreepWork`. |
 | `aibattle_laning_duel.lua` | 212 | `Prewave` and `Pregame` duel movement. |
 | `aibattle_utils.lua` | 236 | `SafeRetreatTowerLoc`, `ForwardSurvivingTowerLoc`, `EnemyTowerDanger`, `UphillMiss`, `IsTowerActuallyThreatening`. |
