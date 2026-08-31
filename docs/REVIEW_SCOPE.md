@@ -170,8 +170,8 @@ helpers. Trust this over any number written in a document.
 
 ## Evidence set
 
-Use these matches before proposing gameplay changes. The first three are the newest; the rest
-are the older baseline and are superseded wherever they disagree.
+Use these before proposing gameplay changes. The first entries are newest; the rest are the
+older baseline, superseded wherever they disagree.
 
 - `8974058954` + `8974086880` - **read these two as one pair, and read them first.** Same build,
   same heroes, configs swapped between the sides. Radiant won both, with opposite configs, for a
@@ -179,20 +179,22 @@ are the older baseline and are superseded wherever they disagree.
   single match in this project can compare two configs. The swap is provable from inside the
   logs (the harass dials and the strategy hashes trade places), and it also produced the best
   tension profile the project has: never decided, no dead tail, a final gap of seven gold.
+- `8975911100` - **the newest, and the only one on the current generation of the build.** Dire
+  won again, so the seven-Radiant-win streak is broken twice over. The lane was lost between
+  t=45 and t=50 (Radiant 54% to 26% while Dire went 49% to 50%), and the match-wide damage
+  attribution says why: Radiant took 2412 hero damage against Dire's 1562. It lost the duel, not
+  a creep exchange. Three of the five edits under test were accepted on it.
 - `8974387496` - same sides and configs as `8974058954`, one build later, so it is a direct A/B
   of the edits between them. Dire won it, the first time in eight matches. One of those edits
   was reverted because of what it showed (`03bd66d`).
 - `8972520526` - the previous best tension profile (decided at 95% of the match, 4.8% dead tail)
   with `mutual low = 0`. Superseded by the pair above on tension, still useful on question 3.
-- `8972598364` - the kill lock broke off a finish at `ehp=10` under `chase_into_tower` (fixed
-  since); the fountain return walked because `fountain-floor reason=heal_in_hand` kept the trip
-  owner out of the tick; the rune scan read `nearest=inf` all match for Dire while Radiant
-  committed and arrived late twice - same code, different result, not yet diagnosed.
-- `8969965270` - decided at 78s with an 87% dead tail: the one-sided end of the range.
-- `8964702771` - accepted technical gate, two lead changes, mutual low still zero. The only
-  match here that passed the gate; `8968270421` and `8926148548` are older and superseded.
+- `8972598364` - where the walking fountain return and the `nearest=inf` rune scan were first
+  seen. Both are still open and both are in BACKLOG; the kill-lock half of it is fixed.
+- `8964702771` - the only match here that passed the technical gate: two lead changes, mutual
+  low still zero. `8969965270` (decided at 78s) is the one-sided end of the range.
 
 ```bash
-python tools/postmatch.py 8974058954   # then 8974086880, 8974387496
-python tools/betting.py 8974058954 8974086880 8974387496 8972520526
+python tools/postmatch.py 8975911100   # then 8974058954, 8974086880, 8974387496
+python tools/betting.py 8975911100 8974058954 8974086880 8974387496
 ```

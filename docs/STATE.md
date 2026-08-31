@@ -75,9 +75,9 @@ owns a tick makes review harder and cures nothing.
   low-HP episode traces after every recovery change.
 - **`fight` wins the tick and cannot act, on every build measured.** Full finding, including
   why it does NOT explain `mutual low` at zero, in BACKLOG "Empty `fight` Wins".
-- **Five edits are deployed and unmeasured** (`c802251`..`03a70bf`), each with its acceptance
-  signature in BACKLOG. One match reads all five at once; split the run in two if attribution
-  matters more than throughput.
+- **Nine behaviour changes are deployed and unmeasured** (`e45fe90`..`609d153`), each with its
+  acceptance signature in BACKLOG. `8975911100` measured the five before them and accepted three;
+  attributing this batch cleanly needs a pair on `e6d56d1` and a pair on HEAD.
 - Anti-idle still holds gameplay actions; its job is detection only. It empties **33-47%** of
   its activations on both sides, and it is what drives the bot when a real owner refuses.
 - Two owners can deadlock by deferring to each other, and neither logs an error. Read what an
