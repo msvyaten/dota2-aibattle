@@ -29,49 +29,49 @@ itself. `c2ed8ac` added a fourth (`uphill`), Codex a fifth (`abilityReady`); abo
 What `empty_action` does and does not mean is in `ARCHITECTURE.md`; splitting `fight` fixes
 telemetry, not behaviour. `--never-fired` judges SPECIFIC matches - always re-check it.
 
-## Acceptance: read on `8975911100` (build `53e4eeb`, R=grok D=gemini, Dire won, 7.8 min)
+## Accepted on `8975911100` (build `53e4eeb`, R=grok D=gemini, Dire won)
 
-- PASS **`9c94a06` creep before tower.** `siege-creep-first` R=10 D=3, off zero for the first
-  time in four matches. `siege-terminal-tower` R=20 against 131 one build earlier; D=82 with
-  creep-first=3 is the documented pass case - that wave really was on the tower.
-- PASS **`153ee96` consumables owner.** Six per-item keys emitted, 24 refusals a side. Our own
-  `mana-clarity` moved off zero (R=2 D=1), which is the ownership transfer the edit was for.
-- PASS **`03a70bf` penalty for being behind.** `cause=hp_behind` 3 a side. The inverse risk did
-  NOT land: kill pressure survived on both sides (16s/2 windows and 15s/3), hero damage stayed
-  the dominant source. `mutual low` was 0, which on its own says little - the best-tension match
-  of the project had it at zero too.
-- NOT MEASURED **`51b9896` tower cover** (`siege-thin-shield`=0) and **`c802251` rune trip**
-  (`spot_race_lost`=0, the situation never arose). Zero here means measured by nothing.
+`9c94a06` creep-before-tower came off zero after four matches; `153ee96` moved consumable
+ownership to us (`mana-clarity` off zero); `03a70bf` capped the fight at an hp deficit without
+killing kill pressure. `c802251`'s rune leg was measured on the next pair. Still measured by
+nothing: `51b9896` (`siege-thin-shield`), now three matches running.
 
-## Pending: the batch that has never been measured
+## Read on the pair `8976219545`/`8976241894` (build `4dfcc75`, sides swapped, Radiant won both)
 
-Nine behaviour changes landed after `53e4eeb` (`e45fe90`, `afc3093`, `609d153`), plus the two
-above that fired on nothing. Attributing them means a pair on `e6d56d1` and a pair on HEAD.
+Clean pair: same build, configs swapped, so behaviour claims hold and outcome claims do not.
+Radiant won both with opposite configs - the side effect again.
 
-- **Clarity/mana gate.** `mana-clarity reason=fountain_free_mana` carries `hp= mana= bottle=0
-  rune_refused=`. Read the hp: the first threshold was 0.35, the waste happened at 39-48%.
-- **Melee-pack refusal claims the motor.** `cs-walk/melee_pack_refuse`. Watch the volume, not
-  the presence: 69 refusals a match at 0.8s each is up to 55s of suppressed lane movement.
-- **Tower backoff, damage leg.** `siege ... reason=tower_targeting_me cause=tower_damage`. Three
-  legs shared one hardcoded name, so the new leg was reported as the targeting one.
-- **Empty-bottle fountain floor.** `recovery-plan ... reason=empty_bottle_no_rune_floor`, which
-  carries hp. This is the one aimed at the hesitation the user watched at 6:40.
-- **Rune pickup jitter.** Pickup clears the attempt and takes a 1.5s cooldown.
-- Still owed from 29.08: six `*-no-edge` keys have never been emitted by anything.
+- FIRED **melee-pack refusal claims the motor**: `melee_pack_refuse` 11 and 21. The volume worry
+  did not land - nowhere near the 69 a match that would have suppressed lane movement.
+- FIRED **`c802251` rune trip**: `spot_race_lost` 2 in the second match, measured for the first
+  time in four builds.
+- ZERO across both sides, so still measured by nothing: the clarity gate (`fountain_free_mana`),
+  the tower-backoff damage leg (`cause=tower_damage`), the empty-bottle fountain floor
+  (`empty_bottle_no_rune_floor`), and `siege-thin-shield` for the third match running. Their
+  trigger conditions did not arise. Do not "fix" any of them on the strength of a zero.
+- **`tower_any` refuted the reading it was built for.** Tower damage arrived ALONE in three of
+  four side-matches (172/172, 64/64, 373/373); only Dire in the second carried 126 in company.
+  So `tower=0` in `8975911100` was not damage hiding in `mixed`, and the tower hits the user
+  watched at 6:14 are still unexplained - the `other=1021` bucket there is where to look next.
+
+## Next signature: did the salve actually land
+
+`heal-item` counted ORDERS. Below 0.30 the flask branch drinks on purpose while a hero is
+hitting us, and damage cancels the channel. The healing modifier is now asked directly:
+`heal-item-took` against `heal-item-cancelled` (`under_fire=` in the blocked line), plus
+`heal-item-under-fire` for how often the risky path is taken. If cancelled dominates under fire,
+the sub-0.30 bypass pays nothing and the threshold is what to move.
 
 ## Measured Debts 29.08 (not blockers, fix one at a time between matches)
 
-- **About 140 hardcoded hp thresholds duplicate named constants** (`0.45`=`activeRecovery` in 27
-  places, `0.35`=`danger` 22, `0.55`=`softRecovery` 16, `0.30`=`critical` 14). The VALUE was
-  compared, not the meaning - read every site. The precedent was paid for in `7e2b066`.
+- **About 140 hardcoded hp thresholds duplicate named constants** (`0.45`, `0.35`, `0.55`,
+  `0.30`). The VALUE was compared, not the meaning - read every site. Precedent: `7e2b066`.
 - **Tower branch shadowing - the creep branch is now measured off zero (`8975911100`).** The
   four branches that hit the TOWER are still shadowed by `terminal` (+180 against +60).
   **`ERA_START`** in `binding.py` spans both hero populations - split it into eras.
-- **`binding.py` is unanswerable on the current series BY CONSTRUCTION**: the configs were
-  written by three models from ONE text, the dials sit within 0.05-0.10 of each other, and
-  `MIN_ROWS=6` means three matches on one build. The user's call: either a second, opposing
-  prompt text, or rewrite the tool to answer "how far apart are the readings". Permanently red
-  is the worst option.
+- **`binding.py` is unanswerable on this series BY CONSTRUCTION**: three configs from ONE text,
+  dials within 0.05-0.10, and `MIN_ROWS=6` = three matches per build. User's call: a second
+  opposing prompt, or rewrite it to measure how far apart the readings are.
 
 ## Open After `8974387496` (confirmed twice, reproduces)
 

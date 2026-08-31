@@ -554,6 +554,27 @@ end
 local function defensiveHeal(bot, dials)
 	local hp        = J.GetHP(bot)
 	local hpMissing = bot:GetMaxHealth() - bot:GetHealth()
+
+	-- Verdict on the previous flask order. `heal-item` counts ORDERS, not heals: below 0.30 the
+	-- branch further down deliberately drinks while a hero is hitting us, and hero damage
+	-- cancels the channel. The branch above this one predicted the consequence in its own
+	-- comment -- "if the salve really does get cancelled here, heal-item rises while HP does
+	-- not" -- and left it to a manual HP cross-check that nobody ever ran. 8976241894 at 2:08 is
+	-- the shape: bought at 108s, drunk at 24% under fire, and nothing in the counters says
+	-- whether it landed. The healing modifier is the ground truth, so ask it.
+	-- Lazy by design: the verdict is emitted on a later visit to this ladder, so an order whose
+	-- bot never comes back here goes uncounted rather than counted wrong.
+	if bot.aib_flaskOrderAt ~= nil then
+		if sameHealTicking(bot, "item_flask") then
+			Style.Diag(bot, "heal-item-took")
+			bot.aib_flaskOrderAt = nil
+		elseif DotaTime() - bot.aib_flaskOrderAt >= 1.0 then
+			Style.Diag(bot, "heal-item-cancelled")
+			Style.Blocked(bot, "heal-item", "channel_cancelled", string.format(
+				"hp=%.0f under_fire=%s", hp * 100, tostring(bot.aib_flaskOrderFire == true)), 3.0)
+			bot.aib_flaskOrderAt = nil
+		end
+	end
 	local maxMana   = bot:GetMaxMana()
 	local mana      = maxMana > 0 and (bot:GetMana() / maxMana) or 1.0
 
@@ -698,7 +719,10 @@ local function defensiveHeal(bot, dials)
 			if hp < 0.30 or not recently_dmg then
 				bot.aib_healLast  = DotaTime()
 				bot.aib_flaskLast = DotaTime()
+				bot.aib_flaskOrderAt = DotaTime()
+				bot.aib_flaskOrderFire = recently_dmg
 				Style.Diag(bot, "heal-item")
+				if recently_dmg then Style.Diag(bot, "heal-item-under-fire") end
 				bot:Action_UseAbilityOnEntity(flask, bot); return true
 			end
 		end
