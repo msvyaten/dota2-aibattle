@@ -737,6 +737,8 @@ def main():
     ok = check_silent_refusals() and ok
     ok = run_step("python tests", [sys.executable, "tools/run_tests.py"]) and ok
     ok = run_step("project inventory", [sys.executable, "tools/project_inventory.py", "--check"]) and ok
+    ok = run_step("hero spacing debt",
+                  [sys.executable, "tools/hero_readiness.py", "--check"]) and ok
 
     if not args.skip_live:
         ok = check_live_build() and ok
