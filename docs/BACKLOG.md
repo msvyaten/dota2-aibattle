@@ -29,38 +29,37 @@ itself. `c2ed8ac` added a fourth (`uphill`), Codex a fifth (`abilityReady`); abo
 What `empty_action` does and does not mean is in `ARCHITECTURE.md`; splitting `fight` fixes
 telemetry, not behaviour. `--never-fired` judges SPECIFIC matches - always re-check it.
 
-## Accepted on `8975911100` (build `53e4eeb`, R=grok D=gemini, Dire won)
+## Already read (`postmatch.py --list` for the builds and sides)
 
-`9c94a06` creep-before-tower came off zero after four matches; `153ee96` moved consumable
-ownership to us (`mana-clarity` off zero); `03a70bf` capped the fight at an hp deficit without
-killing kill pressure. `c802251`'s rune leg was measured on the next pair. Still measured by
-nothing: `51b9896` (`siege-thin-shield`), now three matches running.
+`8975911100` accepted `9c94a06` creep-before-tower, `153ee96` consumable ownership and `03a70bf`
+the hp-deficit cap. The pair `8976219545`/`8976241894` measured the `e45fe90`..`609d153` batch:
+`melee_pack_refuse` 11 and 21, `spot_race_lost` off zero for the first time, and four edits at
+zero on both sides - the clarity gate, the tower-damage leg, the empty-bottle floor and
+`siege-thin-shield`. Zero there means the condition never arose. **Do not fix on a zero.**
 
-## Read on the pair `8976219545`/`8976241894` (build `4dfcc75`, sides swapped, Radiant won both)
+⛔ `tower_any` refuted the reading it was built for: tower damage arrived ALONE in three of four
+side-matches, so `tower=0` in `8975911100` was not damage hiding in `mixed`, and those tower hits
+are still unexplained. The `other=1021` bucket is where to look.
 
-Clean pair: same build, configs swapped, so behaviour claims hold and outcome claims do not.
-Radiant won both with opposite configs - the side effect again.
+## Next signature: the fountain trip, and a counter that only watches one door
 
-- FIRED **melee-pack refusal claims the motor**: `melee_pack_refuse` 11 and 21. The volume worry
-  did not land - nowhere near the 69 a match that would have suppressed lane movement.
-- FIRED **`c802251` rune trip**: `spot_race_lost` 2 in the second match, measured for the first
-  time in four builds.
-- ZERO across both sides, so still measured by nothing: the clarity gate (`fountain_free_mana`),
-  the tower-backoff damage leg (`cause=tower_damage`), the empty-bottle fountain floor
-  (`empty_bottle_no_rune_floor`), and `siege-thin-shield` for the third match running. Their
-  trigger conditions did not arise. Do not "fix" any of them on the strength of a zero.
-- **`tower_any` refuted the reading it was built for.** Tower damage arrived ALONE in three of
-  four side-matches (172/172, 64/64, 373/373); only Dire in the second carried 126 in company.
-  So `tower=0` in `8975911100` was not damage hiding in `mixed`, and the tower hits the user
-  watched at 6:14 are still unexplained - the `other=1021` bucket there is where to look next.
+**Fountain band now asks what is arriving.** `HEAL_INSTEAD_OF_FOUNTAIN_HP` was a flat 0.25 and
+its own comment argues the tango case, so a flask - four hundred HP in one go - could not
+release a committed trip below 25%. `8977154010` [D] paid the bill twice inside ninety seconds:
+flask bought at 12%, 3400 units walked toward the fountain while the courier chased, band
+crossed on passive regen alone, drank at 4400 units out, turned round, back to 20% five seconds
+after reaching the lane, fountain never reached. The band is 0.12 when a flask or a bottle
+charge is on us or in flight, 0.25 otherwise, and all three sites read it through one helper -
+the comment on the constant warns that this rule has already lived twice with two floors.
+Watch: `fountain-floor reason=heal_in_flight` carrying `band=12`, trips released near the lane
+rather than near the base, and `heal-inflight-back` off zero, since waiting for the courier is
+only reachable when no trip is running.
 
-## Next signature: did the salve actually land
-
-`heal-item` counted ORDERS. Below 0.30 the flask branch drinks on purpose while a hero is
-hitting us, and damage cancels the channel. The healing modifier is now asked directly:
-`heal-item-took` against `heal-item-cancelled` (`under_fire=` in the blocked line), plus
-`heal-item-under-fire` for how often the risky path is taken. If cancelled dominates under fire,
-the sub-0.30 bypass pays nothing and the threshold is what to move.
+⛔ **`heal-item-took`/`-cancelled` cover one path in six.** `8977154010` read `heal-item=10` with
+two verdicts. Not laziness in the follow-up as designed - `Style.Diag(bot, "heal-item")` is
+emitted from six sites and the order flag was set at one. Partial coverage lies toward "the fix
+does not work", which is the expensive direction. Until it is fixed, read the two verdicts as a
+sample, not a rate.
 
 ## Measured Debts 29.08 (not blockers, fix one at a time between matches)
 

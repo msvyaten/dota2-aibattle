@@ -174,7 +174,17 @@ local TRIP_DONE_HP = 0.55
 -- at 0.25 after the first fix, entry still at 0.12), and 8918941695 released the trip at hp=13
 -- through the site that had not been changed. Same shape as the salve/flask/bottle chase --
 -- fixing the path whose signature you happened to be looking at is not fixing the rule.
-local HEAL_INSTEAD_OF_FOUNTAIN_HP = 0.25
+-- ...but "a consumable" was one word for three very different amounts. The paragraph above
+-- argues the TANGO case and the constant was then applied to a flask, which heals ~400 in one
+-- go, and to a bottle charge. 8977154010 [D] is the bill: a flask bought at 12% could not
+-- release the trip because 12 < 25, so the bot walked 3400 units toward its fountain while the
+-- courier chased it, crossed the band on passive regen alone, drank at 4400 units out, turned
+-- round, and was back at 20% five seconds after reaching the lane. It did that twice inside
+-- ninety seconds, paid two flasks for it, and never reached the fountain either time.
+-- So the band asks what is actually arriving. Below 0.12 the walk stays the answer whatever is
+-- in the bag -- that floor is unchanged and lives in fountainTripDoneReason.
+local HEAL_INSTEAD_OF_FOUNTAIN_HP = 0.25      -- tango-sized: ~130 over sixteen seconds
+local BIG_HEAL_INSTEAD_OF_FOUNTAIN_HP = 0.12  -- flask or bottle charge: a bar's worth at once
 
 -- "Is THIS item's own regeneration already running on me?" -- one owner, one item at a time.
 -- Dota overwrites only the SAME consumable: a second salve replaces the first and throws away
@@ -205,6 +215,18 @@ local HEAL_MODIFIER = {
 local function sameHealTicking(bot, itemName)
 	local mod = HEAL_MODIFIER[itemName]
 	return mod ~= nil and bot:HasModifier(mod)
+end
+
+-- Which of the three is on us or on its way. Same list as holdsHeal/healInFlight, split by how
+-- much it actually returns, because that is the only thing the band cares about.
+local function bigHealAvailable(bot, charges, inFlight)
+	return hasItem(bot, "item_flask") or (charges ~= nil and charges > 0)
+		or inFlight == "item_flask"
+end
+
+local function healBand(bot, charges, inFlight)
+	return bigHealAvailable(bot, charges, inFlight)
+		and BIG_HEAL_INSTEAD_OF_FOUNTAIN_HP or HEAL_INSTEAD_OF_FOUNTAIN_HP
 end
 
 local function holdsHeal(bot, charges)
@@ -282,9 +304,10 @@ local function fountainTripDoneReason(bot, hp, charges, inFlight, flightFresh)
 	-- walk home returns a full bar. 8918007804 released the trip at hp=34, 20 and 16 and the user
 	-- watched the bot leave for the fountain and come back still hurt -- "it needed to go one way
 	-- or the other". Below this the fountain is simply the right answer, so the trip runs.
-	if (healIsNews or flightFresh) and hp >= HEAL_INSTEAD_OF_FOUNTAIN_HP and not hitRecently and not healing then
+	local band = healBand(bot, charges, inFlight)
+	if (healIsNews or flightFresh) and hp >= band and not hitRecently and not healing then
 		return healIsNews and "heal_in_hand" or "heal_in_flight",
-			string.format("hp=%.0f inflight=%s", hp * 100, tostring(inFlight))
+			string.format("hp=%.0f band=%.0f inflight=%s", hp * 100, band * 100, tostring(inFlight))
 	end
 
 	-- 2. The bar filled itself on the way. This does NOT reopen the user's 21.07 rollback:
@@ -1142,7 +1165,8 @@ local function recovery(bot, dials, nEnemyCreeps)
 		and not bot:WasRecentlyDamagedByAnyHero(2.0)
 		and not bot:HasModifier("modifier_flask_healing")
 		and not bot:HasModifier("modifier_tango_heal")
-	if canHealHere and hp >= HEAL_INSTEAD_OF_FOUNTAIN_HP then
+	local healBandHere = healBand(bot, bottleCharges(bot), inFlight)
+	if canHealHere and hp >= healBandHere then
 		-- Entry guard only: this decides whether to START a trip. Abandoning one already
 		-- running belongs to reviewFountainTrip, which runs before the chain and therefore
 		-- cannot be shadowed by an owner above it.
@@ -1161,7 +1185,7 @@ local function recovery(bot, dials, nEnemyCreeps)
 	-- Narrow on purpose: only reached with a heal actually in the bag and above the band where a
 	-- consumable can still do the job, so a bot with nothing to drink falls through to the floor
 	-- below unchanged, and one that is already mid-heal is not interrupted.
-	if not canHealHere and (heldHeal or flightFresh) and hp >= HEAL_INSTEAD_OF_FOUNTAIN_HP
+	if not canHealHere and (heldHeal or flightFresh) and hp >= healBandHere
 		and not bot:HasModifier("modifier_flask_healing")
 		and not bot:HasModifier("modifier_tango_heal")
 		and not (bot.aib_fountainTrip or bot.aib_fountainFloorTrip) then
