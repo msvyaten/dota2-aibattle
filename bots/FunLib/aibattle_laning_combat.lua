@@ -139,16 +139,27 @@ function M.ContactHero(ctx)
 			ctx.blocked("hero-contact", "uphill", string.format("dist=%.0f hp=%.0f", dist, hp * 100), 3.0)
 			return false
 		end
+		-- The hold measures time since the last ORDER, not since the last time this branch ran.
+		-- It first compared `now` to a field assigned three lines above, so the difference was
+		-- always zero and the window always open; moving the read above the stamp does not fix
+		-- that either, because `aib_contactHeroLast` is stamped on every tick this branch
+		-- reaches -- the gap would then be one tick forever and the valve still never opens.
+		-- That valve is the point: the hold returns true WITHOUT ordering anything, which is
+		-- correct while the bot really is swinging and is the exact shape of a genuinely lost
+		-- tick if GetAttackTarget ever says yes while it is not. So it gets its own clock,
+		-- stamped only where an attack is actually issued.
+		local sinceAtk = bot.aib_contactAtkLast ~= nil
+			and (now - bot.aib_contactAtkLast) or nil
 		bot.aib_contactHeroLast = now
 		bot.aib_harassLast = now
 		if hitHealSummonFirst(ctx, bot, range) then return true end
-		if bot.aib_contactHeroLast ~= nil and now - bot.aib_contactHeroLast < 0.25
-			and alreadyAttacking(bot, enemy) then
+		if sinceAtk ~= nil and sinceAtk < 0.25 and alreadyAttacking(bot, enemy) then
 			ctx.diag("hero-contact-hold")
 			return true
 		end
 		Style.Intent(bot, "hero-contact", string.format("dist=%.0f hp=%.0f reason=attackable_enemy", dist, hp * 100))
 		bot:Action_AttackUnit(enemy, false)
+		bot.aib_contactAtkLast = now
 		ctx.diag("hero-contact-atk")
 		return true
 	end
