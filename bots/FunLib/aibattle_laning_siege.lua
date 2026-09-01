@@ -135,12 +135,7 @@ local function hitCreepHere(ctx, bot, attackRange, now, key)
 	return hit
 end
 
-function M.Think(ctx)
-	local bot = ctx.bot
-	local dials = ctx.dials or {}
-	local rules = ctx.rules or {}
-	local attackRange = ctx.attackRange or bot:GetAttackRange()
-
+local function siegeTower(ctx)
 	local twr = ctx.enemyTowerDanger()
 	if twr == nil then
 		local midT1 = GetTower(GetOpposingTeam(), TOWER_MID_1)
@@ -149,6 +144,33 @@ function M.Think(ctx)
 			twr = midT1
 		end
 	end
+	return twr
+end
+
+function M.LethalTowerOpportunity(ctx)
+	local bot = ctx.bot
+	local rules = ctx.rules or {}
+	local attackRange = ctx.attackRange or bot:GetAttackRange()
+	local twr = siegeTower(ctx)
+	local towerAggr = rules.tower_aggression or "default"
+	local guarded = towerAggr ~= "always"
+	return twr ~= nil
+		and towerAggr ~= "never"
+		and not (guarded and M.WantsTowerBackoff(bot, twr))
+		and not (guarded and M.TowerBackoffLatched(bot))
+		and not (guarded and ctx.towerThreatening(twr))
+		and twr:GetHealth() <= bot:GetAttackDamage() * 1.10
+		and GetUnitToUnitDistance(bot, twr) <= attackRange + 60
+		and J.GetHP(bot) >= 0.40
+end
+
+function M.Think(ctx)
+	local bot = ctx.bot
+	local dials = ctx.dials or {}
+	local rules = ctx.rules or {}
+	local attackRange = ctx.attackRange or bot:GetAttackRange()
+
+	local twr = siegeTower(ctx)
 	if twr == nil then return false end
 
 	-- tower_aggression: risk gates for sieging. Desire knobs (push_desire, cwp)
@@ -402,14 +424,7 @@ function M.CanAct(ctx)
 	local rules = ctx.rules or {}
 	local attackRange = ctx.attackRange or bot:GetAttackRange()
 
-	local twr = ctx.enemyTowerDanger()
-	if twr == nil then
-		local midT1 = GetTower(GetOpposingTeam(), TOWER_MID_1)
-		if midT1 ~= nil and midT1:IsAlive()
-			and ctx.alliedCreepsAtTower(midT1, midT1:GetAttackRange() + 220) >= 2 then
-			twr = midT1
-		end
-	end
+	local twr = siegeTower(ctx)
 	if twr == nil then return false end
 
 	local towerAggr = rules.tower_aggression or "default"

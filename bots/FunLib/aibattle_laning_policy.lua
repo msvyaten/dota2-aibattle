@@ -95,6 +95,9 @@ M.Score = {
 	siegeEnemyDeadBonus = 22,
 	siegeDoubleDamageBonus = 18,
 	siegeLowHpPenalty = -18,
+	-- A tower in one hit is a finish, not a normal pressure window. This must beat
+	-- safety/recover symptoms while preserving the existing last-hit override contract.
+	siegeLethal = 138,
 	-- Score cap when the siege desire wins but every siege action is gated (no wave
 	-- cover / healing tank / hp floor), so it empty-wins and paces at the tower edge
 	-- (8888743934: 8x empty-win + edge-step<->lane-line pace). Below CS. See safetyNoAction.
@@ -345,6 +348,15 @@ function M.Siege(args)
 	local base = M.Score.siegeBase
 	local score = base + math.floor(M.Score.siegePushScale * ((args.dials or {}).push_desire or 0.5))
 	local parts = { "push=" .. tostring(score - base) }
+	if args.lethalTower == true then
+		return {
+			score = M.Score.siegeLethal,
+			reason = "tower_lethal",
+			capped = false,
+			detail = detail(base, { "lethal=" .. tostring(M.Score.siegeLethal - base) },
+				string.format("hp=%.0f", hp * 100)),
+		}
+	end
 	if args.enemyDeadRecently == true then
 		score = score + M.Score.siegeEnemyDeadBonus
 		add(parts, "enemy_dead", M.Score.siegeEnemyDeadBonus)

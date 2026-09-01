@@ -29,7 +29,7 @@ python tools\pre_match_state.py
 
 | | lines | % of `bots/` | do we touch it? |
 |---|---:|---:|---|
-| **Our layer `aibattle_*`** (behaviour) | **8,406** | 3.9% | YES - all the logic is here |
+| **Our layer `aibattle_*`** (behaviour) | **8,433** | 3.9% | YES - all the logic is here |
 | Configs `Customize/` | 678 | 0.3% | YES - archetype presets |
 | **Our patches inside vendored files** | **~469** | 0.2% | CAREFULLY - 21 files, see section 3 |
 | Vendored OHA (everything else in `bots/`) | ~190,000 | ~96% | NO - upstream base, synced from above |
@@ -73,7 +73,7 @@ All behaviour lives here. One file, one responsibility.
 |---|---:|---|
 | `aibattle_style.lua` | 1309 | **The hub**: config loading (rules/dials), item/skill build, ability-harass config, and the telemetry primitives `Style.Intent/Diag/DiagRL/DiagEdge/TickOwner/Blocked`. Everything calls it. |
 | `aibattle_engine.lua` | 274 | Stage and intent runner: `Stage/Intent/Resolve`, `KillWindow`, `RecoveryPolicy`, `PowerRuneState`, `RuneUsePolicy`. |
-| `aibattle_laning_policy.lua` | 377 | **Desire scoring**: `Safety/PowerRune/Fight/Recover/Siege` -> score; HP bands, thresholds, no-action caps. |
+| `aibattle_laning_policy.lua` | 389 | **Desire scoring**: `Safety/PowerRune/Fight/Recover/Siege` -> score; HP bands, thresholds, no-action caps. |
 | `aibattle_laning_arbiter.lua` | 132 | **Top-desire arbiter**: `Run/Candidate` - winner hysteresis, tick owner. The heart of the choice. |
 | `aibattle_constants.lua` | 59 | Engineering thresholds (distances, cooldowns, HP bands). Not model-facing. |
 | `aibattle_motor.lua` | 45 | Movement ownership `Claim/Active/Release` (v1). Slated for retirement in P1-C. |
@@ -90,7 +90,7 @@ All behaviour lives here. One file, one responsibility.
 | `aibattle_laning_combat.lua` | 589 | `HarassAndChase`, `ContactHero`, `AbilityPressure`, `RunePowerPressure`, `UphillReposition`, `EmergencyKillPriority`, `AbilityHarass`. |
 | `aibattle_laning_tempo.lua` | 441 | `Pregame`, `DivePolicy`, `DeathWindow`, `PreCreepStandoff` - the hard stage guards. |
 | `aibattle_laning_recovery.lua` | 426 | **Low-HP owners** (the P3 target): `ThinkIfAllowed`, `CriticalLock`, `ActiveLowHp`, `EmergencyRetreat`, `ForwardLowHpPullback`, `LowHpHoldState`. |
-| `aibattle_laning_siege.lua` | 456 | Tower siege, siege-commit, and the latch owner API. |
+| `aibattle_laning_siege.lua` | 471 | Tower siege, siege-commit, and the latch owner API. |
 | `aibattle_laning_creeps.lua` | 294 | `GetBestLastHitCreep`, `GetBestDenyCreep`, `HandleCreepWork`. |
 | `aibattle_laning_duel.lua` | 212 | `Prewave` and `Pregame` duel movement. |
 | `aibattle_utils.lua` | 236 | `SafeRetreatTowerLoc`, `ForwardSurvivingTowerLoc`, `EnemyTowerDanger`, `UphillMiss`, `IsTowerActuallyThreatening`. |
@@ -183,7 +183,7 @@ merge conflict.
 
 ---
 
-## 4. Configs (`bots/Customize/`, 683 lines)
+## 4. Configs (`bots/Customize/`, 678 lines)
 
 | File | lines | Role |
 |---|---:|---|

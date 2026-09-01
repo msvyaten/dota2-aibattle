@@ -1157,12 +1157,15 @@ local function AIB_BuildDesireCandidates(dials, rules, runtimeCtx, intentCtx)
 		recoverFallbackHp)
 	-- canAct probe for the siege desire: true only when the siege module would ACT this
 	-- tick (mirrors its gate chain without side effects).
-	local siegeCanAct = AIBLaneSiege.CanAct(AIB_LaningModuleCtx(dials, rules))
+	local siegeCtx = AIB_LaningModuleCtx(dials, rules)
+	local siegeCanAct = AIBLaneSiege.CanAct(siegeCtx)
+	local lethalTower = AIBLaneSiege.LethalTowerOpportunity(siegeCtx)
 	local policyArgs = {
 		safetyCanAct = safetyCanAct,
 		fightCanAct = fightCanAct,
 		recoverCanAct = recoverCanAct,
 		siegeCanAct = siegeCanAct,
+		lethalTower = lethalTower,
 		-- Must be set HERE, not in the siege block below: Recover() is called ~37 lines
 		-- earlier than that assignment, so the free-farm penalty would have read nil and
 		-- never fired. The later siege-side assignment is now redundant but harmless.
