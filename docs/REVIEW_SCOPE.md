@@ -171,10 +171,8 @@ helpers. Trust this over any number written in a document.
 
 ## Evidence set
 
-The logs themselves are in `logs/`, committed on 2026-09-01. They are the raw console output of
-each match, which is what every analysis tool reads; without them `postmatch.py` and
-`betting.py` have nothing to open and half this package is unusable. They are evidence, not
-source: nothing imports them, nothing is generated from them, and they are never edited.
+The logs are in `logs/`: raw console output, what every analysis tool reads. They are evidence,
+never source - nothing imports them, nothing is generated from them, and they are never edited.
 
 Which matches exist, on which build, and which config sat on which side is a question for that
 directory, not for this document. The list that used to live here aged out three times in three
@@ -188,13 +186,15 @@ Same build on both halves and the harass dials swapped, or it is not a pair - an
 cannot compare two configs, because the side effect is larger than the config effect. What
 follows is only the matches that carry a lesson beyond their own numbers.
 
-- `8976219545` + `8976241894` - the current pair, and the cleanest the project has: one build,
-  sides swapped, Radiant won both with opposite configs. Read them before anything older.
+- `8977154010` - the newest, and the one the fountain rule came out of: the bot bought two
+  flasks to walk most of the way home, drink en route and turn back, twice in ninety seconds.
+- `8976219545` + `8976241894` - the cleanest pair the project has: one build, sides swapped,
+  Radiant won both with opposite configs. Read them before anything older.
 - `8974058954` + `8974086880` - the swap that first proved the side effect, and the reason the
   pair rule exists at all.
 - `8975911100` - the lane lost between t=45 and t=50 with a match-wide attribution that says
   Radiant lost the duel, not a creep exchange. The clearest single-match causal trace we have.
-- `8972598364` - where the walking fountain return and the `nearest=inf` rune scan were first
-  seen. The rune half is now diagnosed and was never a bug; the fountain half is still open.
+- `8972598364` - where the walking fountain return and `nearest=inf` were first seen; the rune
+  half is diagnosed and was never a bug.
 - `8964702771` - the only match on record that passed the technical gate.
 

@@ -67,6 +67,8 @@ Use the right layer:
 
 - `rules`: model-facing strategic choices, for example `hero_priority`, `creep_wave_priority`, `low_hp_behavior`, `rune_use_policy`.
 - `dials`: model-facing numeric preferences in the 0..1 space, for example aggression/farm/rune pressure.
+- `item_build` and `skill_build`: what the hero buys and the order it levels its abilities, per hero.
+  Both are model-facing and both override an engine default written for full-length games.
 - `aibattle_constants.lua`: engine thresholds, distances, cooldowns, and hard safety limits.
 - policy modules: logic that turns rules/dials/constants into decisions.
 

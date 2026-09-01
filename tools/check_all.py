@@ -94,7 +94,12 @@ ACTIVE_DOC_LIMITS = {
     "CODE_MAP.md": 350,
     "TEAM_REVIEW_START.md": 160,
     "HANDOFF.md": 180,
-    "REVIEW_SCOPE.md": 200,
+    # Raised from 200 on 2026-09-01. This one is read by a reviewer who has not seen the
+    # project before, and the budget was making completeness lose to a line count: the
+    # newest match was about to be left out of the evidence set to save two lines. A
+    # budget is right for the queue, where length is itself information about how much
+    # is outstanding; it is the wrong lever on a reference document.
+    "REVIEW_SCOPE.md": 240,
     "SPECS.md": 800,
     "STATE.md": 150,
     # Compatibility pointers for old config/code comments. The real content is archived.

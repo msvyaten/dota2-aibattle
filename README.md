@@ -6,7 +6,7 @@ small numeric config; the bot engine executes that config; the match log has to 
 the bot wanted, what it did, and what stopped it.
 
 ```
-plain-English strategy  ->  LLM  ->  config (11 dials + 11 rules + item build)
+plain-English strategy  ->  LLM  ->  config (11 dials + 11 rules + item and skill build)
                                         |
                                         v
                      Lua bot engine in Dota 2, 1v1 solo mid
