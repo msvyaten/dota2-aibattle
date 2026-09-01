@@ -258,6 +258,15 @@ COUPLINGS — settings that silently cancel each other. Check these before answe
 - retreat_caution is both a fighting dial and a go-home threshold, so the very top of its
   range backfires on anything that also wants lane presence: at 0.9 the hero leaves
   constantly.
+- creep_wave_priority="push" OUTRANKS deny_policy. Pushing is decided before denying is even
+  asked, so a config that sets deny_policy="always" and creep_wave_priority="push" gets fewer
+  denies than one that leaves both alone. Measured twice, on both sides of a side swap: four
+  times fewer. If denying is the point of the strategy, leave creep_wave_priority at
+  "last_hit_only".
+- push_desire has a step in it at 0.65: below that it only adds weight to a siege the hero
+  already wants for another reason, and it cannot start one by itself. A strategy that means
+  to take the tower needs 0.65 or more, or tower_aggression="always", or it will push waves
+  and never commit.
 
 THE BASELINE
 
@@ -346,6 +355,10 @@ try to defeat them with extreme dials.
   gone and cannot be re-bought, the hero walks home whatever low_hp_behavior says. It will
   not stand in the lane and die. Once that walk starts it runs to completion.
 - It will not chase a finish under the enemy tower.
+- A tower one hit from death gets that hit, whatever push_desire says, as long as the hero is
+  above 40% health and the tower is not shooting it.
+- A rune trip will not start while an enemy is standing close enough to be killed by a single
+  attack. The kill comes first; the rune waits.
 - It will buy an emergency healing item even when saving for something bigger; conversely it
   will not spend on healing that the fountain is about to give it for free.
 - Being ranged, it will not stand inside the enemy creep squad trading hits with it -- it
