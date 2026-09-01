@@ -46,6 +46,32 @@ def config_keys(text, section):
     return lua_keys(match.group(1) if match else "")
 
 
+def prompt_examples(text):
+    """Every worked example in the prompt, however it is wrapped.
+
+    This used to be a single-line regex, so the moment the example was formatted one field
+    group per line -- which is what makes it readable -- the check would have found nothing
+    and reported green over an example it never opened. Brace matching does not care.
+    """
+    blocks = []
+    for match in re.finditer(r'^\{"dials"', text, re.M):
+        start, depth = match.start(), 0
+        for i in range(start, len(text)):
+            if text[i] == "{":
+                depth += 1
+            elif text[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    block = text[start:i + 1]
+                    # The shape skeleton at the top of the prompt starts the same way and is
+                    # deliberately not JSON: it carries <0.0-1.0> and <word> placeholders so a
+                    # model cannot copy values out of it. A real example never contains '<'.
+                    if "<" not in block:
+                        blocks.append(block)
+                    break
+    return blocks
+
+
 def main():
     problems = []
     style = (ROOT / "bots/FunLib/aibattle_style.lua").read_text(encoding="utf-8")
@@ -75,9 +101,9 @@ def main():
     # The worked example is what the model actually imitates, so a stale one is worse than a
     # stale sentence. 28.08: ability_aggro was retired and the example still handed the model
     # twelve dials; nothing here noticed.
-    for match in re.finditer(r'^\{"dials".*\}$', prompt, re.M):
+    for block in prompt_examples(prompt):
         try:
-            example = json.loads(match.group(0))
+            example = json.loads(block)
         except ValueError as exc:
             problems.append(f"system prompt example is not valid JSON: {exc}")
             continue

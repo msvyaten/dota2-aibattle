@@ -32,6 +32,28 @@ Eleven dials, eleven rules, both heroes. Each dial is a number from 0.0 to 1.0. 
 one of the exact words listed for it further down -- no other word is accepted. Each build is
 an ordered list of item ids.
 
+A filled answer looks like this. It is one arbitrary config shown for shape, NOT a target: its
+values answer a strategy you were not given, so copying them is not an answer to yours.
+
+{"dials": {
+   "harass_desire": 0.9, "farm_focus": 0.15, "forwardness": 0.8,
+   "retreat_caution": 0.3, "rune_control": 0.85, "execute_threshold": 0.42,
+   "gank_desire": 0.9, "push_desire": 0.3, "defend_desire": 0.25,
+   "ward_desire": 0.5, "roshan_desire": 0.5},
+ "rules": {
+   "respawn_behavior": "tp_to_lane", "pregame_behavior": "aggressive_mid",
+   "dive_policy": "finish_only", "low_hp_behavior": "regen_lane",
+   "healing_style": "active", "ability_usage": "aggressive",
+   "ability_timing": "on_cooldown", "creep_wave_priority": "last_hit_only",
+   "hero_priority": "always", "tower_aggression": "always",
+   "deny_policy": "default"},
+ "item_build": {
+   "npc_dota_hero_juggernaut": ["item_tango", "item_quelling_blade", "item_magic_wand", "item_power_treads", "item_bfury"],
+   "npc_dota_hero_nevermore": ["item_tango", "item_circlet", "item_bottle", "item_power_treads", "item_blade_mail"]}}
+
+Return ONLY that object. No explanation, no commentary, no markdown fences, nothing before or
+after it.
+
 That object is the entire message. The bot never reads the strategy text, your reasoning, or
 any key you invent, so anything outside those three sections is simply lost. And a wrong entry
 does not announce itself -- every one of these failures is silent:
@@ -278,11 +300,6 @@ minutes, not what you want at the end.
 Unknown or misspelled item ids are dropped silently, and a hero with an empty or dropped
 list falls back to a generic long-game build that is wrong for this mod -- so an incorrect
 name is not a small mistake, it costs the whole plan.
-
-The example below shows the FORMAT only -- it is one arbitrary config, not a target to steer
-toward, and copying its values is not answering the strategy you were given:
-
-{"dials": {"harass_desire": 0.9, "farm_focus": 0.15, "forwardness": 0.8, "retreat_caution": 0.3, "rune_control": 0.85, "execute_threshold": 0.42, "gank_desire": 0.9, "push_desire": 0.3, "defend_desire": 0.25, "ward_desire": 0.5, "roshan_desire": 0.5}, "rules": {"respawn_behavior": "tp_to_lane", "pregame_behavior": "aggressive_mid", "dive_policy": "finish_only", "low_hp_behavior": "regen_lane", "healing_style": "active", "ability_usage": "aggressive", "ability_timing": "on_cooldown", "creep_wave_priority": "last_hit_only", "hero_priority": "always", "tower_aggression": "always", "deny_policy": "default"}, "item_build": {"npc_dota_hero_juggernaut": ["item_tango", "item_quelling_blade", "item_magic_wand", "item_power_treads", "item_bfury"], "npc_dota_hero_nevermore": ["item_tango", "item_circlet", "item_bottle", "item_power_treads", "item_blade_mail"]}}
 
 COUPLINGS — settings that silently cancel each other. Check these before answering.
 - ability_timing="save_for_execute" DISABLES Shadowraze harassment entirely. It means
