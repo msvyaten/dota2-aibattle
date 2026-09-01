@@ -40,6 +40,25 @@ local function hasLastHitWindow(bot)
 	return false
 end
 
+local function killableEnemyNearby(bot, hp)
+	if bot == nil or hp == nil or hp < 0.34 then return nil, nil end
+	local range = bot:GetAttackRange()
+	-- hero-agnostic: this is a one-hit kill guard for rune departure, not an attack band.
+	-- It needs to see a nearby dying hero before the rune owner takes the bot out of lane.
+	local enemies = bot:GetNearbyHeroes(math.max(900, range + 520), true, BOT_MODE_NONE)
+	if not (enemies and #enemies > 0) then return nil, nil end
+	for _, enemy in ipairs(enemies) do
+		if J.IsValidHero(enemy) and enemy:IsAlive() and enemy:GetHealth() > 0 then
+			local dist = GetUnitToUnitDistance(bot, enemy)
+			if dist <= range + 520
+				and enemy:GetHealth() <= bot:GetAttackDamage() * Style.AttackDamageMult(bot, enemy) then
+				return enemy, dist
+			end
+		end
+	end
+	return nil, nil
+end
+
 local function laneFrontDistance(bot)
 	local lane = LANE_MID
 	if bot.GetAssignedLane ~= nil then lane = bot:GetAssignedLane() end
@@ -390,6 +409,12 @@ function M.SeekBottleRune(bot, hp, mana, diagKey, maxDist, opts)
 		return false
 	end
 	bot.aib_emptyBottleSince = bot.aib_emptyBottleSince or now
+	local killEnemy, killDist = killableEnemyNearby(bot, hp)
+	if killEnemy ~= nil and bot.aib_bottleRuneTarget == nil then
+		Style.Blocked(bot, diagKey, "kill_window",
+			string.format("dist=%.0f ehp=%.0f hp=%.0f", killDist, J.GetHP(killEnemy) * 100, hp * 100), 3.0)
+		return false
+	end
 	if hp >= 0.78 and mana >= 0.45 and not forceEmptyBottle then return false end
 	if bot.aib_bottleRuneCooldownUntil ~= nil and now < bot.aib_bottleRuneCooldownUntil then
 		Style.Blocked(bot, diagKey, "cooldown", string.format("left=%.0f", bot.aib_bottleRuneCooldownUntil - now), 4.0)

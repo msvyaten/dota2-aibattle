@@ -110,11 +110,6 @@ function M.ContactHero(ctx)
 	if enemy == nil then return false end
 
 	local now = DotaTime()
-	if bot.aib_contactHeroLast ~= nil and now - bot.aib_contactHeroLast < 0.65 then
-		ctx.blocked("hero-contact", "refractory", string.format("since=%.2f", now - bot.aib_contactHeroLast), 3.0)
-		return false
-	end
-
 	local hp = J.GetHP(bot)
 	if hp < 0.32 then
 		local safe = ctx.forwardSurvivingTowerLoc()
@@ -141,6 +136,11 @@ function M.ContactHero(ctx)
 		bot:Action_AttackUnit(enemy, false)
 		ctx.diag("hero-contact-atk")
 		return true
+	end
+
+	if bot.aib_contactHeroLast ~= nil and now - bot.aib_contactHeroLast < 0.65 then
+		ctx.blocked("hero-contact", "refractory", string.format("since=%.2f", now - bot.aib_contactHeroLast), 3.0)
+		return false
 	end
 
 	if hp >= 0.45 and ctx.enemyTowerDanger() == nil and not ctx.uphillMiss(enemy) then

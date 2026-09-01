@@ -215,6 +215,15 @@ function M.Think(ctx)
 
 	local alliedTank, guessedShield = alliedTankAt(ctx, twr)
 	if not alliedTank and guessedShield == 1 then ctx.diag("siege-thin-shield") end
+	local towerLethal = twr:GetHealth() <= bot:GetAttackDamage() * 1.10
+	if towerLethal and twrDist <= attackRange + 60 and J.GetHP(bot) >= 0.40 then
+		M.Commit(bot, 1.6, now)
+		bot:Action_AttackUnit(twr, true)
+		ctx.towerOpportunity("hit", string.format("phase=lethal wave=%d tower=%.0f hp=%.0f thp=%.0f",
+			waveCount, twrDist, J.GetHP(bot) * 100, twr:GetHealth()), 2.0)
+		ctx.diag("siege-lethal-tower")
+		return true
+	end
 	-- THE TOWER IS SHOOTING US is answered at the top of this function now, ahead of the gate
 	-- that used to bury it. Measured across the era: 14 of 16 sides took tower damage, and
 	-- aggregating what the bot was doing in the 31 windows where that damage grew puts the
