@@ -165,7 +165,8 @@ function M.ShouldUseMango(bot, style, context)
 	-- mp < 0.55 (an enemy being killable is not by itself a mana shortage).
 	--
 	-- abilitySoon is exactly the wanted condition: the caller sets it when an ability is off
-	-- cooldown within 3s, costs more mana than we have, and one mango would cover the gap.
+	-- cooldown within a short commit window, costs more mana than we have, and one mango would
+	-- cover the gap.
 	if context.abilitySoon ~= true then return false end
 
 	-- Which skill is it short for? The caller cannot tell us, so use the kill window as the

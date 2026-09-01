@@ -259,6 +259,13 @@ local function releaseFountainTrip(bot, reason, detail)
 	Style.Blocked(bot, "fountain-floor", reason, detail or "", 5.0)
 end
 
+local function skipFountainTrip(bot, reason, detail)
+	-- Not a release: the trip has not started yet. Keep this separate so match review can tell
+	-- "we wisely stayed in lane with a flask" from "we wasted a half-walk and turned around".
+	Style.DiagRL(bot, "fountain-init-skip", 3)
+	Style.Blocked(bot, "fountain-floor", reason, detail or "", 5.0)
+end
+
 -- Returns a reason string when a committed trip should be abandoned, nil to keep walking.
 -- Pure: reads state, issues no actions, so it is safe to call before the handler chain.
 local function fountainTripDoneReason(bot, hp, charges, inFlight, flightFresh)
@@ -1147,7 +1154,7 @@ local function recovery(bot, dials, nEnemyCreeps)
 	-- is what it claims to be: with a trip committed this says nothing, and the walk finishes.
 	if canHealHere and hp >= HEAL_INSTEAD_OF_FOUNTAIN_HP
 		and not (bot.aib_fountainTrip or bot.aib_fountainFloorTrip) then
-		releaseFountainTrip(bot, heldHeal and "heal_in_hand" or "heal_in_flight",
+		skipFountainTrip(bot, heldHeal and "heal_in_hand" or "heal_in_flight",
 			string.format("hp=%.0f flask=%s inflight=%s", hp*100,
 				tostring(hasItem(bot, "item_flask")), tostring(inFlight)))
 	end
