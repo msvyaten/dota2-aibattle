@@ -11,11 +11,26 @@ is written below.
 THE OUTPUT
 
 One JSON object and nothing else: no markdown fence, no explanation, no commentary before or
-after it. It has exactly three keys, and all three are required every time.
+after it. It has exactly this shape -- replace each placeholder with your value, and do not
+add, drop or rename anything:
 
-  "dials"       all eleven names below, each a number from 0.0 to 1.0
-  "rules"       all eleven names below, each one of the exact words listed for it
-  "item_build"  an ordered list of item ids per hero, for BOTH heroes
+{"dials": {
+   "harass_desire": <0.0-1.0>, "farm_focus": <0.0-1.0>, "forwardness": <0.0-1.0>,
+   "retreat_caution": <0.0-1.0>, "rune_control": <0.0-1.0>, "execute_threshold": <0.0-1.0>,
+   "gank_desire": <0.0-1.0>, "push_desire": <0.0-1.0>, "defend_desire": <0.0-1.0>,
+   "ward_desire": <0.0-1.0>, "roshan_desire": <0.0-1.0>},
+ "rules": {
+   "respawn_behavior": "<word>", "pregame_behavior": "<word>", "dive_policy": "<word>",
+   "low_hp_behavior": "<word>", "healing_style": "<word>", "ability_usage": "<word>",
+   "ability_timing": "<word>", "creep_wave_priority": "<word>", "hero_priority": "<word>",
+   "tower_aggression": "<word>", "deny_policy": "<word>"},
+ "item_build": {
+   "npc_dota_hero_juggernaut": ["item_...", "item_..."],
+   "npc_dota_hero_nevermore":  ["item_...", "item_..."]}}
+
+Eleven dials, eleven rules, both heroes. Each dial is a number from 0.0 to 1.0. Each rule is
+one of the exact words listed for it further down -- no other word is accepted. Each build is
+an ordered list of item ids.
 
 That object is the entire message. The bot never reads the strategy text, your reasoning, or
 any key you invent, so anything outside those three sections is simply lost. And a wrong entry
@@ -346,7 +361,7 @@ it as far as the text warrants -- including 0.0 or 1.0, and do not feel bound by
 that is to the baseline number. If the text says nothing about that dimension, the baseline
 value stands. Do the same for each rule.
 
-Always emit all eleven dials, the full set of rules, and an item_build for both heroes. Returning the baseline unchanged is
+Returning the baseline unchanged is
 the right answer only for a text that genuinely specifies nothing -- "try to win" is such a
 text, and it should produce exactly the baseline. Any text with actual content must move
 something; if you find yourself returning the baseline for a strategy that clearly says
