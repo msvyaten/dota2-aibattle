@@ -370,13 +370,30 @@ control whether it throws its life away -- it will not.
 THE OUTPUT
 
 One JSON object and nothing else: no markdown fence, no explanation, no commentary before or
-after it. It looks exactly like this -- the same four keys in the same order, and the same
-layout, one field per line, with your own values in place of these.
+after it. Four keys, in this order: "dials", "rules", "item_build", "skill_build".
+
+Eleven dials, eleven rules, an item build and a skill build for both heroes -- every dial a
+number from 0.0 to 1.0, every rule one of the exact words listed for it above, and no other
+word is accepted. Emit all of them even where the strategy says nothing: THE BASELINE above is
+what to write in that case.
+
+That object is the entire message. The bot never reads the strategy text, your reasoning, or
+any key you invent, so anything outside those four sections is simply lost. And a wrong entry
+does not announce itself -- every one of these failures is silent:
+
+  - a dial you leave out is filled with the engine default, and the strategy that asked for it
+    never happens;
+  - a rule word outside its allowed list is discarded and the engine falls back to its own
+    default, which is often the opposite of what the text asked for;
+  - an item id that does not exist is dropped, and a hero left with an empty list is given a
+    generic long-game build that is wrong for this mod;
+  - an ability number outside the hero's slots is dropped, and a hero left with none keeps the
+    engine's own levelling order, which is written for a full-length game.
 
 The values below answer a strategy you were not given, so copying them is not an answer to
-yours. The SHAPE is what to copy, and the line breaks are part of it: a single-line object is
-valid JSON and the parser takes it, but a person has to read this and decide whether it says
-what the strategy asked for, and nobody checks a wall of text.
+yours. The SHAPE is what to copy, line breaks included: a single-line object is valid JSON and
+the parser takes it, but a person has to read this and decide whether it says what the strategy
+asked for, and nobody checks a wall of text.
 
 {
   "dials": {
@@ -415,34 +432,4 @@ what the strategy asked for, and nobody checks a wall of text.
   }
 }
 
-
-Return ONLY that object. Eleven dials, eleven rules, an item build and a skill build for both
-heroes: every dial a number from 0.0 to 1.0, every rule one of the exact words listed for it
-above -- no other word is accepted.
-
-LAY IT OUT THE WAY THE EXAMPLE IS LAID OUT. Put the line breaks where the example puts them:
-"dials", "rules", "item_build" and "skill_build" each start a line, and the entries under them
-are grouped a few per line rather than run together. A single-line object is valid JSON and the
-parser accepts it, but a person has to read this and decide whether it says what the strategy
-asked for -- and nobody can check a wall of text. Formatting is not decoration here, it is the
-difference between a config that gets reviewed and one that gets waved through.
-
-That object is the entire message. The bot never reads the strategy text, your reasoning, or
-any key you invent, so anything outside those four sections is simply lost. And a wrong entry
-does not announce itself -- every one of these failures is silent:
-
-  - a dial you leave out is filled with the engine default, and the strategy that asked for it
-    never happens;
-  - a rule word outside its allowed list is discarded and the engine falls back to its own
-    default, which is often the opposite of what the text asked for;
-  - an item id that does not exist is dropped, and a hero left with an empty list is given a
-    generic long-game build that is wrong for this mod;
-  - an ability number outside the hero's slots is dropped, and a hero left with none keeps the
-    engine's own levelling order, which is written for a full-length game.
-
-So the answer is complete or it is partly someone else's. Emit all eleven dials, all eleven
-rules, and an item build and a skill build for both heroes, even where the strategy says
-nothing about them -- THE BASELINE above tells you what to write in that case.
-
-The strategy you must express follows this message. Read it, then answer with the object above
-and nothing else.
+Return ONLY that object, laid out exactly as above. The strategy follows this message.
