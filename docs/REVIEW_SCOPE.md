@@ -171,9 +171,14 @@ helpers. Trust this over any number written in a document.
 
 ## Evidence set
 
-Which matches exist, on which build, and which config sat on which side is a question for the
-log directory, not for this document. The list that used to live here aged out three times in
-three days, once per match played, so it is a command now:
+The logs themselves are in `logs/`, committed on 2026-09-01. They are the raw console output of
+each match, which is what every analysis tool reads; without them `postmatch.py` and
+`betting.py` have nothing to open and half this package is unusable. They are evidence, not
+source: nothing imports them, nothing is generated from them, and they are never edited.
+
+Which matches exist, on which build, and which config sat on which side is a question for that
+directory, not for this document. The list that used to live here aged out three times in three
+days, once per match played, so it is a command now:
 
 ```bash
 python tools/postmatch.py --list
