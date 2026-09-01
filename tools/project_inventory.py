@@ -104,7 +104,7 @@ def dead_exported_functions() -> list[tuple[str, str]]:
 # tools/ still reddened the build through this table.
 CODE_MAP_SCALE_ROWS = {
     "Our layer": lambda: tracked_line_count("bots/FunLib/aibattle_*.lua"),
-    "Configs": lambda: tracked_line_count("bots/Customize/*.lua"),
+    "Configs": lambda: tracked_line_count("bots/Customize/*.lua", exclude=LIVE_BINDINGS),
     "Tools (Python)": lambda: tracked_line_count("tools/*.py"),
     "Backend": lambda: tracked_line_count("backend/*.py") + tracked_line_count("backend/*.txt"),
 }
@@ -142,8 +142,25 @@ def tracked_files(pathspec: str) -> list[Path]:
     return [ROOT / line for line in out.split() if line]
 
 
-def tracked_line_count(pathspec: str) -> int:
-    return sum(line_count(p) for p in tracked_files(pathspec) if p.is_file())
+# The live experiment bindings. They are tracked, so git lists them, but their CONTENT is the
+# current match setup and changes between matches without ever being committed -- which meant
+# this count measured whatever experiment happened to be running. A fresh clone then failed the
+# gate on its first run with a two-line difference, which is exactly what an auditor sees and
+# the worst possible first impression of a project that claims its numbers are checked.
+LIVE_BINDINGS = (
+    "bots/Customize/general.lua",
+    "bots/Customize/playstyle_radiant.lua",
+    "bots/Customize/playstyle_dire.lua",
+)
+
+
+def tracked_line_count(pathspec: str, exclude: tuple[str, ...] = ()) -> int:
+    # tracked_files returns absolute paths, so the exclusion list is resolved against ROOT
+    # rather than compared as written. Comparing the two shapes directly silently excludes
+    # nothing, which is a no-op that reports success.
+    skip = {(ROOT / e).resolve() for e in exclude}
+    return sum(line_count(p) for p in tracked_files(pathspec)
+               if p.is_file() and p.resolve() not in skip)
 
 
 def tracked_tools() -> list[Path]:
