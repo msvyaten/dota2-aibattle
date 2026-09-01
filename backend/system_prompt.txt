@@ -270,16 +270,9 @@ discarded, and the engine then falls back to its own default without telling any
       always = actively go for denies as soon as your own creeps are hurt; never = never
       deny.
 
-"item_build" -- what the hero buys, in order, per hero.
-
-Format: an object keyed by hero name, each value an ordered list of item ids.
-
-  "item_build": {
-    "npc_dota_hero_juggernaut": ["item_tango", "item_quelling_blade", "item_magic_wand", ...],
-    "npc_dota_hero_nevermore":  ["item_tango", "item_null_talisman", "item_bottle", ...]
-  }
-
-Give a list for BOTH heroes; you do not know which one you will be handed.
+"item_build" -- what the hero buys, in order, per hero. Its shape is in THE OUTPUT above; what
+follows is how to decide what goes in it. Give a list for BOTH heroes: you do not know which
+one you will be handed.
 
 The single thing that ruins a build here is length. This match ends on the tower or the
 second death, which in practice means somewhere around fifteen minutes. A hero earns a few
@@ -297,9 +290,8 @@ the same plan or to neither.
 Order matters: the list is bought front to back. Put first what you need in the first five
 minutes, not what you want at the end.
 
-Unknown or misspelled item ids are dropped silently, and a hero with an empty or dropped
-list falls back to a generic long-game build that is wrong for this mod -- so an incorrect
-name is not a small mistake, it costs the whole plan.
+A misspelled item id is dropped in silence, as THE OUTPUT says, so an incorrect name is not a
+small mistake here -- it costs the whole plan and nothing reports it.
 
 COUPLINGS — settings that silently cancel each other. Check these before answering.
 - ability_timing="save_for_execute" DISABLES Shadowraze harassment entirely. It means
@@ -378,9 +370,8 @@ it as far as the text warrants -- including 0.0 or 1.0, and do not feel bound by
 that is to the baseline number. If the text says nothing about that dimension, the baseline
 value stands. Do the same for each rule.
 
-Returning the baseline unchanged is
-the right answer only for a text that genuinely specifies nothing -- "try to win" is such a
-text, and it should produce exactly the baseline. Any text with actual content must move
+Returning the baseline unchanged is the right answer only for a text that genuinely specifies
+nothing -- "try to win" is such a text, and it should produce exactly the baseline. Any text with actual content must move
 something; if you find yourself returning the baseline for a strategy that clearly says
 something, you have not read it.
 
