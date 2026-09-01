@@ -41,25 +41,26 @@ zero on both sides - the clarity gate, the tower-damage leg, the empty-bottle fl
 side-matches, so `tower=0` in `8975911100` was not damage hiding in `mixed`, and those tower hits
 are still unexplained. The `other=1021` bucket is where to look.
 
-## Next signature: the fountain trip, and a counter that only watches one door
+## Next signature: a committed fountain trip now runs to completion
 
-**Fountain band now asks what is arriving.** `HEAL_INSTEAD_OF_FOUNTAIN_HP` was a flat 0.25 and
-its own comment argues the tango case, so a flask - four hundred HP in one go - could not
-release a committed trip below 25%. `8977154010` [D] paid the bill twice inside ninety seconds:
-flask bought at 12%, 3400 units walked toward the fountain while the courier chased, band
-crossed on passive regen alone, drank at 4400 units out, turned round, back to 20% five seconds
-after reaching the lane, fountain never reached. The band is 0.12 when a flask or a bottle
-charge is on us or in flight, 0.25 otherwise, and all three sites read it through one helper -
-the comment on the constant warns that this rule has already lived twice with two floors.
-Watch: `fountain-floor reason=heal_in_flight` carrying `band=12`, trips released near the lane
-rather than near the base, and `heal-inflight-back` off zero, since waiting for the courier is
-only reachable when no trip is running.
+The rule is the user's, recorded in this file since 21.07 and eroded by an exception each time
+it was touched: **once the trip is committed it finishes.** A consumable turning up is not a
+reason to turn round - the fountain returns HP, mana and bottle charges, costs nothing and is
+already part paid for by the distance walked, while a flask returns HP alone for ninety gold.
+`8977154010` [D] paid that twice in ninety seconds and never reached the fountain either time.
 
-⛔ **`heal-item-took`/`-cancelled` cover one path in six.** `8977154010` read `heal-item=10` with
-two verdicts. Not laziness in the follow-up as designed - `Style.Diag(bot, "heal-item")` is
-emitted from six sites and the order flag was set at one. Partial coverage lies toward "the fix
-does not work", which is the expensive direction. Until it is fixed, read the two verdicts as a
-sample, not a rate.
+Two doors led there and only one had been argued about: the abort clause, now removed, and an
+"entry guard only" whose code released a running trip unconditionally, now gated on no trip
+running. What still ends a trip: everything already full (`recovered_en_route`), or a rune up and
+closer than home (`rune_due`, the user's call from 23.07).
+
+Watch: `heal_in_hand`/`heal_in_flight` appearing only as refusals to START; trips ending at the
+fountain rather than halfway; `heal-skip-trip-committed` rising. Inverse risk: a bot walking home
+holding a flask it could have drunk. If trips lengthen and last hits fall, the entry guard moves,
+not the completion rule.
+
+⛔ **`heal-item-took`/`-cancelled` cover one path in six** (`heal-item` is emitted from six sites,
+the order flag was set at one): `8977154010` read 10 orders, 2 verdicts. Read them as a sample.
 
 ## Measured Debts 29.08 (not blockers, fix one at a time between matches)
 
