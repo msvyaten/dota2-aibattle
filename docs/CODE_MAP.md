@@ -33,8 +33,8 @@ python tools\pre_match_state.py
 | Configs `Customize/` | 678 | 0.3% | YES - archetype presets |
 | **Our patches inside vendored files** | **~469** | 0.2% | CAREFULLY - 21 files, see section 3 |
 | Vendored OHA (everything else in `bots/`) | ~190,000 | ~96% | NO - upstream base, synced from above |
-| Tools (Python) | 5973 | - | YES |
-| Backend (Python + prompt) | 733 | - | YES |
+| Tools (Python) | 5983 | - | YES |
+| Backend (Python + prompt) | 736 | - | YES |
 
 **Total Lua in `bots/`: ~199,000 lines. Ours: ~8,300 (4.2%)**, counting the vendor patches.
 
@@ -228,7 +228,7 @@ are checked against each other by `tools/check_schema_contract.py`.
 | `check_text_encoding.py` | 109 | Mojibake, ASCII-only runtime files, and the no-Cyrillic rule. |
 | `aibattle_log.py` | 141 | The single telemetry parser everything else builds on. |
 | `test_arbiter_ladder.py` | 425 | Ladder arithmetic and owner contracts, read as text; see its docstring for what green does not mean. |
-| `check_schema_contract.py` | 110 | Python/Lua/prompt/config schema agreement, including the worked example the model copies. |
+| `check_schema_contract.py` | 120 | Python/Lua/prompt/config schema agreement, including the worked example the model copies. |
 | `run_tests.py` | 104 | Runs the test files above without pytest. |
 | `series.py` | 91 | Sets the sides for match N of a round robin, so a side effect cannot masquerade as a model effect. |
 | `pre_match_state.py` | 115 | Branch, HEAD, live build, repo vs live playstyles, dirty files. Run before every match. |

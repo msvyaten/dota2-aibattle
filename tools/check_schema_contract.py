@@ -87,6 +87,16 @@ def main():
                 "system prompt example dials drifted: extra=%s missing=%s"
                 % (sorted(shown - set(DIAL_KEYS)), sorted(set(DIAL_KEYS) - shown))
             )
+        # The dial half of this test was written 28.08 and the rule half was not, so the
+        # example went on showing ten rules of eleven -- tower_aggression missing -- while the
+        # text beside it demanded the full set and this check reported green. Half a check on
+        # the thing the model imitates is the same failure as half a counter on a fix.
+        shown_rules = set(example.get("rules", {}))
+        if shown_rules != set(RULE_VALUES):
+            problems.append(
+                "system prompt example rules drifted: extra=%s missing=%s"
+                % (sorted(shown_rules - set(RULE_VALUES)), sorted(set(RULE_VALUES) - shown_rules))
+            )
 
     allowed_dials = set(DIAL_KEYS)
     allowed_rules = set(RULE_VALUES)
