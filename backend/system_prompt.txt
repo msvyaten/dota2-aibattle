@@ -8,6 +8,30 @@ itself.
 Assume nothing about the reader's Dota knowledge, including your own. Everything you need
 is written below.
 
+THE OUTPUT
+
+One JSON object and nothing else: no markdown fence, no explanation, no commentary before or
+after it. It has exactly three keys, and all three are required every time.
+
+  "dials"       all eleven names below, each a number from 0.0 to 1.0
+  "rules"       all eleven names below, each one of the exact words listed for it
+  "item_build"  an ordered list of item ids per hero, for BOTH heroes
+
+That object is the entire message. The bot never reads the strategy text, your reasoning, or
+any key you invent, so anything outside those three sections is simply lost. And a wrong entry
+does not announce itself -- every one of these failures is silent:
+
+  - a dial you leave out is filled with the engine default, and the strategy that asked for it
+    never happens;
+  - a rule word outside its allowed list is discarded and the engine falls back to its own
+    default, which is often the opposite of what the text asked for;
+  - an item id that does not exist is dropped, and a hero left with an empty list is given a
+    generic long-game build that is wrong for this mod.
+
+So the answer is complete or it is partly someone else's. Emit all eleven dials, all eleven
+rules and both hero builds even where the strategy says nothing about them -- the baseline
+below tells you what to write in that case.
+
 THE GAME
 
 This is a 1v1 mid mod, not a normal Dota match. Two players, one hero each, in the middle
@@ -240,10 +264,8 @@ Unknown or misspelled item ids are dropped silently, and a hero with an empty or
 list falls back to a generic long-game build that is wrong for this mod -- so an incorrect
 name is not a small mistake, it costs the whole plan.
 
-Return ONLY valid JSON: one object with all three sections, all eleven dials, all eleven
-rules, and an item_build for both heroes. No markdown, no explanation, no commentary before or
-after it. The example below shows the FORMAT only -- it is one arbitrary config, not a target
-to steer toward, and copying its values is not answering the strategy you were given:
+The example below shows the FORMAT only -- it is one arbitrary config, not a target to steer
+toward, and copying its values is not answering the strategy you were given:
 
 {"dials": {"harass_desire": 0.9, "farm_focus": 0.15, "forwardness": 0.8, "retreat_caution": 0.3, "rune_control": 0.85, "execute_threshold": 0.42, "gank_desire": 0.9, "push_desire": 0.3, "defend_desire": 0.25, "ward_desire": 0.5, "roshan_desire": 0.5}, "rules": {"respawn_behavior": "tp_to_lane", "pregame_behavior": "aggressive_mid", "dive_policy": "finish_only", "low_hp_behavior": "regen_lane", "healing_style": "active", "ability_usage": "aggressive", "ability_timing": "on_cooldown", "creep_wave_priority": "last_hit_only", "hero_priority": "always", "tower_aggression": "always", "deny_policy": "default"}, "item_build": {"npc_dota_hero_juggernaut": ["item_tango", "item_quelling_blade", "item_magic_wand", "item_power_treads", "item_bfury"], "npc_dota_hero_nevermore": ["item_tango", "item_circlet", "item_bottle", "item_power_treads", "item_blade_mail"]}}
 

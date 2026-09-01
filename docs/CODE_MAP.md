@@ -34,7 +34,7 @@ python tools\pre_match_state.py
 | **Our patches inside vendored files** | **~469** | 0.2% | CAREFULLY - 21 files, see section 3 |
 | Vendored OHA (everything else in `bots/`) | ~190,000 | ~96% | NO - upstream base, synced from above |
 | Tools (Python) | 5983 | - | YES |
-| Backend (Python + prompt) | 736 | - | YES |
+| Backend (Python + prompt) | 758 | - | YES |
 
 **Total Lua in `bots/`: ~199,000 lines. Ours: ~8,300 (4.2%)**, counting the vendor patches.
 
