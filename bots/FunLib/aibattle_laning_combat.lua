@@ -97,6 +97,12 @@ local function hitHealSummonFirst(ctx, bot, range)
 	return true
 end
 
+local function alreadyAttacking(bot, target)
+	if bot == nil or target == nil or bot.GetAttackTarget == nil then return nil end
+	local ok, attackTarget = pcall(function() return bot:GetAttackTarget() end)
+	return ok and attackTarget == target
+end
+
 function M.ContactHero(ctx)
 	local bot = ctx.bot
 	local rules = ctx.rules or {}
@@ -112,6 +118,10 @@ function M.ContactHero(ctx)
 	local now = DotaTime()
 	local hp = J.GetHP(bot)
 	if hp < 0.32 then
+		if bot.aib_contactHeroLast ~= nil and now - bot.aib_contactHeroLast < 0.65 then
+			ctx.blocked("hero-contact", "refractory", string.format("since=%.2f", now - bot.aib_contactHeroLast), 3.0)
+			return false
+		end
 		local safe = ctx.forwardSurvivingTowerLoc()
 		if safe ~= nil and GetUnitToLocationDistance(bot, safe) > 120 then
 			bot.aib_contactHeroLast = now
@@ -132,6 +142,11 @@ function M.ContactHero(ctx)
 		bot.aib_contactHeroLast = now
 		bot.aib_harassLast = now
 		if hitHealSummonFirst(ctx, bot, range) then return true end
+		if bot.aib_contactHeroLast ~= nil and now - bot.aib_contactHeroLast < 0.25
+			and alreadyAttacking(bot, enemy) then
+			ctx.diag("hero-contact-hold")
+			return true
+		end
 		Style.Intent(bot, "hero-contact", string.format("dist=%.0f hp=%.0f reason=attackable_enemy", dist, hp * 100))
 		bot:Action_AttackUnit(enemy, false)
 		ctx.diag("hero-contact-atk")

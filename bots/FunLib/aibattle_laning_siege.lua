@@ -207,14 +207,6 @@ function M.Think(ctx)
 	local wantsSiege = towerAggr == "always" or cwp == "push" or advantageSiege or (dials.push_desire or 0.5) >= 0.65
 	local siegeHpFloor = ctx.enemyDeadRecently() and 0.22 or 0.35
 	if towerAggr == "always" then siegeHpFloor = ctx.enemyDeadRecently() and 0.20 or 0.28 end
-	if not wantsSiege or J.GetHP(bot) < siegeHpFloor then
-		ctx.blocked("siege", "desire_or_hp", string.format("hp=%.0f adv=%s", J.GetHP(bot) * 100, tostring(advantageSiege)), 5.0)
-		ctx.towerOpportunity("blocked_desire_or_hp", string.format("wave=%d hp=%.0f adv=%s", waveCount, J.GetHP(bot) * 100, tostring(advantageSiege)), 5.0)
-		return false
-	end
-
-	local alliedTank, guessedShield = alliedTankAt(ctx, twr)
-	if not alliedTank and guessedShield == 1 then ctx.diag("siege-thin-shield") end
 	local towerLethal = twr:GetHealth() <= bot:GetAttackDamage() * 1.10
 	if towerLethal and twrDist <= attackRange + 60 and J.GetHP(bot) >= 0.40 then
 		M.Commit(bot, 1.6, now)
@@ -224,6 +216,14 @@ function M.Think(ctx)
 		ctx.diag("siege-lethal-tower")
 		return true
 	end
+	if not wantsSiege or J.GetHP(bot) < siegeHpFloor then
+		ctx.blocked("siege", "desire_or_hp", string.format("hp=%.0f adv=%s", J.GetHP(bot) * 100, tostring(advantageSiege)), 5.0)
+		ctx.towerOpportunity("blocked_desire_or_hp", string.format("wave=%d hp=%.0f adv=%s", waveCount, J.GetHP(bot) * 100, tostring(advantageSiege)), 5.0)
+		return false
+	end
+
+	local alliedTank, guessedShield = alliedTankAt(ctx, twr)
+	if not alliedTank and guessedShield == 1 then ctx.diag("siege-thin-shield") end
 	-- THE TOWER IS SHOOTING US is answered at the top of this function now, ahead of the gate
 	-- that used to bury it. Measured across the era: 14 of 16 sides took tower damage, and
 	-- aggregating what the bot was doing in the 31 windows where that damage grew puts the
