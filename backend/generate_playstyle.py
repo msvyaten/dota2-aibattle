@@ -75,7 +75,24 @@ def _sanitize_style(raw: dict) -> dict:
         if clean:
             item_build[hero] = clean
 
-    return {"dials": dials, "rules": rules, "item_build": item_build}
+    # skill_build: the ability level-up order, per hero, as 1-based ability slot indices.
+    # aibattle_style.lua calls this tract "prompt-driven" and jmz_func.lua consumes it by
+    # overriding nAbilityBuildList -- but nothing ever asked the model for it, and nothing
+    # here would have kept it, so every generated config has left ability levelling to the
+    # vendor default. Filtered the same way as items and for the same reason: the runtime
+    # drops bogus entries in silence, so a bad index has to die here where it can be seen.
+    raw_skills = raw.get("skill_build") if isinstance(raw.get("skill_build"), dict) else {}
+    skill_build = {}
+    for hero in ITEM_BUILD_HEROES:
+        entry = raw_skills.get(hero)
+        if not isinstance(entry, list):
+            continue
+        clean = [i for i in entry if isinstance(i, int) and not isinstance(i, bool) and i > 0]
+        if clean:
+            skill_build[hero] = clean
+
+    return {"dials": dials, "rules": rules, "item_build": item_build,
+            "skill_build": skill_build}
 
 def _parse_llm_json(raw_text: str) -> dict:
     """Extract a JSON object from the LLM response (tolerates ```json fences)."""
@@ -113,7 +130,7 @@ def _lua_value(v) -> str:
     raise TypeError(f"Unsupported type: {type(v)}")
 
 def write_playstyle_lua(style: dict, output_path: str) -> None:
-    """Write a sanitized style dict to a Lua return table (dials + rules + item_build)."""
+    """Write a sanitized style dict to a Lua return table (dials, rules, item and skill build)."""
     style = _sanitize_style(style)
     lines = ["return {", "    dials = {"]
     for k in DIAL_KEYS:
@@ -129,6 +146,13 @@ def write_playstyle_lua(style: dict, output_path: str) -> None:
         lines.append("    item_build = {")
         for hero, items in build.items():
             body = ", ".join(_lua_value(i) for i in items)
+            lines.append(f"        [{_lua_value(hero)}] = {{ {body} }},")
+        lines.append("    },")
+    skills = style.get("skill_build") or {}
+    if skills:
+        lines.append("    skill_build = {")
+        for hero, order in skills.items():
+            body = ", ".join(_lua_value(i) for i in order)
             lines.append(f"        [{_lua_value(hero)}] = {{ {body} }},")
         lines.append("    },")
     lines.append("}")

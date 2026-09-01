@@ -34,7 +34,7 @@ python tools\pre_match_state.py
 | **Our patches inside vendored files** | **~469** | 0.2% | CAREFULLY - 21 files, see section 3 |
 | Vendored OHA (everything else in `bots/`) | ~190,000 | ~96% | NO - upstream base, synced from above |
 | Tools (Python) | 6009 | - | YES |
-| Backend (Python + prompt) | 781 | - | YES |
+| Backend (Python + prompt) | 827 | - | YES |
 
 **Total Lua in `bots/`: ~199,000 lines. Ours: ~8,300 (4.2%)**, counting the vendor patches.
 
@@ -276,7 +276,7 @@ SHA into `LIVE/FunLib/aibattle_build.lua`. LIVE is
 
 | File | lines | Role |
 |---|---:|---|
-| `generate_playstyle.py` | 186 | API or offline JSON -> a validated Lua config. |
+| `generate_playstyle.py` | 210 | API or offline JSON -> a validated Lua config. |
 | `test_generate.py` | 140 | Offline tests for sanitising, JSON handling and Lua output. No API key needed. |
 | `style_schema.py` | 39 | The single model-facing schema: 11 dials + 11 rules. |
 | `system_prompt.txt` | - | The live generator prompt. |
