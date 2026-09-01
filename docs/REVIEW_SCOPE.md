@@ -162,7 +162,8 @@ helpers. Trust this over any number written in a document.
 
 - **Grep locates code; it never proves anything about it.** The rule, the `--twins` command and
   the fix it already cost us are in `STATE.md` under "Evidence Rules".
-- **The working branch is `1v1-mid-validation`, not `main`.**
+- **Everything is on `main`.** The working branch was folded into it on 2026-09-01 by
+  fast-forward, so the history is the same commits in the same order.
 - Three files under `bots/Customize/` are deliberately dirty in `git status`
   (`general.lua`, `playstyle_radiant.lua`, `playstyle_dire.lua`). They hold live experiment
   state, not source of truth. Do not commit them.
